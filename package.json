@@ -1,0 +1,49 @@
+{
+  "name": "amor",
+  "version": "1.0.60",
+  "main": "index.js",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "actualizar": "node ./scripts/actualizar.js --use-app-runtime",
+    "actualizar:hotfix": "node ./scripts/actualizar.js --use-app-runtime",
+    "actualizar:sync": "node ./scripts/actualizar.js --sync-runtime",
+    "prebuild": "npm run actualizar"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-community/geolocation": "^3.4.0",
+    "@react-native-community/netinfo": "12.0.1",
+    "@react-native-firebase/app": "^23.4.0",
+    "@shopify/react-native-skia": "2.6.2",
+    "babel-preset-expo": "~57.0.0",
+    "eas-cli": "^0.0.0",
+    "expo": "^57.0.2",
+    "expo-audio": "~57.0.0",
+    "expo-dev-client": "^57.0.5",
+    "expo-document-picker": "~57.0.0",
+    "expo-file-system": "~57.0.0",
+    "expo-image": "~57.0.0",
+    "expo-image-picker": "~57.0.2",
+    "expo-linear-gradient": "~57.0.0",
+    "expo-modules-core": "~57.0.2",
+    "expo-navigation-bar": "~57.0.1",
+    "expo-notifications": "^57.0.3",
+    "expo-status-bar": "~57.0.0",
+    "expo-updates": "^57.0.6",
+    "firebase": "^12.10.0",
+    "pushy-react-native": "^1.0.61",
+    "react": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-game-engine": "^1.2.0",
+    "react-native-reanimated": "4.5.0",
+    "react-native-svg": "15.15.4"
+  },
+  "devDependencies": {
+    "@react-native-community/cli": "latest"
+  },
+  "private": true
+}

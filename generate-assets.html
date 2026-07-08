@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Assets</title>
+</head>
+<body>
+    <canvas id="canvas" style="border: 1px solid black;"></canvas>
+    <br>
+    <button onclick="generateIcon()">Generate Icon (1024x1024)</button>
+    <button onclick="generateSplash()">Generate Splash (1284x2778)</button>
+    <button onclick="generateFavicon()">Generate Favicon (48x48)</button>
+    <br><br>
+    <a id="download" style="display:none;">Download</a>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const download = document.getElementById('download');
+
+        function generateIcon() {
+            canvas.width = 1024;
+            canvas.height = 1024;
+            
+            // Background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, 1024, 1024);
+            
+            // Heart
+            ctx.fillStyle = '#FF6B6B';
+            ctx.beginPath();
+            ctx.moveTo(512, 800);
+            ctx.bezierCurveTo(400, 700, 200, 550, 200, 400);
+            ctx.bezierCurveTo(200, 300, 280, 220, 380, 220);
+            ctx.bezierCurveTo(430, 220, 480, 240, 512, 280);
+            ctx.bezierCurveTo(544, 240, 594, 220, 644, 220);
+            ctx.bezierCurveTo(744, 220, 824, 300, 824, 400);
+            ctx.bezierCurveTo(824, 550, 624, 700, 512, 800);
+            ctx.fill();
+            
+            downloadImage('icon.png');
+        }
+
+        function generateSplash() {
+            canvas.width = 1284;
+            canvas.height = 2778;
+            
+            // Background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 1284, 2778);
+            gradient.addColorStop(0, '#FF6B6B');
+            gradient.addColorStop(1, '#FF8E8E');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 1284, 2778);
+            
+            // Heart
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.moveTo(642, 1500);
+            ctx.bezierCurveTo(530, 1400, 330, 1250, 330, 1100);
+            ctx.bezierCurveTo(330, 1000, 410, 920, 510, 920);
+            ctx.bezierCurveTo(560, 920, 610, 940, 642, 980);
+            ctx.bezierCurveTo(674, 940, 724, 920, 774, 920);
+            ctx.bezierCurveTo(874, 920, 954, 1000, 954, 1100);
+            ctx.bezierCurveTo(954, 1250, 754, 1400, 642, 1500);
+            ctx.fill();
+            
+            // Text
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 80px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Amor', 642, 1650);
+            
+            downloadImage('splash.png');
+        }
+
+        function generateFavicon() {
+            canvas.width = 48;
+            canvas.height = 48;
+            
+            // Background
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, 48, 48);
+            
+            // Heart
+            ctx.fillStyle = '#FF6B6B';
+            ctx.beginPath();
+            ctx.moveTo(24, 36);
+            ctx.bezierCurveTo(18, 32, 10, 26, 10, 20);
+            ctx.bezierCurveTo(10, 16, 13, 13, 17, 13);
+            ctx.bezierCurveTo(19, 13, 21, 14, 24, 16);
+            ctx.bezierCurveTo(27, 14, 29, 13, 31, 13);
+            ctx.bezierCurveTo(35, 13, 38, 16, 38, 20);
+            ctx.bezierCurveTo(38, 26, 30, 32, 24, 36);
+            ctx.fill();
+            
+            downloadImage('favicon.png');
+        }
+
+        function downloadImage(filename) {
+            canvas.toBlob(function(blob) {
+                const url = URL.createObjectURL(blob);
+                download.href = url;
+                download.download = filename;
+                download.style.display = 'inline';
+                download.textContent = `Download ${filename}`;
+                download.click();
+            });
+        }
+    </script>
+</body>
+</html>

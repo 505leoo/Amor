@@ -1,0 +1,37 @@
+# Carpetas nativas (EAS las genera)
+android/
+ios/
+
+# Node modules
+node_modules/
+
+# Archivos de configuración local
+.expo/
+.git/
+.gitignore
+.gitattributes
+
+# Credenciales y archivos sensibles
+amor-9df0d-firebase-adminsdk-fbsvc-09b3626e0e.json
+functions/.env
+
+# Scripts y herramientas de desarrollo
+scripts/
+actualizar.bat
+update-version.js
+get_firebase_token.js
+generate-assets.html
+nueva-cuenta.txt
+
+# Archivos de ejemplo
+assets/example/
+
+# Firebase functions (no necesarias en la app)
+functions/
+
+# Configuración de Firebase
+.firebaserc
+firebase.json
+
+# Amazon Q
+.amazonq/

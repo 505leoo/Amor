@@ -1,0 +1,76 @@
+{
+  "expo": {
+    "name": "Amor",
+    "slug": "Amor",
+    "version": "0.1",
+    "orientation": "landscape",
+    "icon": "./assets/16.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#000000",
+      "icon": ""
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "url": "https://u.expo.dev/5a9a4938-ebde-4a94-a2b2-b762ea7c2791"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "fonts": [
+      "./fonts/Omori.ttf"
+    ],
+    "newArchEnabled": true,
+    "android": {
+      "package": "com.leitof7.amor",
+      "screenOrientation": "landscape",
+      "googleServicesFile": "./google-services.json",
+      "navigationBar": {
+        "visible": "immersive"
+      },
+      "buildToolsVersion": "34.0.0",
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "enableProguardInReleaseBuilds": true,
+      "enableShrinkResourcesInReleaseBuilds": true,
+      "architectures": [
+        "arm64-v8a"
+      ]
+    },
+    "ios": {
+      "requireFullScreen": true,
+      "bundleIdentifier": "com.leitof7.amor",
+      "supportsTablet": false
+    },
+    "notification": {
+      "icon": "./assets/16.png",
+      "color": "#FFFFFF",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Amor"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/16.png",
+          "color": "#FFFFFF",
+          "defaultChannel": "amor-notifications"
+        }
+      ],
+      "expo-navigation-bar",
+      "expo-audio",
+      "expo-image",
+      "expo-status-bar"
+    ],
+    "runtimeVersion": "0.1",
+    "extra": {
+      "eas": {
+        "projectId": "1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec"
+      },
+      "expo-navigation-bar": {}
+    },
+    "owner": "leitof7"
+  }
+}
