@@ -23,7 +23,7 @@ import { useSeason } from '../SeasonContext';
 import { useDebug } from '../DebugContext';
 import ThemeParticles from '../components/ThemeParticles';
 
-const Inicio = ({ navigation, onReady, cartaMessage }) => {
+const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker }) => {
   const { currentTheme, themes } = useTheme();
   const { getDisplaySeason, isDevMode } = useSeason();
   const { isDebugMode } = useDebug();
@@ -54,7 +54,7 @@ const Inicio = ({ navigation, onReady, cartaMessage }) => {
       <Hud navigation={navigation} />
       <Hud2 navigation={navigation} />
       <Player onSelectSticker={() => navigation.navigate('coleccion')} />
-      <Mensajes navigation={navigation} message={cartaMessage} />
+      <Mensajes navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />
       
       {isDebugMode && (
         <TouchableOpacity 

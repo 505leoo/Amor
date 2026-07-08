@@ -11,16 +11,16 @@ import { db } from '../firebaseConfig';
 
 const { width: screenWidth } = Dimensions.get('window');
 
-const CARD_W = screenWidth * 0.88;
-const CARD_H = CARD_W * (150 / 250);
-const STICKER_SIZE = CARD_W * 0.35;
+const CARD_W = screenWidth * 0.98;
+const CARD_H = CARD_W * (195 / 250);
+const STICKER_SIZE = CARD_W * 0.23;
 const SCALE = CARD_W / 250;
 const TEXT_LEFT = 99 * SCALE;
 const TEXT_TOP = 48 * SCALE;
 const TEXT_W = 55 * SCALE;
 const TEXT_H = 49 * SCALE;
 
-const CartaExpandida = ({ navigation, message = '' }) => {
+const CartaExpandida = ({ navigation, message = '', selectedSticker: initialSticker }) => {
   const [fontsLoaded] = useFonts({ Omori: require('../fonts/Omori.ttf') });
   const { currentTheme, themes } = useTheme();
   const { getDisplaySeason } = useSeason();
@@ -29,9 +29,12 @@ const CartaExpandida = ({ navigation, message = '' }) => {
 
   const [currentMessage, setCurrentMessage] = useState(message);
   const [stickerOptions, setStickerOptions] = useState([]);
-  const [selectedSticker, setSelectedSticker] = useState(null);
+  const [selectedSticker, setSelectedSticker] = useState(initialSticker || null);
 
-  const handleExit = () => navigation.navigate('main', { message: currentMessage });
+  const handleExit = () => navigation.navigate('main', { 
+    message: currentMessage,
+    selectedSticker: selectedSticker
+  });
 
   useEffect(() => {
     const loadStickerCards = async () => {
@@ -132,7 +135,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 60,
+    paddingTop: 90,
   },
   stickerPicker: {
     paddingVertical: 10,
@@ -180,13 +183,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: STICKER_SIZE,
     height: STICKER_SIZE,
-    top: '50%',
-    left: '50%',
+    top: '48.8%',
+    left: '50.6%',
     transform: [{ translateX: -STICKER_SIZE / 2 }, { translateY: -STICKER_SIZE / 2 }],
     borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#fff',
-    backgroundColor: 'rgba(255,255,255,0.85)',
+    backgroundColor: 'transparent',
   },
   text: {
     position: 'absolute',

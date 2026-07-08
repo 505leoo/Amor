@@ -5,10 +5,12 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { auth, db, storage } from '../firebaseConfig';
+import { getDownloadURL } from 'firebase/storage';
+import { auth, db } from '../firebaseConfig';
 import { useSeason } from '../SeasonContext';
+import { Buffer } from 'buffer';
 
 const StickerUploader = ({ visible, onClose, onSuccess }) => {
   const { seasons } = useSeason();
@@ -112,29 +114,62 @@ const StickerUploader = ({ visible, onClose, onSuccess }) => {
       }
 
       setUploadProgress(20);
-      const storagePath = isAudioCategory() ? 'music' : 'stickers';
-      const fileRef = ref(storage, `${storagePath}/${Date.now()}_${uploadData.name}`);
-      
-      setUploadProgress(40);
-      const response = await fetch(uploadData.file.uri);
-      const blob = await response.blob();
-      
-      setUploadProgress(60);
-      const uploadTask = uploadBytesResumable(fileRef, blob);
-      
-      await new Promise((resolve, reject) => {
-        uploadTask.on('state_changed', 
-          (snapshot) => {
-            const progress = 60 + (snapshot.bytesTransferred / snapshot.totalBytes) * 30;
-            setUploadProgress(progress);
-          },
-          reject, 
-          resolve
-        );
+
+      // Leer archivo como base64
+      const base64 = await FileSystem.readAsStringAsync(uploadData.file.uri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
       
+      setUploadProgress(60);
+      
+      // Obtener token de Firebase
+      const token = await user.getIdToken();
+      const storagePath = isAudioCategory() ? 'music' : 'stickers';
+      
+      // Detectar MIME type del archivo
+      let mimeType = uploadData.file.mimeType;
+      if (!mimeType) {
+        const fileName = uploadData.file.name || uploadData.file.uri;
+        const extension = fileName.split('.').pop()?.toLowerCase();
+        
+        if (extension === 'png') {
+          mimeType = 'image/png';
+        } else if (extension === 'jpg' || extension === 'jpeg') {
+          mimeType = 'image/jpeg';
+        } else if (extension === 'gif') {
+          mimeType = 'image/gif';
+        } else if (extension === 'webp') {
+          mimeType = 'image/webp';
+        } else if (isAudioCategory()) {
+          mimeType = 'audio/mpeg';
+        } else {
+          mimeType = 'image/jpeg';
+        }
+      }
+      
+      const fileNameUpload = `${Date.now()}_${uploadData.name}`;
+      const fullPath = `${storagePath}/${fileNameUpload}`;
+      
+      // Usar API REST de Firebase Storage con storageBucket correcto
+      const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/amor-9df0d.firebasestorage.app/o/${encodeURIComponent(fullPath)}?uploadType=media`;
+      
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': mimeType,
+          'Authorization': `Bearer ${token}`
+        },
+        body: Buffer.from(base64, 'base64')
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      }
+
       setUploadProgress(95);
-      const fileUrl = await getDownloadURL(fileRef);
+      
+      // Construir URL de descarga
+      const fileUrl = `https://firebasestorage.googleapis.com/v0/b/amor-9df0d.firebasestorage.app/o/${encodeURIComponent(fullPath)}?alt=media`;
 
       const firestoreCategory = uploadData.category === 'Stickers' ? 'StickerCarta' : uploadData.category;
       const docData = {

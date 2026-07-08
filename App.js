@@ -39,6 +39,7 @@ export default function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [currentScreen, setCurrentScreen] = useState('intro');
   const [cartaMessage, setCartaMessage] = useState('');
+  const [selectedSticker, setSelectedSticker] = useState(null);
   const [isConnected, setIsConnected] = useState(true);
   const [isFirestoreReady, setIsFirestoreReady] = useState(false);
   const [inicioReady, setInicioReady] = useState(false);
@@ -73,6 +74,7 @@ export default function App() {
   // Función para cambiar pantallas
   const navigateToScreen = (screenName, params) => {
     if (params?.message !== undefined) setCartaMessage(params.message);
+    if (params?.selectedSticker !== undefined) setSelectedSticker(params.selectedSticker);
     setCurrentScreen(screenName);
   };
 
@@ -238,7 +240,7 @@ export default function App() {
                     <Register navigation={{ navigate: navigateToScreen }} />
                   )}
                   {currentScreen === 'main' && (
-                    <Inicio navigation={{ navigate: navigateToScreen }} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} />
+                    <Inicio navigation={{ navigate: navigateToScreen }} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} />
                   )}
                   {currentScreen === 'menu' && (
                     <Menu navigation={{ navigate: navigateToScreen }} />
@@ -274,7 +276,7 @@ export default function App() {
                     <Perfil navigation={{ navigate: navigateToScreen }} />
                   )}
                   {currentScreen === 'carta' && (
-                    <CartaExpandida navigation={{ navigate: navigateToScreen }} message={cartaMessage} />
+                    <CartaExpandida navigation={{ navigate: navigateToScreen }} message={cartaMessage} selectedSticker={selectedSticker} />
                   )}
                 </MusicProvider>
               </TrofeosProvider>
