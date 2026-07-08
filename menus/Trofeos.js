@@ -8,6 +8,7 @@ import {
   StatusBar,
   Animated,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
@@ -15,6 +16,7 @@ import { auth, db } from '../firebaseConfig';
 import TabButtons from '../components/TabButtons';
 import { useTheme } from '../ThemeContext';
 import ThemeParticles from '../components/ThemeParticles';
+import NotificationSystem from '../utils/NotificationSystem';
 import { useTrofeos } from '../TrofeosContext';
 import { TROFEOS_DEF } from '../utils/trofeosDef';
 import { useSeason } from '../SeasonContext';
@@ -313,6 +315,33 @@ const Trofeos = ({ navigation }) => {
               >
                 <Text style={styles.resetBtnText}>Reiniciar</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.resetBtn, styles.testBtn]}
+                onPress={async () => {
+                  try {
+                    const pushyToken = userData?.MyPushyToken || userData?.pushyToken;
+                    if (!pushyToken) {
+                      Alert.alert('Pushy', 'No se encontró token Pushy para el usuario');
+                      return;
+                    }
+
+                    console.log('Pushy token usado:', pushyToken);
+                    const result = await NotificationSystem.sendPushNotification(
+                      pushyToken,
+                      'Pushy Test',
+                      'Esta es una prueba desde Trofeos'
+                    );
+                    console.log('Pushy test result:', result);
+                    Alert.alert('Pushy', `Resultado: ${JSON.stringify(result)}`);
+                  } catch (error) {
+                    console.error('Error enviando notificación de prueba:', error);
+                    Alert.alert('Pushy', `Error: ${error.message || error}`);
+                  }
+                }}
+              >
+                <Text style={styles.resetBtnText}>Enviar prueba</Text>
+              </TouchableOpacity>
             </View>
           </ScrollView>
         </LinearGradient>
@@ -599,6 +628,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     borderRadius: 10,
     marginTop: 30,
+  },
+  testBtn: {
+    backgroundColor: '#3B82F6',
+    marginTop: 12,
   },
   resetBtnText: {
     color: '#FFF',

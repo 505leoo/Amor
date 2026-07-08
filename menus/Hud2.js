@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
   container: {
     position: 'absolute',
     top: -1,
-    right: 3,
+    right: 0.5,
     width: 200,
     height: 48,
     borderBottomLeftRadius: 20,
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: 18,
-    zIndex: 1000,
+    zIndex: 50,
   },
   iconButtonWrapper: {
     position: 'relative',

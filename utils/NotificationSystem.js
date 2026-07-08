@@ -45,43 +45,46 @@ class NotificationSystem {
 
       // Obtener token real de Pushy usando el módulo nativo
       const PushyService = require('./PushyService').default;
-      const token = await PushyService.register();
-      this.expoPushToken = token;
-      console.log('Token de Pushy obtenido:', token.substring(0, 20) + '...');
+      const isRegistered = await PushyService.isRegistered();
+      let token = null;
 
-        // Guardar token en Firebase
-        const user = auth.currentUser;
-        if (user && token) {
-          try {
-            
-            const userDocRef = doc(db, 'usuarios', user.uid);
-            const userDoc = await getDoc(userDocRef);
-            
-            if (userDoc.exists()) {
-              await updateDoc(userDocRef, {
-                MyPushyToken: token,
-                pushyToken: token,
-                lastTokenUpdate: new Date()
-              });
-              
-            } else {
-              // Crear documento si no existe
-              await setDoc(userDocRef, {
-                uid: user.uid,
-                MyPushyToken: token,
-                pushyToken: token,
-                lastTokenUpdate: new Date(),
-                displayName: user.displayName || 'Usuario',
-                email: user.email
-              });
-              
-            }
-          } catch (firebaseError) {
-            
-          }
+      if (!isRegistered) {
+        token = await PushyService.register();
+        this.expoPushToken = token;
+        if (token) {
+          console.log('Token de Pushy obtenido:', token.substring(0, 20) + '...');
         }
+      }
 
-        return token;
+      // Guardar token en Firebase si se generó uno nuevo
+      const user = auth.currentUser;
+      if (user && token) {
+        try {
+          const userDocRef = doc(db, 'usuarios', user.uid);
+          const userDoc = await getDoc(userDocRef);
+
+          if (userDoc.exists()) {
+            await updateDoc(userDocRef, {
+              MyPushyToken: token,
+              pushyToken: token,
+              lastTokenUpdate: new Date()
+            });
+          } else {
+            await setDoc(userDocRef, {
+              uid: user.uid,
+              MyPushyToken: token,
+              pushyToken: token,
+              lastTokenUpdate: new Date(),
+              displayName: user.displayName || 'Usuario',
+              email: user.email
+            });
+          }
+        } catch (firebaseError) {
+          console.error('Error guardando token de Pushy en Firestore:', firebaseError);
+        }
+      }
+
+      return token;
     } catch (error) {
       console.error('Error registrando notificaciones:', error);
       return null;
@@ -133,9 +136,10 @@ class NotificationSystem {
 
       usersSnapshot.forEach(doc => {
         const userData = doc.data();
-        if (userData.expoPushToken && userData.isOnline !== true) {
+        const preferred = this._getPreferredToken(userData);
+        if (preferred.token && userData.isOnline !== true) {
           offlineUsers.push({
-            token: userData.expoPushToken,
+            token: preferred.token,
             name: userData.displayName || 'Tu pareja'
           });
         }
@@ -200,16 +204,12 @@ class NotificationSystem {
   async sendPushNotification(pushyToken, title, body, data = {}) {
     try {
       const PushyService = require('./PushyService').default;
-      await PushyService.sendCustomNotification([pushyToken], title, body);
-      return { ok: true, provider: 'pushy' };
+      const result = await PushyService.sendCustomNotification([pushyToken], title, body, data);
+      console.log('PushyService.sendCustomNotification result:', result);
+      return result;
     } catch (error) {
       console.error('Error enviando notificación:', error);
-      // Fallback a consola
-      
-      
-      
-      
-      return { ok: true, provider: 'console' };
+      return { success: false, provider: 'pushy', error: error.message || error };
     }
   }
 

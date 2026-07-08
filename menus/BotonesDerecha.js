@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 12,
     right: 24,
-    zIndex: 1000,
+    zIndex: 50,
     alignItems: 'flex-end',
   },
   menuItem: {

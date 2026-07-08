@@ -94,15 +94,7 @@ export default function App() {
         
         NotificationSystem.setupNotificationListeners();
         
-        PushyService.isRegistered().then(isRegistered => {
-          if (!isRegistered) {
-            PushyService.register().then(pushyToken => {
-              
-              const userRef = doc(db, 'usuarios', currentUser.uid);
-              updateDoc(userRef, { pushyToken }).catch(err => console.error('Error guardando token:', err));
-            }).catch(err => console.error('Error registrando Pushy:', err));
-          }
-        }).catch(err => console.error('Error verificando Pushy:', err));
+        // El registro de Pushy y el guardado de token se maneja en NotificationSystem.registerForPushNotifications()
         
         getDoc(doc(db, 'usuarios', currentUser.uid)).then(userSnap => {
           if (userSnap.exists()) {
@@ -239,8 +231,11 @@ export default function App() {
                   {currentScreen === 'register' && (
                     <Register navigation={{ navigate: navigateToScreen }} />
                   )}
-                  {currentScreen === 'main' && (
+                  {['main', 'coleccion'].includes(currentScreen) && (
                     <Inicio navigation={{ navigate: navigateToScreen }} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} />
+                  )}
+                  {currentScreen === 'coleccion' && (
+                    <Coleccion navigation={{ navigate: navigateToScreen }} />
                   )}
                   {currentScreen === 'menu' && (
                     <Menu navigation={{ navigate: navigateToScreen }} />
@@ -259,9 +254,6 @@ export default function App() {
                   )}
                   {currentScreen === 'trofeos' && (
                     <Trofeos navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'coleccion' && (
-                    <Coleccion navigation={{ navigate: navigateToScreen }} />
                   )}
                   {currentScreen === 'stickers' && (
                     <Stickers navigation={{ navigate: navigateToScreen }} />

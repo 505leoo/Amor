@@ -60,7 +60,7 @@ const Player = ({ onSelectSticker, centered = false, showNameTag = true }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 10,
+    bottom: 65,
     left: '45%',
     transform: [{ translateX: -50 }],
     width: 100,

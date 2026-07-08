@@ -46,14 +46,12 @@ class PushyService {
 
   static async register() {
     if (Platform.OS !== 'android') {
-      
-      return `pushy_ios_${Date.now()}`;
+      return null;
     }
 
     const pushy = getPushyApi();
     if (!pushy) {
-      
-      return `pushy_fallback_${Date.now()}`;
+      return null;
     }
 
     try {
@@ -61,7 +59,7 @@ class PushyService {
       return token;
     } catch (error) {
       console.error('Error registrando con Pushy:', error);
-      return `pushy_error_${Date.now()}`;
+      return null;
     }
   }
 
@@ -110,19 +108,22 @@ class PushyService {
       const sendNotification = httpsCallable(functions, 'sendPushyNotification');
       
       const results = await Promise.allSettled(
-        tokens.map(token => sendNotification({ token, title, body }).catch(err => {
-          if (err.message && !err.message.includes('INVALID_API_KEY')) {
-            
-          }
-          return null;
+        tokens.map(token => sendNotification({ token, title, body }).then(res => {
+          return res;
+        }).catch(err => {
+          console.error('[PUSHY] sendPushyNotification error for token:', token, err);
+          return { error: err.message || err, token };
         }))
       );
       
-      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const successful = results.filter(r => r.status === 'fulfilled' && r.value && !r.value.error).length;
+      const errors = results
+        .filter(r => r.status === 'rejected' || (r.value && r.value.error))
+        .map(r => r.status === 'rejected' ? r.reason : r.value.error);
+
       if (successful > 0) this._markSent(title, body);
       
-
-      return { success: true, sent: successful };
+      return { success: successful > 0, sent: successful, errors };
     } catch (error) {
       // Silenciar errores de API key inválida
       if (error.message && !error.message.includes('INVALID_API_KEY')) {

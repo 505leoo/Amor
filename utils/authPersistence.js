@@ -1,21 +1,11 @@
-import { Platform } from 'react-native';
 import { legacyAsync as FileSystem } from 'expo-file-system/legacy';
-import { auth } from '../firebaseConfig';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 
-const AUTH_FILE = `${FileSystem.documentDirectory}/auth.dat`;
-const ENCRYPTION_KEY = 'your-secret-key'; // Deberías mover esto a una variable de entorno
+const AUTH_FILE = `${FileSystem.documentDirectory}auth.dat`;
 
-// Función auxiliar para encriptar/desencriptar datos
-const encryptData = (data) => {
-  // Aquí podrías implementar tu propia lógica de encriptación
-  return Buffer.from(JSON.stringify(data)).toString('base64');
-};
-
-const decryptData = (encrypted) => {
-  // Aquí podrías implementar tu propia lógica de desencriptación
+const serializeData = (data) => JSON.stringify(data);
+const deserializeData = (text) => {
   try {
-    return JSON.parse(Buffer.from(encrypted, 'base64').toString());
+    return JSON.parse(text);
   } catch {
     return null;
   }
@@ -23,18 +13,17 @@ const decryptData = (encrypted) => {
 
 export const saveAuthSession = async (user) => {
   if (!user) return false;
-  
+
   try {
     const authData = {
       email: user.email,
       uid: user.uid,
-      refreshToken: await user.getIdToken(true),
       lastLogin: Date.now()
     };
-    
-    const encryptedData = encryptData(authData);
-    await FileSystem.writeAsStringAsync(AUTH_FILE, encryptedData);
-    
+
+    const text = serializeData(authData);
+    await FileSystem.writeAsStringAsync(AUTH_FILE, text);
+
     return true;
   } catch (error) {
     console.error('Error guardando sesión:', error);
@@ -47,19 +36,9 @@ export const getStoredAuth = async () => {
     const fileInfo = await FileSystem.getInfoAsync(AUTH_FILE);
     if (!fileInfo.exists) return null;
 
-    const encryptedData = await FileSystem.readAsStringAsync(AUTH_FILE);
-    const authData = decryptData(encryptedData);
-    if (!authData) return null;
-
-    // Verificar si el token aún es válido
-    try {
-      await signInWithEmailAndPassword(auth, authData.email, authData.refreshToken);
-      return authData;
-    } catch (error) {
-      console.error('Token expirado o inválido:', error);
-      await clearStoredAuth();
-      return null;
-    }
+    const storedText = await FileSystem.readAsStringAsync(AUTH_FILE);
+    const authData = deserializeData(storedText);
+    return authData;
   } catch (error) {
     console.error('Error recuperando sesión:', error);
     return null;

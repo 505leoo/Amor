@@ -76,9 +76,9 @@ const Botones = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 12,
-    left: 36,
-    zIndex: 1000,
+    bottom: 100,
+    left: 732,
+    zIndex: 50,
     alignItems: 'flex-start',
   },
   menuItem: {
