@@ -84,11 +84,6 @@ const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker }) => {
           )}
         </View>
       </TouchableOpacity>
-      <Image
-        source={require('../assets/menu/pared.png')}
-        style={styles.overlayImage}
-        pointerEvents="none"
-      />
     </View>
   );
 };
