@@ -363,20 +363,14 @@ const Pistas = ({ navigation }) => {
   if (!dataLoaded) {
     return (
       <View style={styles.container}>
-        <LinearGradient
-          colors={['#F3E5F5', '#E1BEE7']}
-          style={styles.gradient}
-        />
+        <View style={styles.gradient} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <LinearGradient
-        colors={['#F3E5F5', '#E1BEE7']}
-        style={styles.gradient}
-      >
+      <View style={styles.gradient}>
         <Animated.View style={{ opacity: pistasOpacity, flex: 1 }}>
           <ScrollView 
             horizontal
@@ -1021,7 +1015,7 @@ const Pistas = ({ navigation }) => {
             </Animated.View>
           )}
         </Animated.View>
-      </LinearGradient>
+      </View>
     </View>
   );
 };

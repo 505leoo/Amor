@@ -252,8 +252,7 @@ export default function Buzon({ navigation }) {
         customAddButton={customGiftButton}
       />
       
-      <LinearGradient colors={['#667eea', '#764ba2']} style={styles.gradient}>
-        <View style={styles.content}>
+      <View style={styles.content}>
           <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
             <FlatList
               data={allItems}
@@ -269,7 +268,6 @@ export default function Buzon({ navigation }) {
             />
           </Animated.View>
         </View>
-      </LinearGradient>
 
       <Modal
         visible={showFriendSelector}
@@ -396,9 +394,6 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
     marginTop: 70,
   },
   listContent: {

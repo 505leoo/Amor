@@ -92,14 +92,7 @@ const Stickers = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar hidden={true} />
       <TabButtons onExit={() => navigation?.navigate('main')} userMoney={0} onAddSticker={() => {}} onStopMusic={null} />
-      {gradientColors ? (
-        <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.background}
-        />
-      ) : (
+      {gradientColors ? null : (
         <View style={[StyleSheet.absoluteFill, styles.neutralBackground]} />
       )}
 
@@ -185,6 +178,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     padding: 20,
+    paddingLeft: 60,
     gap: 15,
   },
   stickerItem: {

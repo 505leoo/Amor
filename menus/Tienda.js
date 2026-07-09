@@ -490,7 +490,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: 'transparent',
     paddingVertical: 8,
   },
   subTabButton: {
@@ -515,12 +515,12 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     flex: 1,
-    paddingLeft: 50,
+    paddingLeft: 80,
     paddingRight: 15,
     paddingTop: 70,
   },
   contentContainerShifted: {
-    paddingLeft: 70,
+    paddingLeft: 100,
   },
   gridContainer: {
     flexDirection: 'row',

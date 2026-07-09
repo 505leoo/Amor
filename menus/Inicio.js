@@ -6,7 +6,9 @@ import {
   TouchableOpacity,
   StatusBar,
   Image,
+  Dimensions,
 } from 'react-native';
+const { width, height } = Dimensions.get('window');
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth } from '../firebaseConfig';
@@ -47,6 +49,7 @@ const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker }) => {
   return (
     <View style={styles.container}>
       <StatusBar hidden={true} />
+      <Image source={require('../assets/menu/pared1.png')} style={styles.backgroundImage} />
       {false ? <ThemeParticles particleType={particlesType} /> : null}
       <Eventos navigation={navigation} />
       <Botones navigation={navigation} />
@@ -167,8 +170,10 @@ const styles = StyleSheet.create({
     textShadowRadius: 2,
   },
   backgroundImage: {
-    ...StyleSheet.absoluteFillObject,
-    resizeMode: 'cover',
+    position: 'absolute',
+    width: width,
+    height: height,
+    resizeMode: 'stretch',
   },
   overlayImage: {
     position: 'absolute',

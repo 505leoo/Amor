@@ -231,7 +231,7 @@ export default function App() {
                   {currentScreen === 'register' && (
                     <Register navigation={{ navigate: navigateToScreen }} />
                   )}
-                  {['main', 'coleccion'].includes(currentScreen) && (
+                  {currentScreen === 'main' && (
                     <Inicio navigation={{ navigate: navigateToScreen }} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} />
                   )}
                   {currentScreen === 'coleccion' && (

@@ -98,7 +98,6 @@ const Perfil = ({ navigation }) => {
 
   return (
     <View style={styles.root}>
-      <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <StatusBar hidden />
       {particlesType ? <ThemeParticles particleType={particlesType} /> : null}
 
@@ -253,7 +252,7 @@ const styles = StyleSheet.create({
   contentWrap: {
     flex: 1,
     alignItems: 'stretch',
-    paddingLeft: 0,
+    paddingLeft: 40,
     paddingRight: 36,
     paddingTop: 14,
     paddingBottom: 10,

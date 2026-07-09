@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList } from 'react-native';
-import { collection, getDocs, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, StatusBar } from 'react-native';
+import { collection, getDocs, doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from './firebaseConfig';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import TabButtons from './components/TabButtons';
+import ThemeParticles from './components/ThemeParticles';
+import { useTheme } from './ThemeContext';
+import { useSeason } from './SeasonContext';
 
 export const getSeasonTemplates = (seasonId) => {
   const seasonMap = {
@@ -81,16 +85,44 @@ const CATEGORIES = [
   { id: 'Otros', name: 'Audio', icon: 'music-note', color: '#96C4B8' },
 ];
 
+const rarityLabel = { 'Común': 'COMÚN', 'Épico': 'ÉPICO', 'Legendario': 'LEGENDARIO' };
+const rarityColor = { 'Común': '#ffffff', 'Épico': '#a78bfa', 'Legendario': '#f59e0b' };
+
 const Coleccion = ({ onClose, navigation }) => {
+  const { currentTheme, themes } = useTheme();
+  const { getDisplaySeason } = useSeason();
+  const theme = themes[currentTheme];
+  const displaySeason = getDisplaySeason();
+
   const [selectedCategory, setSelectedCategory] = useState('Personajes');
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedStickerId, setSelectedStickerId] = useState(null);
+  const [previewItem, setPreviewItem] = useState(null);
+  const [cartaSticker, setCartaSticker] = useState(null);
 
   useEffect(() => {
     loadData();
     loadSelectedSticker();
+    loadCartaSticker();
   }, []);
+
+  const loadCartaSticker = async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+      const ref = doc(db, 'cartaStickers', user.uid);
+      const snap = await getDoc(ref);
+      if (!snap.exists()) return;
+      const { imageUrl, selectedAt } = snap.data();
+      const elapsed = Date.now() - selectedAt.toMillis();
+      if (elapsed > 24 * 60 * 60 * 1000) {
+        await deleteDoc(ref);
+      } else {
+        setCartaSticker({ imageUrl });
+      }
+    } catch (e) {}
+  };
 
   const loadSelectedSticker = async () => {
     try {
@@ -98,7 +130,9 @@ const Coleccion = ({ onClose, navigation }) => {
       if (!user) return;
       const userDoc = await getDoc(doc(db, 'usuarios', user.uid));
       if (userDoc.exists()) {
-        setSelectedStickerId(userDoc.data().selectedSticker?.id || null);
+        const sticker = userDoc.data().selectedSticker || null;
+        setSelectedStickerId(sticker?.id || null);
+        if (sticker) setPreviewItem(sticker);
       }
     } catch (e) {}
   };
@@ -137,146 +171,306 @@ const Coleccion = ({ onClose, navigation }) => {
     else if (typeof onClose === 'function') onClose();
   };
 
-  const filteredItems = items.filter(item => {
-    if (selectedCategory === 'Personajes') return item.category === 'Personajes' || item.category === 'Stickers';
-    if (selectedCategory === 'Stickers') return item.category === 'StickerCarta';
-    return item.category === selectedCategory;
-  });
+  const rarityOrder = { 'Común': 0, 'Épico': 1, 'Legendario': 2 };
+  const filteredItems = items
+    .filter(item => {
+      if (selectedCategory === 'Personajes') return item.category === 'Personajes' || item.category === 'Stickers';
+      if (selectedCategory === 'Stickers') return item.category === 'StickerCarta';
+      return item.category === selectedCategory;
+    })
+    .sort((a, b) => (rarityOrder[a.rarity] ?? 0) - (rarityOrder[b.rarity] ?? 0));
 
   const currentCat = CATEGORIES.find(c => c.id === selectedCategory);
+  const activePreview = selectedCategory === 'Stickers'
+    ? (previewItem && filteredItems.some(i => i.id === previewItem.id) ? previewItem : cartaSticker)
+    : (previewItem && filteredItems.some(i => i.id === previewItem.id) ? previewItem : null);
+
+  const handleCardPress = (item) => {
+    if (selectedCategory === 'Personajes') {
+      setPreviewItem(item);
+      handleStickerSelect(item);
+    } else if (selectedCategory === 'Stickers') {
+      // Solo visual, sin cambiar Firestore
+      setPreviewItem(item);
+    }
+  };
 
   const renderItem = ({ item }) => {
     const isSelected = selectedCategory === 'Personajes' && item.id === selectedStickerId;
-    const templates = getSeasonTemplates(item.season);
-    const gradColors = templates?.gradients[item.rarity] || ['#0f0c29', '#302b63'];
-    const borderColor = isSelected ? '#22c55e' : 'transparent';
+    const isPreviewing = previewItem?.id === item.id;
+    const rColor = rarityColor[item.rarity] || '#9ca3af';
+    const borderColor = isSelected ? '#22c55e' : isPreviewing ? rColor : 'rgba(255,255,255,0.08)';
 
     return (
-      <TouchableOpacity onPress={() => handleStickerSelect(item)} activeOpacity={0.75} style={[styles.card, { borderColor }]}>
-        <LinearGradient colors={gradColors} style={StyleSheet.absoluteFill} />
-        {selectedCategory === 'Otros' ? (
-          <MaterialCommunityIcons name="music-note" size={18} color={currentCat?.color} />
-        ) : (
-          <Image source={{ uri: item.imageUrl }} style={styles.img} contentFit="contain" />
-        )}
-        {isSelected && <View style={styles.selectedDot} />}
+      <TouchableOpacity onPress={() => handleCardPress(item)} activeOpacity={0.85}
+        style={[
+          styles.card,
+          { borderColor },
+          (isPreviewing || isSelected) && { shadowColor: isSelected ? '#22c55e' : rColor, shadowOpacity: 0.9, shadowRadius: 10, elevation: 14 },
+        ]}
+      >
+        {/* Header de rareza */}
+        <View style={[styles.cardHeader, { backgroundColor: rColor }]} />
+
+        {/* Imagen */}
+        <View style={styles.cardImageWrap}>
+          {selectedCategory === 'Otros' ? (
+            <MaterialCommunityIcons name="music-note" size={26} color={currentCat?.color} />
+          ) : (
+            <Image source={{ uri: item.imageUrl }} style={styles.img} contentFit="contain" transition={0} cachePolicy="memory-disk" />
+          )}
+        </View>
+
+        {/* Footer */}
+        <View style={styles.cardFooter}>
+          <View style={[styles.rarityDot, { backgroundColor: rColor }]} />
+          {isSelected && <MaterialCommunityIcons name="check" size={9} color="#22c55e" style={styles.checkIcon} />}
+        </View>
       </TouchableOpacity>
     );
   };
 
-  return (
-    <View style={styles.backdrop} pointerEvents="box-none">
-      <View style={styles.sheet}>
-      {/* Fila de categorías + cerrar */}
-      <View style={styles.topRow} pointerEvents="box-none">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent} pointerEvents="box-none">
-          {CATEGORIES.map(cat => {
-            const active = selectedCategory === cat.id;
-            return (
-              <TouchableOpacity key={cat.id} onPress={() => setSelectedCategory(cat.id)} style={styles.iconTab}>
-                <MaterialCommunityIcons name={cat.icon} size={16} color={active ? cat.color : 'rgba(255,255,255,0.35)'} />
-                <Text style={[styles.catName, active && { color: cat.color }]}>{cat.name}</Text>
-                {active && <View style={[styles.activeDot, { backgroundColor: cat.color }]} />}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-        <View style={styles.topRight}>
-          {selectedCategory === 'Personajes' && selectedStickerId && (
-            <TouchableOpacity onPress={handleUnequip}>
-              <Ionicons name="close-circle" size={18} color="rgba(239,68,68,0.9)" />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity onPress={handleClose}>
-            <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.4)" />
-          </TouchableOpacity>
-        </View>
-      </View>
+  const gradientColors = displaySeason ? displaySeason.gradient : theme?.gradient;
+  const particlesType = displaySeason ? displaySeason.particles : theme?.particles;
 
-      {/* Items */}
-      {!loading && (
-        <FlatList
-          data={filteredItems}
-          renderItem={renderItem}
-          keyExtractor={i => i.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <View style={styles.empty}>
-              <MaterialCommunityIcons name={currentCat?.icon} size={22} color="rgba(255,255,255,0.3)" />
-            </View>
-          }
-        />
-      )}
-      </View>
+  return (
+    <View style={styles.container}>
+      <StatusBar hidden={true} />
+      <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
+        <ThemeParticles particleType={particlesType} />
+        <TabButtons onExit={handleClose} />
+        <View style={styles.body}>
+          {/* Sidebar categorías */}
+          <View style={styles.sidebar}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sidebarContent}>
+              {CATEGORIES.map(cat => {
+                const active = selectedCategory === cat.id;
+                return (
+                  <TouchableOpacity
+                    key={cat.id}
+                    onPress={() => setSelectedCategory(cat.id)}
+                    style={[styles.sideTab, active && styles.sideTabActive]}
+                  >
+                    {active && <View style={[styles.sideActiveLine, { backgroundColor: cat.color }]} />}
+                    <MaterialCommunityIcons name={cat.icon} size={16} color={active ? cat.color : 'rgba(0,0,0,0.35)'} />
+                    <Text style={[styles.sideTabText, active && { color: '#222' }]}>{cat.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Grid central */}
+          <View style={styles.gridArea}>
+            {!loading && (
+              <FlatList
+                data={filteredItems}
+                renderItem={renderItem}
+                keyExtractor={i => i.id}
+                numColumns={4}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.gridContent}
+                ListEmptyComponent={
+                  <View style={styles.empty}>
+                    <MaterialCommunityIcons name={currentCat?.icon} size={28} color="rgba(255,255,255,0.2)" />
+                    <Text style={styles.emptyText}>Vacío</Text>
+                  </View>
+                }
+              />
+            )}
+          </View>
+
+          {/* Preview derecha */}
+          <View style={styles.previewArea}>
+            {activePreview ? (
+              <View style={styles.previewCard}>
+                <Image source={{ uri: activePreview.imageUrl }} style={styles.previewImage} contentFit="contain" />
+                {selectedCategory === 'Personajes' && (
+                  <TouchableOpacity
+                    style={[styles.equipBtn, activePreview.id === selectedStickerId && styles.equipBtnActive]}
+                    onPress={() => activePreview.id === selectedStickerId ? handleUnequip() : handleStickerSelect(activePreview)}
+                  >
+                    <LinearGradient
+                      colors={activePreview.id === selectedStickerId ? ['#dc2626','#991b1b'] : ['#d97706','#b45309']}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={styles.equipBtnGradient}
+                    >
+                      <Text style={styles.equipBtnText}>
+                        {activePreview.id === selectedStickerId ? 'DESEQUIPAR' : 'EQUIPAR'}
+                      </Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+                {selectedCategory === 'Stickers' && (
+                  <TouchableOpacity
+                    style={styles.equipBtn}
+                    onPress={() => navigation.navigate('carta')}
+                  >
+                    <LinearGradient
+                      colors={['#d97706','#b45309']}
+                      start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                      style={styles.equipBtnGradient}
+                    >
+                      <Text style={styles.equipBtnText}>CAMBIAR</Text>
+                    </LinearGradient>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : null}
+          </View>
+        </View>
+      </LinearGradient>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  backdrop: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    zIndex: 100,
+  container: { flex: 1 },
+  gradient: { flex: 1 },
+  body: {
+    flex: 1,
+    flexDirection: 'row',
+    marginTop: 55,
   },
-  sheet: {
-    backgroundColor: 'rgba(8,6,18,0.96)',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    paddingTop: 6,
-    paddingBottom: 10,
-    borderTopWidth: 1,
-    borderLeftWidth: 1,
+  // Sidebar
+  sidebar: {
+    width: 120,
+    marginLeft: 47,
+    backgroundColor: 'transparent',
     borderRightWidth: 1,
-    borderColor: 'rgba(120,80,255,0.25)',
+    borderRightColor: 'rgba(255, 255, 255, 0)',
   },
-  topRow: {
+  sidebarContent: {
+    paddingVertical: 8,
+  },
+  sideTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    marginBottom: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 10,
+    position: 'relative',
   },
-  tabsContent: { flexGrow: 1, gap: 2, alignItems: 'center', paddingRight: 6 },
-  iconTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    height: 28,
-    gap: 4,
+  sideTabActive: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  catName: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.35)' },
-  activeDot: {
+  sideTabText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: 'rgba(0,0,0,0.55)',
+    letterSpacing: 0.2,
+  },
+  sideActiveLine: {
+    position: 'absolute',
+    left: 0,
+    top: '20%',
     width: 3,
-    height: 3,
-    borderRadius: 1.5,
-    marginTop: 1,
+    height: '60%',
+    borderRadius: 2,
   },
-  topRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  listContent: { paddingHorizontal: 10, gap: 6, alignItems: 'center' },
+  // Grid
+  gridArea: {
+    flex: 1,
+    right: -5,
+    backgroundColor: 'rgba(0, 0, 0, 0.03)',
+  },
+  gridContent: {
+    padding: 12,
+    gap: 2,
+  },
   card: {
-    width: 46,
-    height: 46,
+    width: 88,
+    height: 88,
     borderRadius: 10,
     overflow: 'hidden',
     borderWidth: 1.5,
-    justifyContent: 'center',
+    margin: 4,
+    backgroundColor: 'rgba(15,15,15,0.75)',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 4,
+    flexDirection: 'column',
+  },
+  cardHeader: {
+    height: 4,
+    width: '100%',
+  },
+  cardImageWrap: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  cardGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  img: { width: 46, height: 46 },
-  selectedDot: {
-    position: 'absolute',
-    bottom: 3,
-    right: 3,
-    width: 6,
-    height: 6,
+  img: { width: 62, height: 62, backgroundColor: 'transparent' },
+  cardFooter: {
+    height: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingBottom: 2,
+  },
+  rarityDot: {
+    width: 5,
+    height: 5,
     borderRadius: 3,
-    backgroundColor: '#22c55e',
+    opacity: 0.9,
   },
-  empty: { width: 80, alignItems: 'center', justifyContent: 'center', paddingVertical: 10 },
+  checkIcon: {
+    opacity: 0.95,
+  },
+  empty: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+    gap: 10,
+  },
+  emptyText: {
+    color: 'rgba(255,255,255,0.2)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  // Preview
+  previewArea: {
+    width: 190,
+    overflow: 'hidden',
+    borderLeftWidth: 1,
+    borderLeftColor: 'rgba(255,255,255,0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewCard: {
+    alignItems: 'center',
+    gap: 14,
+    width: '100%',
+    paddingHorizontal: 18,
+  },
+  previewImage: {
+    width: 150,
+    height: 150,
+  },
+  equipBtn: {
+    width: '80%',
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  equipBtnActive: {},
+  equipBtnGradient: {
+    paddingVertical: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  equipBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
 });
 
 export default Coleccion;
