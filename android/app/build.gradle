@@ -136,7 +136,7 @@ android {
         jniLibs {
             def enableLegacyPackaging = findProperty('expo.useLegacyPackaging') ?: 'false'
             useLegacyPackaging enableLegacyPackaging.toBoolean()
-            excludes += ['lib/x86/*', 'lib/x86_64/*', 'lib/armeabi-v7a/*', 'lib/armeabi/*']
+            excludes += ['**/lib/x86/**', '**/lib/x86_64/**', '**/lib/armeabi-v7a/**', '**/lib/armeabi/**']
         }
     }
     androidResources {
