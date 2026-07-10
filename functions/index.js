@@ -43,6 +43,10 @@ exports.sendPushyNotification = functions.https.onCall(
       try {
         const payload = {
           to: token,
+          notification: {
+            title,
+            body,
+          },
           data: {
             title,
             message: body,
@@ -53,7 +57,7 @@ exports.sendPushyNotification = functions.https.onCall(
 
         const apiUrl = `https://api.pushy.me/push?api_key=${apiSecret}`;
         logger.info("[PUSHY] Calling API:", apiUrl.replace(apiSecret, "***"));
-        
+
         const response = await fetch(apiUrl, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
@@ -61,7 +65,7 @@ exports.sendPushyNotification = functions.https.onCall(
         });
 
         logger.info("[PUSHY] Response status:", response.status);
-        
+
         const result = await response.json();
         logger.info("[PUSHY] Response body:", result);
 

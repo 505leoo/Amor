@@ -1,6 +1,11 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { auth, db } from '../firebaseConfig';
+import { doc, getDoc, getDocs, collection, query, where, limit, updateDoc } from 'firebase/firestore';
+import { useTheme } from '../ThemeContext';
+import { useSeason } from '../SeasonContext';
+import ThemeParticles from '../components/ThemeParticles';
 
 const generarMiniBarcode = () => {
   const bars = [];
@@ -14,61 +19,93 @@ const generarMiniBarcode = () => {
 const Hud = ({ navigation }) => {
   const openPerfil = () => navigation?.navigate?.('perfil');
   const bars = generarMiniBarcode();
+  const { currentTheme, themes } = useTheme();
+  const { getDisplaySeason } = useSeason();
+  const theme = themes[currentTheme];
+  const displaySeason = getDisplaySeason();
+  const gradientColors = displaySeason ? displaySeason.gradient : theme?.gradient;
+  const particlesType = displaySeason ? displaySeason.particles : theme?.particles;
+
+  useEffect(() => {
+    const user = auth.currentUser;
+    if (!user) return;
+    (async () => {
+      try {
+        const ref = doc(db, 'usuarios', user.uid);
+        const snap = await getDoc(ref);
+        if (!snap.exists()) return;
+        const dni = snap.data().dni;
+        if (typeof dni === 'string' && /^\d{2}-\d{3}-\d{3}$/.test(dni.trim())) return;
+        const gen = () => { const r = n => Math.floor(n + Math.random() * n); return `${r(10)}-${r(100)}-${r(100)}`; };
+        for (let i = 0; i < 24; i++) {
+          const c = gen();
+          const taken = await getDocs(query(collection(db, 'usuarios'), where('dni', '==', c), limit(1)));
+          if (taken.empty) { await updateDoc(ref, { dni: c }); return; }
+        }
+      } catch (e) {}
+    })();
+  }, []);
 
   return (
     <Pressable onPress={openPerfil} style={styles.pressable}>
-      <LinearGradient
-        colors={['rgba(40, 30, 20, 0.9)', 'rgba(60, 45, 30, 0.85)']}
-        style={styles.container}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <View style={styles.dniMini}>
-          {/* Banda superior */}
-          <LinearGradient
-            colors={['#4a1a10', '#7a1f06', '#8f2d0e']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.band}
-          >
-            <View style={styles.bandRow}>
-              <Text style={styles.bandCountry}>LOVE</Text>
-              <View style={styles.bandAccent}>
-                <Text style={styles.bandAccentText}>DNI</Text>
+      <View style={styles.container}>
+        <LinearGradient
+          colors={gradientColors || ['#4a1a10', '#7a1f06', '#8f2d0e']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientShell}
+        >
+          <ThemeParticles particleType={particlesType} />
+          <View style={styles.seasonBadge}>
+            <Text style={styles.seasonBadgeText}>{displaySeason?.icon || '✦'}</Text>
+          </View>
+          <View style={styles.dniMini}>
+            {/* Banda superior */}
+            <LinearGradient
+              colors={['#4a1a10', '#7a1f06', '#8f2d0e']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.band}
+            >
+              <View style={styles.bandRow}>
+                <Text style={styles.bandCountry}>LOVE</Text>
+                <View style={styles.bandAccent}>
+                  <Text style={styles.bandAccentText}>DNI</Text>
+                </View>
               </View>
-            </View>
-          </LinearGradient>
+            </LinearGradient>
 
-          {/* Cuerpo */}
-          <View style={styles.dniBody}>
-            <View style={styles.mainRow}>
-              {/* Foto simulada */}
-              <View style={styles.photoShell}>
-                <View style={styles.photoPlaceholder}>
-                  <Text style={styles.photoText}>ID</Text>
+            {/* Cuerpo */}
+            <View style={styles.dniBody}>
+              <View style={styles.mainRow}>
+                {/* Foto simulada */}
+                <View style={styles.photoShell}>
+                  <View style={styles.photoPlaceholder}>
+                    <Text style={styles.photoText}>ID</Text>
+                  </View>
+                </View>
+
+                {/* Info */}
+                <View style={styles.infoCol}>
+                  <View style={styles.fakeTextLine} />
+                  <View style={styles.fakeTextLineShort} />
+                  <View style={styles.fakeTextLineLong} />
                 </View>
               </View>
 
-              {/* Info */}
-              <View style={styles.infoCol}>
-                <View style={styles.fakeTextLine} />
-                <View style={styles.fakeTextLineShort} />
-                <View style={styles.fakeTextLineLong} />
+              {/* Línea divisoria */}
+              <View style={styles.sectionDivider} />
+
+              {/* Barcode mini */}
+              <View style={styles.barcodeRow}>
+                {bars.map((bar, i) => (
+                  <View key={i} style={[styles.barcodeBar, { width: bar.w, height: bar.h, opacity: bar.opacity }]} />
+                ))}
               </View>
             </View>
-
-            {/* L�nea divisoria */}
-            <View style={styles.sectionDivider} />
-
-            {/* Barcode mini */}
-            <View style={styles.barcodeRow}>
-              {bars.map((bar, i) => (
-                <View key={i} style={[styles.barcodeBar, { width: bar.w, height: bar.h, opacity: bar.opacity }]} />
-              ))}
-            </View>
           </View>
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </View>
     </Pressable>
   );
 };
@@ -96,11 +133,38 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 8,
   },
+  gradientShell: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  seasonBadge: {
+    position: 'absolute',
+    top: 1,
+    right: 1,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  seasonBadgeText: {
+    fontSize: 3,
+    color: 'rgba(255,255,255,0.9)',
+  },
   dniMini: {
     width: '100%',
     height: '100%',
     borderRadius: 0,
-    backgroundColor: '#f5f0e8',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(200, 160, 30, 0.9)',
@@ -136,7 +200,7 @@ const styles = StyleSheet.create({
   },
   dniBody: {
     flex: 1,
-    backgroundColor: '#fdfbf6',
+    backgroundColor: 'transparent',
     paddingHorizontal: 3,
     paddingTop: 1,
     paddingBottom: 1,

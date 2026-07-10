@@ -9,7 +9,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
 import NotificationSystem from './utils/NotificationSystem';
 import PushyService from './utils/PushyService';
-import { asegurarDniUsuario } from './utils/dniUsuario';
 import { ThemeProvider } from './ThemeContext';
 import { SeasonProvider } from './SeasonContext';
 import { DebugProvider } from './DebugContext';
@@ -109,7 +108,6 @@ export default function App() {
             if (Object.keys(updates).length > 0) {
               updateDoc(doc(db, 'usuarios', currentUser.uid), updates).catch(err => console.error('Error actualizando usuario:', err));
             }
-            asegurarDniUsuario(db, currentUser.uid).catch(err => console.error('Error asignando DNI:', err));
           } else {
             setDoc(doc(db, 'usuarios', currentUser.uid), { 
               dinero: 0, 
@@ -118,8 +116,6 @@ export default function App() {
               racha: 1,
               ultimaActividad: new Date().toISOString(),
               fechaUltimaRacha: new Date().toISOString()
-            }).then(() => {
-              asegurarDniUsuario(db, currentUser.uid).catch(err => console.error('Error asignando DNI:', err));
             }).catch(err => console.error('Error creando usuario:', err));
           }
         }).catch(e => {

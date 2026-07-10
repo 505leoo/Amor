@@ -6,7 +6,8 @@ import { doc, updateDoc, collection, query, where, getDocs, addDoc, getDoc, setD
 // Configurar comportamiento de notificaciones
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
@@ -204,11 +205,8 @@ class NotificationSystem {
   async sendPushNotification(pushyToken, title, body, data = {}) {
     try {
       const PushyService = require('./PushyService').default;
-      const result = await PushyService.sendCustomNotification([pushyToken], title, body, data);
-      console.log('PushyService.sendCustomNotification result:', result);
-      return result;
+      return await PushyService.sendCustomNotification([pushyToken], title, body);
     } catch (error) {
-      console.error('Error enviando notificación:', error);
       return { success: false, provider: 'pushy', error: error.message || error };
     }
   }
@@ -561,11 +559,8 @@ class NotificationSystem {
 
   // Configurar listener de notificaciones
   setupNotificationListeners() {
-    // El analizador de datos ya maneja los listeners
-    // Solo agregamos logs adicionales aquí
-    Notifications.addNotificationReceivedListener(notification => {
-      
-    });
+    if (this._notifListener) return;
+    this._notifListener = Notifications.addNotificationReceivedListener(() => {});
   }
 }
 
