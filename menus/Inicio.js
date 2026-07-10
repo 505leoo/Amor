@@ -5,9 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   StatusBar,
-  Image,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth } from '../firebaseConfig';
 import NotificationSystem from '../utils/NotificationSystem';
@@ -17,18 +16,27 @@ import BotonesDerecha from './BotonesDerecha';
 import Hud from './Hud';
 import Hud2 from './Hud2';
 import Player from '../Player';
+import PlayerRemera from '../PlayerRemera';
+import PlayerManoI from '../PlayerManoI';
+import PlayerManoD from '../PlayerManoD';
+import Poster1 from '../Poster1';
+import Frases from '../Frases';
+import FrasesExpandida from '../FrasesExpandida';
 import Mensajes from './Mensajes';
 import { useTheme } from '../ThemeContext';
 import { useSeason } from '../SeasonContext';
-import { useDebug } from '../DebugContext';
 import ThemeParticles from '../components/ThemeParticles';
+import RoomBackground from '../components/RoomBackground';
+import Guirladas from '../components/Guirladas';
+import { useDebug } from '../DebugContext';
 
-const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker }) => {
+const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker, frase }) => {
   const { currentTheme, themes } = useTheme();
   const { getDisplaySeason, isDevMode } = useSeason();
   const { isDebugMode } = useDebug();
   const theme = themes[currentTheme];
   const displaySeason = getDisplaySeason();
+  const [showFrasesExpandida, setShowFrasesExpandida] = React.useState(false);
 
   const gradientColors = displaySeason ? displaySeason.gradient : theme?.gradient;
   const particlesType = displaySeason ? displaySeason.particles : theme?.particles;
@@ -46,6 +54,8 @@ const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker }) => {
 
   return (
     <View style={styles.container}>
+      <RoomBackground />
+      <Guirladas />
       <StatusBar hidden={true} />
       {false ? <ThemeParticles particleType={particlesType} /> : null}
       <Eventos navigation={navigation} />
@@ -53,8 +63,17 @@ const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker }) => {
       <BotonesDerecha navigation={navigation} />
       <Hud navigation={navigation} />
       <Hud2 navigation={navigation} />
-      <Player onSelectSticker={() => navigation.navigate('coleccion')} />
+      <Poster1 containerStyle={styles.poster1} />
+      <Frases containerStyle={styles.frases} frase={frase} onPress={() => navigation.navigate('frasesExpandida')} />
+      <PlayerManoI containerStyle={styles.manoI} />
+      <PlayerManoD containerStyle={styles.manoD} />
+      <PlayerRemera containerStyle={{ bottom: -213, left: '24%', transform: [{ translateX: -50 }], width: 450, height: 700 }} />
+      {showFrasesExpandida && null}
       <Mensajes navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />
+
+      <TouchableOpacity style={styles.vestuarioBtn} onPress={() => navigation.navigate('Vestuario')}>
+        <Text style={styles.vestuarioBtnText}>Vestuario</Text>
+      </TouchableOpacity>
       
       {isDebugMode && (
         <TouchableOpacity 
@@ -91,6 +110,61 @@ const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  poster1: {
+    position: 'absolute',
+    width: 90,
+    height: 200,
+    top: '60.6%',
+    left: '72%',
+    transform: [{ translateX: -100 }, { translateY: -150 }],
+  },
+  frases: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    top: '50%',
+    left: '20%',
+    transform: [{ translateY: -40 }],
+  },
+  cabeza: {
+    position: 'absolute',
+    bottom: -213,
+    left: '24%',
+    transform: [{ translateX: -50 }],
+    width: 450,
+    height: 700,
+  },
+  manoI: {
+    position: 'absolute',
+    bottom: -213,
+    left: '24%',
+    transform: [{ translateX: -50 }],
+    width: 450,
+    height: 700,
+  },
+  manoD: {
+    position: 'absolute',
+    bottom: -213,
+    left: '24%',
+    transform: [{ translateX: -50 }],
+    width: 450,
+    height: 700,
+  },
+  vestuarioBtn: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    left: '38%',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 20,
+  },
+  vestuarioBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   temasButton: {
     position: 'absolute',
@@ -165,21 +239,6 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
-  },
-  backgroundImage: {
-    ...StyleSheet.absoluteFillObject,
-    resizeMode: 'cover',
-  },
-  overlayImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-    resizeMode: 'stretch',
-    zIndex: -999,
-    elevation: -999,
-    opacity: 1,
   },
 });
 

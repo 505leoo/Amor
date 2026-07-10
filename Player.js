@@ -3,9 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
-import { MaterialIcons } from '@expo/vector-icons';
 
-const Player = ({ onSelectSticker, centered = false, showNameTag = true }) => {
+const Player = ({ onSelectSticker, centered = false, showNameTag = true, containerStyle }) => {
   const [selectedSticker, setSelectedSticker] = useState(null);
   const [playerName, setPlayerName] = useState('Aurora');
 
@@ -38,7 +37,7 @@ const Player = ({ onSelectSticker, centered = false, showNameTag = true }) => {
   const imageUri = selectedSticker?.imageUrl || selectedSticker?.url || selectedSticker?.image || selectedSticker?.image_url || null;
 
   return (
-    <View style={centered ? styles.containerCentered : styles.container} pointerEvents="box-none">
+    <View style={[centered ? styles.containerCentered : styles.container, containerStyle]} pointerEvents="box-none">
       {imageUri ? (
         <TouchableOpacity style={styles.imageTouchable} onPress={onSelectSticker} activeOpacity={0.8}>
           <Image source={{ uri: imageUri }} style={styles.image} contentFit="contain" cachePolicy="memory-disk" />
@@ -49,8 +48,8 @@ const Player = ({ onSelectSticker, centered = false, showNameTag = true }) => {
           )}
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity style={styles.addButton} onPress={onSelectSticker} activeOpacity={0.7}>
-          <MaterialIcons name="add" size={48} color="rgba(255,255,255,0.5)" />
+        <TouchableOpacity style={styles.imageTouchable} onPress={onSelectSticker} activeOpacity={0.8}>
+          <Image source={require('./assets/player/cabeza1.png')} style={styles.image} contentFit="contain" />
         </TouchableOpacity>
       )}
     </View>
@@ -60,11 +59,6 @@ const Player = ({ onSelectSticker, centered = false, showNameTag = true }) => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 65,
-    left: '45%',
-    transform: [{ translateX: -50 }],
-    width: 100,
-    height: 100,
   },
   containerCentered: {
     position: 'relative',
@@ -82,7 +76,6 @@ const styles = StyleSheet.create({
     height: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   image: {
     width: '100%',

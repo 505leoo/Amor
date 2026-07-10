@@ -1,11 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, getDocs, collection, query, where, limit, updateDoc } from 'firebase/firestore';
 import { useTheme } from '../ThemeContext';
 import { useSeason } from '../SeasonContext';
-import ThemeParticles from '../components/ThemeParticles';
 
 const generarMiniBarcode = () => {
   const bars = [];
@@ -18,7 +17,7 @@ const generarMiniBarcode = () => {
 
 const Hud = ({ navigation }) => {
   const openPerfil = () => navigation?.navigate?.('perfil');
-  const bars = generarMiniBarcode();
+  const bars = useMemo(() => generarMiniBarcode(), []);
   const { currentTheme, themes } = useTheme();
   const { getDisplaySeason } = useSeason();
   const theme = themes[currentTheme];
@@ -55,7 +54,6 @@ const Hud = ({ navigation }) => {
           end={{ x: 1, y: 1 }}
           style={styles.gradientShell}
         >
-          <ThemeParticles particleType={particlesType} />
           <View style={styles.seasonBadge}>
             <Text style={styles.seasonBadgeText}>{displaySeason?.icon || '✦'}</Text>
           </View>

@@ -45,7 +45,7 @@
       "supportsTablet": false
     },
     "notification": {
-      "icon": "./assets/16.png",
+      "icon": "./assets/notifications.png",
       "color": "#FFFFFF",
       "androidMode": "default",
       "androidCollapsedTitle": "Amor"
@@ -54,7 +54,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/16.png",
+          "icon": "./assets/notifications.png",
           "color": "#FFFFFF",
           "defaultChannel": "amor-notifications"
         }

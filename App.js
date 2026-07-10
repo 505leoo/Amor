@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, StatusBar as RNStatusBar, Image } from 'react-native';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebaseConfig';
 import { doc, getDoc, collection, getDocs, query, limit, updateDoc, setDoc } from 'firebase/firestore';
@@ -8,7 +8,6 @@ import * as NavigationBar from 'expo-navigation-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
 import NotificationSystem from './utils/NotificationSystem';
-import PushyService from './utils/PushyService';
 import { ThemeProvider } from './ThemeContext';
 import { SeasonProvider } from './SeasonContext';
 import { DebugProvider } from './DebugContext';
@@ -31,98 +30,79 @@ import Temas from './menus/Temas';
 import SeasonInfo from './menus/SeasonInfo';
 import Perfil from './menus/Perfil';
 import CartaExpandida from './components/CartaExpandida';
+import Vestuario from './menus/Vestuario';
+import FrasesExpandida from './FrasesExpandida';
 
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [loading, setLoading]           = useState(true);
+  const [authChecked, setAuthChecked]   = useState(false);
   const [currentScreen, setCurrentScreen] = useState('intro');
   const [cartaMessage, setCartaMessage] = useState('');
   const [selectedSticker, setSelectedSticker] = useState(null);
-  const [isConnected, setIsConnected] = useState(true);
-  const [isFirestoreReady, setIsFirestoreReady] = useState(false);
-  const [inicioReady, setInicioReady] = useState(false);
+  const [frase, setFrase] = useState(null);
+  const [isConnected, setIsConnected]   = useState(true);
+  const [inicioReady, setInicioReady]   = useState(false);
   const userRef = useRef(null);
 
-  // Precargar imágenes de stickers
-  useEffect(() => {
-    const preloadImages = async () => {
-      try {
-        const stickersSnapshot = await getDocs(collection(db, 'stickers'));
-        const imageUrls = stickersSnapshot.docs.map(doc => doc.data().imageUrl).filter(Boolean);
-        
-        await Promise.all(
-          imageUrls.map(url => 
-            ExpoImage.prefetch(url, {
-              cachePolicy: 'memory-disk',
-              priority: 'high'
-            })
-          )
-        );
-        
-      } catch (error) {
-        console.error('Error precargando imágenes:', error);
-      }
-    };
-
-    if (isFirestoreReady) {
-      preloadImages();
-    }
-  }, [isFirestoreReady]);
-
-  // Función para cambiar pantallas
-  const navigateToScreen = (screenName, params) => {
-    if (params?.message !== undefined) setCartaMessage(params.message);
+  // navigation estable — useCallback + ref para que nunca cambie de referencia
+  // y no cause re-renders en cascada en todos los hijos
+  const navigateToScreen = useCallback((screenName, params) => {
+    if (params?.message !== undefined)        setCartaMessage(params.message);
     if (params?.selectedSticker !== undefined) setSelectedSticker(params.selectedSticker);
+    if (params?.frase !== undefined)           setFrase(params.frase);
     setCurrentScreen(screenName);
-  };
+  }, []);
+
+  const navigation = useRef({ navigate: navigateToScreen }).current;
+  useEffect(() => { navigation.navigate = navigateToScreen; }, [navigateToScreen]);
+
+  // Precargar imágenes después de que Firestore esté listo
+  const preloadImages = useCallback(async () => {
+    try {
+      const snap = await getDocs(collection(db, 'stickers'));
+      const urls = snap.docs.map(d => d.data().imageUrl).filter(Boolean);
+      await Promise.all(urls.map(url => ExpoImage.prefetch(url, { cachePolicy: 'memory-disk', priority: 'high' })));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     NavigationBar.setVisibilityAsync('hidden');
-    
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        setUser(currentUser);
         userRef.current = currentUser;
-        
+
         Promise.all([
           NotificationSystem.registerForPushNotifications(),
           NotificationSystem.notifyUserOnline(),
-          NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName)
-        ]).catch(err => console.error('Error en notificaciones:', err));
-        
+          NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName),
+        ]).catch(() => {});
+
         NotificationSystem.setupNotificationListeners();
-        
-        // El registro de Pushy y el guardado de token se maneja en NotificationSystem.registerForPushNotifications()
-        
-        getDoc(doc(db, 'usuarios', currentUser.uid)).then(userSnap => {
-          if (userSnap.exists()) {
-            const data = userSnap.data();
+
+        getDoc(doc(db, 'usuarios', currentUser.uid)).then(snap => {
+          if (snap.exists()) {
+            const data = snap.data();
             const updates = {};
-            if (typeof data.dinero === 'undefined') updates.dinero = 0;
-            if (typeof data.nivel === 'undefined') updates.nivel = 1;
-            if (typeof data.exp === 'undefined') updates.exp = 0;
-            if (typeof data.racha === 'undefined') updates.racha = 1;
-            if (typeof data.ultimaActividad === 'undefined') updates.ultimaActividad = new Date().toISOString();
-            if (typeof data.fechaUltimaRacha === 'undefined') updates.fechaUltimaRacha = new Date().toISOString();
-            if (Object.keys(updates).length > 0) {
-              updateDoc(doc(db, 'usuarios', currentUser.uid), updates).catch(err => console.error('Error actualizando usuario:', err));
-            }
+            if (data.dinero        === undefined) updates.dinero        = 0;
+            if (data.nivel         === undefined) updates.nivel         = 1;
+            if (data.exp           === undefined) updates.exp           = 0;
+            if (data.racha         === undefined) updates.racha         = 1;
+            if (data.ultimaActividad    === undefined) updates.ultimaActividad    = new Date().toISOString();
+            if (data.fechaUltimaRacha   === undefined) updates.fechaUltimaRacha   = new Date().toISOString();
+            if (Object.keys(updates).length > 0)
+              updateDoc(doc(db, 'usuarios', currentUser.uid), updates).catch(() => {});
           } else {
-            setDoc(doc(db, 'usuarios', currentUser.uid), { 
-              dinero: 0, 
-              nivel: 1,
-              exp: 0,
-              racha: 1,
+            setDoc(doc(db, 'usuarios', currentUser.uid), {
+              dinero: 0, nivel: 1, exp: 0, racha: 1,
               ultimaActividad: new Date().toISOString(),
-              fechaUltimaRacha: new Date().toISOString()
-            }).catch(err => console.error('Error creando usuario:', err));
+              fechaUltimaRacha: new Date().toISOString(),
+            }).catch(() => {});
           }
-        }).catch(e => {
-          console.error('Error verificando/creando campos de usuario:', e);
-        });
+        }).catch(() => {});
+
+        preloadImages();
       } else {
-        setUser(null);
         userRef.current = null;
       }
       setAuthChecked(true);
@@ -130,69 +110,18 @@ export default function App() {
     });
 
     ImagePicker.getMediaLibraryPermissionsAsync().then(({ status }) => {
-      if (status !== 'granted') {
-        ImagePicker.requestMediaLibraryPermissionsAsync();
-      }
-    });
-
-    ImagePicker.UIImagePickerControllerDidFinishPickingMediaWithInfo = ({
-      mediaTypes: 'Images',
-      allowsEditing: false,
-      quality: 1,
-      allowsMultipleSelection: false,
-      presentationStyle: 'fullScreen',
-      base64: false
+      if (status !== 'granted') ImagePicker.requestMediaLibraryPermissionsAsync();
     });
 
     return () => unsubscribe();
   }, []);
 
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(state => {
-      setIsConnected(state.isConnected);
-    });
-
-    return () => {
-      unsubscribe();
-    };
+    const unsub = NetInfo.addEventListener(state => setIsConnected(state.isConnected));
+    return () => unsub();
   }, []);
 
-  useEffect(() => {
-    let retryCount = 0;
-    const maxRetries = 5;
-    const retryDelay = 2000;
-    let timeoutId;
-
-    const checkFirestoreConnection = async () => {
-      if (!isConnected) {
-        setIsFirestoreReady(false);
-        return;
-      }
-
-      try {
-        await getDocs(query(collection(db, 'usuarios'), limit(1)));
-        setIsFirestoreReady(true);
-      } catch (error) {
-        console.error('Firestore connection attempt failed:', error.message);
-        setIsFirestoreReady(false);
-        
-        if (retryCount < maxRetries) {
-          retryCount++;
-          timeoutId = setTimeout(checkFirestoreConnection, retryDelay);
-        }
-      }
-    };
-
-    checkFirestoreConnection();
-
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [isConnected]);
-
-  if (loading || !authChecked) {
-    return null;
-  }
+  if (loading || !authChecked) return null;
 
   return (
     <View style={styles.container}>
@@ -203,69 +132,35 @@ export default function App() {
               <TrofeosProvider>
                 <MusicProvider>
                   <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
-                  
-                  {currentScreen === 'intro' && userRef.current && (
-                    <View style={{ position: 'absolute', width: '100%', height: '100%', opacity: 0 }}>
-                      <Inicio navigation={{ navigate: navigateToScreen }} onReady={() => setInicioReady(true)} />
-                    </View>
-                  )}
-                  
+
+                  {/* Intro — sin pre-render oculto de Inicio, inicioReady siempre true */}
                   {currentScreen === 'intro' && (
-                    <Intro 
-                      onComplete={() => {
-                        setCurrentScreen(userRef.current ? 'main' : 'login');
-                      }} 
+                    <Intro
+                      onComplete={() => setCurrentScreen(userRef.current ? 'main' : 'login')}
                       isAuthenticated={!!userRef.current}
                       isConnected={isConnected}
-                      inicioReady={inicioReady}
+                      inicioReady={true}
                     />
                   )}
-                  
-                  {currentScreen === 'login' && (
-                    <Login navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'register' && (
-                    <Register navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'main' && (
-                    <Inicio navigation={{ navigate: navigateToScreen }} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} />
-                  )}
-                  {currentScreen === 'coleccion' && (
-                    <Coleccion navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'menu' && (
-                    <Menu navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'pistas' && (
-                    <Pistas navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'ecos' && (
-                    <Ecos navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'buzon' && (
-                    <Buzon navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'tienda' && (
-                    <Tienda navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'trofeos' && (
-                    <Trofeos navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'stickers' && (
-                    <Stickers navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'Temas' && (
-                    <Temas navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'seasonInfo' && (
-                    <SeasonInfo navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'perfil' && (
-                    <Perfil navigation={{ navigate: navigateToScreen }} />
-                  )}
-                  {currentScreen === 'carta' && (
-                    <CartaExpandida navigation={{ navigate: navigateToScreen }} message={cartaMessage} selectedSticker={selectedSticker} />
-                  )}
+
+                  {currentScreen === 'login'      && <Login      navigation={navigation} />}
+                  {currentScreen === 'register'   && <Register   navigation={navigation} />}
+                  {currentScreen === 'main'       && <Inicio     navigation={navigation} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} frase={frase} />}
+                  {currentScreen === 'coleccion'  && <Coleccion  navigation={navigation} />}
+                  {currentScreen === 'menu'       && <Menu       navigation={navigation} />}
+                  {currentScreen === 'pistas'     && <Pistas     navigation={navigation} />}
+                  {currentScreen === 'ecos'       && <Ecos       navigation={navigation} />}
+                  {currentScreen === 'buzon'      && <Buzon      navigation={navigation} />}
+                  {currentScreen === 'tienda'     && <Tienda     navigation={navigation} />}
+                  {currentScreen === 'trofeos'    && <Trofeos    navigation={navigation} />}
+                  {currentScreen === 'stickers'   && <Stickers   navigation={navigation} />}
+                  {currentScreen === 'Temas'      && <Temas      navigation={navigation} />}
+                  {currentScreen === 'seasonInfo' && <SeasonInfo navigation={navigation} />}
+                  {currentScreen === 'perfil'     && <Perfil     navigation={navigation} />}
+                  {currentScreen === 'Vestuario'       && <Vestuario       navigation={navigation} />}
+                  {currentScreen === 'frasesExpandida' && <FrasesExpandida navigation={navigation} />}
+                  {currentScreen === 'carta'      && <CartaExpandida navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />}
+
                 </MusicProvider>
               </TrofeosProvider>
             </NewIndicatorProvider>
@@ -279,4 +174,3 @@ export default function App() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
 });
-
