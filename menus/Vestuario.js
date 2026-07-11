@@ -4,21 +4,19 @@ import { Image } from 'expo-image';
 import TabButtons from '../components/TabButtons';
 import Player from '../Player';
 import PlayerRemera from '../PlayerRemera';
-import PlayerManoI from '../PlayerManoI';
-import PlayerManoD from '../PlayerManoD';
+import PlayerManos from '../PlayerManos';
 
 const Vestuario = ({ navigation }) => (
   <View style={styles.container}>
     <StatusBar hidden={true} />
     <Image source={require('../assets/paredes/vestuario1.png')} style={StyleSheet.absoluteFill} contentFit="cover" />
-    <PlayerManoI containerStyle={styles.manoI} />
-    <PlayerManoD containerStyle={styles.manoD} />
-    <PlayerRemera containerStyle={styles.remera} />
     <Player
       containerStyle={styles.cabeza}
       showNameTag={false}
       onSelectSticker={() => {}}
     />
+    <PlayerManos containerStyle={styles.manos} />
+    <PlayerRemera containerStyle={styles.remera} />
     <TabButtons onExit={() => navigation.navigate('main')} />
   </View>
 );
@@ -27,36 +25,28 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   cabeza: {
     position: 'absolute',
+    left: 443,
+    bottom: 55,
+    width: 240,
+    height: 300,
+    zIndex: 2,
+  },
+  manos: {
+    position: 'absolute',
     left: 487,
-    bottom: 65,
+    bottom: 20,
     width: 160,
-    height: 300,
-    zIndex: 3,
-  },
-  manoI: {
-    position: 'absolute',
-    left: 480,
-    bottom: 20,
-    width: 120,
-    height: 300,
-    zIndex: 1,
-  },
-  manoD: {
-    position: 'absolute',
-    left: 534,
-    bottom: 20,
-    width: 120,
     height: 300,
     zIndex: 1,
   },
   remera: {
     position: 'absolute',
-    left: 510.9,
-    bottom: 97,
-    width: 113,
+    left: 475,
+    bottom: 67,
+    width: 183,
     height: 180,
     zIndex: 1,
-    opacity: 2,
+    opacity: 3,
   },
 });
 

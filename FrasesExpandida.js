@@ -20,13 +20,13 @@ const FRASES = [
   { id: '6',  linea1: 'CONFÍA',  linea2: 'EN TI'      },
   { id: '7',  linea1: 'ERES',    linea2: 'SUFICIENTE' },
   { id: '8',  linea1: 'SIGUE',   linea2: 'ADELANTE'   },
-  { id: '9',  linea1: 'HOY',     linea2: 'ES TU DÍA'  },
+  { id: '9',  linea1: 'HOY ES',  linea2: 'TU DÍA'   },
   { id: '10', linea1: 'MERECES', linea2: 'LO MEJOR'   },
   { id: '11', linea1: 'FLORECE', linea2: 'SOLA'       },
   { id: '12', linea1: 'RESPIRA', linea2: 'PROFUNDO'   },
 ];
 
-const COLORS = ['#333', '#e8607a', '#f0a500', '#7a5cf0', '#2a9d8f', '#e9c46a', '#f4a0c0', '#fff'];
+const COLORS = ['#333', '#e8607a', '#e67000', '#7a5cf0', '#0a8a6e', '#d4a000', '#c0006a', '#0077cc', '#b5000f', '#5a00b5'];
 
 const FrasesExpandida = ({ navigation, frase: initialFrase, onConfirm }) => {
   const [selected, setSelected] = useState(null);
@@ -41,7 +41,7 @@ const FrasesExpandida = ({ navigation, frase: initialFrase, onConfirm }) => {
 
   const handleConfirm = () => {
     if (onConfirm) onConfirm(selected);
-    navigation.navigate('main', { frase: `${selected.linea1}\n${selected.linea2}` });
+    navigation.navigate('main', { frase: `${selected.linea1}\n${selected.linea2}`, fraseColor: COLORS[colorIdx] });
   };
 
   return (
@@ -112,12 +112,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: '100%',
     height: '100%',
+    top: -15,
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 4,
+    gap: 7.8,
+    marginBottom: 120,
   },
-  fraseLinea1: { fontFamily: 'Delius', fontSize: 22, color: '#333', textAlign: 'center' },
-  fraseLinea2: { fontFamily: 'Delius', fontSize: 22, color: '#333', textAlign: 'center' },
+  fraseLinea1: { fontFamily: 'Delius', fontSize: 24, color: '#333', textAlign: 'center' },
+  fraseLinea2: { fontFamily: 'Delius', fontSize: 24, color: '#333', textAlign: 'center' },
 
   btnConfirm: {
     position: 'absolute',

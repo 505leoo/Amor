@@ -2,9 +2,9 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 
-const PlayerManoI = ({ containerStyle }) => (
+const PlayerManos = ({ containerStyle }) => (
   <View style={[styles.container, containerStyle]} pointerEvents="none">
-    <Image source={require('./assets/player/mano1i.png')} style={styles.image} contentFit="contain" />
+    <Image source={require('./assets/player/manos1.png')} style={styles.image} contentFit="contain" />
   </View>
 );
 
@@ -13,4 +13,4 @@ const styles = StyleSheet.create({
   image: { width: '100%', height: '100%' },
 });
 
-export default PlayerManoI;
+export default PlayerManos;

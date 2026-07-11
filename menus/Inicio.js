@@ -17,8 +17,7 @@ import Hud from './Hud';
 import Hud2 from './Hud2';
 import Player from '../Player';
 import PlayerRemera from '../PlayerRemera';
-import PlayerManoI from '../PlayerManoI';
-import PlayerManoD from '../PlayerManoD';
+import PlayerManos from '../PlayerManos';
 import Poster1 from '../Poster1';
 import Frases from '../Frases';
 import FrasesExpandida from '../FrasesExpandida';
@@ -30,7 +29,7 @@ import RoomBackground from '../components/RoomBackground';
 import Guirladas from '../components/Guirladas';
 import { useDebug } from '../DebugContext';
 
-const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker, frase }) => {
+const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker, frase, fraseColor }) => {
   const { currentTheme, themes } = useTheme();
   const { getDisplaySeason, isDevMode } = useSeason();
   const { isDebugMode } = useDebug();
@@ -64,9 +63,8 @@ const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker, frase }) =
       <Hud navigation={navigation} />
       <Hud2 navigation={navigation} />
       <Poster1 containerStyle={styles.poster1} />
-      <Frases containerStyle={styles.frases} frase={frase} onPress={() => navigation.navigate('frasesExpandida')} />
-      <PlayerManoI containerStyle={styles.manoI} />
-      <PlayerManoD containerStyle={styles.manoD} />
+      <Frases containerStyle={styles.frases} frase={frase} fraseColor={fraseColor} onPress={() => navigation.navigate('frasesExpandida')} />
+      <PlayerManos containerStyle={styles.manos} />
       <PlayerRemera containerStyle={{ bottom: -213, left: '24%', transform: [{ translateX: -50 }], width: 450, height: 700 }} />
       {showFrasesExpandida && null}
       <Mensajes navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />
@@ -119,14 +117,7 @@ const styles = StyleSheet.create({
     left: '72%',
     transform: [{ translateX: -100 }, { translateY: -150 }],
   },
-  frases: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    top: '50%',
-    left: '20%',
-    transform: [{ translateY: -40 }],
-  },
+  frases: { position: 'absolute' },
   cabeza: {
     position: 'absolute',
     bottom: -213,
@@ -135,15 +126,7 @@ const styles = StyleSheet.create({
     width: 450,
     height: 700,
   },
-  manoI: {
-    position: 'absolute',
-    bottom: -213,
-    left: '24%',
-    transform: [{ translateX: -50 }],
-    width: 450,
-    height: 700,
-  },
-  manoD: {
+  manos: {
     position: 'absolute',
     bottom: -213,
     left: '24%',

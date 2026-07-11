@@ -40,6 +40,7 @@ export default function App() {
   const [cartaMessage, setCartaMessage] = useState('');
   const [selectedSticker, setSelectedSticker] = useState(null);
   const [frase, setFrase] = useState(null);
+  const [fraseColor, setFraseColor] = useState(null);
   const [isConnected, setIsConnected]   = useState(true);
   const [inicioReady, setInicioReady]   = useState(false);
   const userRef = useRef(null);
@@ -50,6 +51,7 @@ export default function App() {
     if (params?.message !== undefined)        setCartaMessage(params.message);
     if (params?.selectedSticker !== undefined) setSelectedSticker(params.selectedSticker);
     if (params?.frase !== undefined)           setFrase(params.frase);
+    if (params?.fraseColor !== undefined)      setFraseColor(params.fraseColor);
     setCurrentScreen(screenName);
   }, []);
 
@@ -145,7 +147,7 @@ export default function App() {
 
                   {currentScreen === 'login'      && <Login      navigation={navigation} />}
                   {currentScreen === 'register'   && <Register   navigation={navigation} />}
-                  {currentScreen === 'main'       && <Inicio     navigation={navigation} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} frase={frase} />}
+                  {currentScreen === 'main'       && <Inicio     navigation={navigation} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} frase={frase} fraseColor={fraseColor} />}
                   {currentScreen === 'coleccion'  && <Coleccion  navigation={navigation} />}
                   {currentScreen === 'menu'       && <Menu       navigation={navigation} />}
                   {currentScreen === 'pistas'     && <Pistas     navigation={navigation} />}
