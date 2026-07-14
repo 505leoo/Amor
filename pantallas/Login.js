@@ -155,7 +155,9 @@ export default function Login({ navigation }) {
         setLoading(false);
       }
     }
-  }, [pin, selectedUser, navigation]); = selectedUser?.selectedSticker?.imageUrl || selectedUser?.currentStickerUrl || selectedUser?.photoURL || null;
+  }, [pin, selectedUser, navigation]);
+
+  const avatarUrl = selectedUser?.selectedSticker?.imageUrl || selectedUser?.currentStickerUrl || selectedUser?.photoURL || null;
   const displayName = selectedUser?.displayName || selectedUser?.datosCompletos?.nombre || selectedUser?.nombre || '';
 
   return (
