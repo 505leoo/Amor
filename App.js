@@ -14,6 +14,7 @@ import { DebugProvider } from './DebugContext';
 import { NewIndicatorProvider } from './NewIndicatorContext';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
+import Loading from './components/Loading';
 import Intro from './Intro';
 import Login from './pantallas/Login';
 import Register from './pantallas/Register';
@@ -44,15 +45,36 @@ export default function App() {
   const [isConnected, setIsConnected]   = useState(true);
   const [inicioReady, setInicioReady]   = useState(false);
   const userRef = useRef(null);
+  const loadingRef = useRef(null);
+
+  const ANIMATED_TRANSITIONS = new Set([
+    'main|Vestuario', 'Vestuario|main',
+  ]);
 
   // navigation estable — useCallback + ref para que nunca cambie de referencia
   // y no cause re-renders en cascada en todos los hijos
+  const currentScreenRef = useRef('intro');
+
   const navigateToScreen = useCallback((screenName, params) => {
-    if (params?.message !== undefined)        setCartaMessage(params.message);
-    if (params?.selectedSticker !== undefined) setSelectedSticker(params.selectedSticker);
-    if (params?.frase !== undefined)           setFrase(params.frase);
-    if (params?.fraseColor !== undefined)      setFraseColor(params.fraseColor);
-    setCurrentScreen(screenName);
+    const key = `${currentScreenRef.current}|${screenName}`;
+    const doNavigate = () => {
+      if (params?.message !== undefined)        setCartaMessage(params.message);
+      if (params?.selectedSticker !== undefined) setSelectedSticker(params.selectedSticker);
+      if (params?.frase !== undefined)           setFrase(params.frase);
+      if (params?.fraseColor !== undefined)      setFraseColor(params.fraseColor);
+      currentScreenRef.current = screenName;
+      setCurrentScreen(screenName);
+    };
+
+    if (ANIMATED_TRANSITIONS.has(key) && loadingRef.current) {
+      loadingRef.current.fadeIn(() => {
+        doNavigate();
+        // Pequeño delay para que el nuevo componente monte antes de abrir
+        setTimeout(() => loadingRef.current?.fadeOut(), 80);
+      });
+    } else {
+      doNavigate();
+    }
   }, []);
 
   const navigation = useRef({ navigate: navigateToScreen }).current;
@@ -141,27 +163,29 @@ export default function App() {
                       onComplete={() => setCurrentScreen(userRef.current ? 'main' : 'login')}
                       isAuthenticated={!!userRef.current}
                       isConnected={isConnected}
-                      inicioReady={true}
                     />
                   )}
 
-                  {currentScreen === 'login'      && <Login      navigation={navigation} />}
-                  {currentScreen === 'register'   && <Register   navigation={navigation} />}
-                  {currentScreen === 'main'       && <Inicio     navigation={navigation} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} frase={frase} fraseColor={fraseColor} />}
-                  {currentScreen === 'coleccion'  && <Coleccion  navigation={navigation} />}
-                  {currentScreen === 'menu'       && <Menu       navigation={navigation} />}
-                  {currentScreen === 'pistas'     && <Pistas     navigation={navigation} />}
-                  {currentScreen === 'ecos'       && <Ecos       navigation={navigation} />}
-                  {currentScreen === 'buzon'      && <Buzon      navigation={navigation} />}
-                  {currentScreen === 'tienda'     && <Tienda     navigation={navigation} />}
-                  {currentScreen === 'trofeos'    && <Trofeos    navigation={navigation} />}
-                  {currentScreen === 'stickers'   && <Stickers   navigation={navigation} />}
-                  {currentScreen === 'Temas'      && <Temas      navigation={navigation} />}
-                  {currentScreen === 'seasonInfo' && <SeasonInfo navigation={navigation} />}
-                  {currentScreen === 'perfil'     && <Perfil     navigation={navigation} />}
-                  {currentScreen === 'Vestuario'       && <Vestuario       navigation={navigation} />}
-                  {currentScreen === 'frasesExpandida' && <FrasesExpandida navigation={navigation} />}
-                  {currentScreen === 'carta'      && <CartaExpandida navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />}
+                  {currentScreen === 'login'    && <Login    navigation={navigation} />}
+                  {currentScreen === 'register' && <Register navigation={navigation} />}
+
+                  {currentScreen === 'main'           && <Inicio          navigation={navigation} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} frase={frase} fraseColor={fraseColor} />}
+                  {currentScreen === 'Vestuario'       && <Vestuario        navigation={navigation} />}
+                  {currentScreen === 'carta'           && <CartaExpandida   navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />}
+                  {currentScreen === 'frasesExpandida' && <FrasesExpandida  navigation={navigation} />}
+                  {currentScreen === 'coleccion'       && <Coleccion        navigation={navigation} />}
+                  {currentScreen === 'stickers'        && <Stickers         navigation={navigation} />}
+                  {currentScreen === 'tienda'          && <Tienda           navigation={navigation} />}
+                  {currentScreen === 'ecos'            && <Ecos             navigation={navigation} />}
+                  {currentScreen === 'perfil'          && <Perfil           navigation={navigation} />}
+                  {currentScreen === 'buzon'           && <Buzon            navigation={navigation} />}
+                  {currentScreen === 'trofeos'         && <Trofeos          navigation={navigation} />}
+                  {currentScreen === 'menu'            && <Menu             navigation={navigation} />}
+                  {currentScreen === 'pistas'          && <Pistas           navigation={navigation} />}
+                  {currentScreen === 'Temas'           && <Temas            navigation={navigation} />}
+                  {currentScreen === 'seasonInfo'      && <SeasonInfo       navigation={navigation} />}
+
+                  <Loading ref={loadingRef} />
 
                 </MusicProvider>
               </TrofeosProvider>

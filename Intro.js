@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, StatusBar } from 'react-native';
+import { Asset } from 'expo-asset';
 import { doc, getDoc, collection, getDocs, query, limit } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import { Image } from 'expo-image';
@@ -9,7 +10,7 @@ import { useTheme } from './ThemeContext';
 import { useSeason } from './SeasonContext';
 import ThemeParticles from './components/ThemeParticles';
 
-const Intro = ({ onComplete, isAuthenticated = false, inicioReady = false, isConnected = true }) => {
+const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
   const brandFade = useRef(new Animated.Value(0)).current;
   const brandSlide = useRef(new Animated.Value(20)).current;
   const progressWidth = useRef(new Animated.Value(0)).current;
@@ -30,6 +31,25 @@ const Intro = ({ onComplete, isAuthenticated = false, inicioReady = false, isCon
   const particlesType = seasonLoading
     ? null
     : (displaySeason ? displaySeason.particles : theme?.particles);
+
+  const preloadLocalAssets = async () => {
+    await Asset.loadAsync([
+      require('./assets/paredes/pared1.png'),
+      require('./assets/paredes/vestuario1.png'),
+      require('./assets/paredes/frasespared.png'),
+      require('./assets/player/cabeza1.png'),
+      require('./assets/player/manos1.png'),
+      require('./assets/player/remera1.png'),
+      require('./assets/player/inicial1.png'),
+      require('./assets/player/mano1d.png'),
+      require('./assets/player/mano1i.png'),
+      require('./assets/menu/mensajes.png'),
+      require('./assets/menu/pared1.png'),
+      require('./assets/menu/pistas.png'),
+      require('./assets/posters/poster1.png'),
+      require('./assets/frases/frases1.png'),
+    ]);
+  };
 
   const preloadFirebaseData = async () => {
     try {
@@ -145,7 +165,7 @@ const Intro = ({ onComplete, isAuthenticated = false, inicioReady = false, isCon
         useNativeDriver: false,
       }).start();
       
-      const preloadPromise = preloadFirebaseData();
+      const preloadPromise = Promise.all([preloadLocalAssets(), preloadFirebaseData()]);
       
       // Esperar mínimo 2s para ver la barra
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -153,14 +173,7 @@ const Intro = ({ onComplete, isAuthenticated = false, inicioReady = false, isCon
       await preloadPromise;
       
       setLoadingStatus('Preparando interfaz...');
-      
-      // Esperar a que Inicio esté listo (máximo 1s adicional)
-      let attempts = 0;
-      while (!inicioReady && attempts < 10) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-      }
-      
+
       // Completar la barra rápidamente si no está al 100%
       progressAnimRef.current?.stop();
       await new Promise(resolve => {

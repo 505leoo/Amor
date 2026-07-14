@@ -557,14 +557,14 @@ const SweetSparkle = ({ x, y, delay }) => {
 
 
 
+const starPositions = Array.from({ length: 80 }, () => ({
+  top: `${Math.random() * 100}%`,
+  left: `${Math.random() * 100}%`,
+  delay: Math.random() * 2000,
+}));
+
 const ThemeParticles = ({ particleType }) => {
   if (!particleType) return null;
-
-  const starPositions = Array.from({ length: 80 }, () => ({
-    top: `${Math.random() * 100}%`,
-    left: `${Math.random() * 100}%`,
-    delay: Math.random() * 2000,
-  }));
 
   if (particleType === 'stars') {
     return (
