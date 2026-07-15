@@ -17,6 +17,7 @@ const PIN_LENGTH = 6;
 const BubbleKey = React.memo(({ label, onPress, isDel }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const bg = useRef(new Animated.Value(0)).current;
+  const interval = useRef(null);
   const pressIn = () => {
     Animated.spring(scale, { toValue: 0.82, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
     Animated.timing(bg, { toValue: 1, duration: 60, useNativeDriver: false }).start();
@@ -24,13 +25,19 @@ const BubbleKey = React.memo(({ label, onPress, isDel }) => {
   const pressOut = () => {
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start();
     Animated.timing(bg, { toValue: 0, duration: 150, useNativeDriver: false }).start();
+    if (interval.current) { clearInterval(interval.current); interval.current = null; }
+  };
+  const handleLongPress = () => {
+    if (!isDel) return;
+    onPress('⌫');
+    interval.current = setInterval(() => onPress('⌫'), 80);
   };
   const bgColor = bg.interpolate({
     inputRange: [0, 1],
     outputRange: isDel ? ['rgba(255,100,100,0.15)', 'rgba(255,100,100,0.5)'] : ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.42)'],
   });
   return (
-    <TouchableOpacity onPressIn={pressIn} onPressOut={pressOut} onPress={onPress} activeOpacity={1}>
+    <TouchableOpacity onPressIn={pressIn} onPressOut={pressOut} onPress={onPress} onLongPress={handleLongPress} delayLongPress={300} activeOpacity={1}>
       <Animated.View style={[kb.bubble, isDel && kb.deleteBubble, { backgroundColor: bgColor }]}>
         <Animated.View style={{ transform: [{ scale }] }}>
           <Text style={[kb.bubbleText, isDel && kb.deleteText]}>{label}</Text>
@@ -47,8 +54,8 @@ const PinKeyboard = React.memo(({ onPress }) => (
     {PIN_KEYS.map((row, ri) => (
       <View key={ri} style={kb.row}>
         {row.map((key, ki) => {
-          if (key === '') return <View key={ki} style={kb.empty} />;
-          return <BubbleKey key={key} label={key} onPress={() => onPress(key)} isDel={key === '⌫'} />;
+          if (key === '') return <View key={`${ri}-empty`} style={kb.empty} />;
+          return <BubbleKey key={`${ri}-${key}`} label={key} onPress={() => onPress(key)} isDel={key === '⌫'} />;
         })}
       </View>
     ))}
@@ -101,7 +108,7 @@ export default function Login({ navigation }) {
       try {
         const snap = await getDocs(collection(db, 'usuarios'));
         const all = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
-        const isAdmin = u => u.correo === 'admin@gmail.com' || u.email === 'admin@gmail.com' || u.nombre === 'Administración' || u.displayName === 'Administración';
+        const isAdmin = u => u.correo === 'admin@gmail.com' || u.email === 'admin@gmail.com' || u.nombre === 'Admin' || u.displayName === 'Administración';
         const regular = all.filter(u => !isAdmin(u)).slice(0, 2);
         const admin = all.find(isAdmin);
         const list = admin ? [...regular, { ...admin, _isAdmin: true }] : regular;
@@ -175,7 +182,7 @@ export default function Login({ navigation }) {
           ) : (
           <View style={s.profilesRow}>
             {users.map(user => {
-              const name = user._isAdmin ? 'Administración' : (user.displayName || user.datosCompletos?.nombre || user.nombre || 'Usuario');
+              const name = user._isAdmin ? 'Admin' : (user.displayName || user.datosCompletos?.nombre || user.nombre || 'Usuario');
               const avatar = !user._isAdmin && (user.selectedSticker?.imageUrl || user.currentStickerUrl || user.photoURL || null);
               return (
                 <TouchableOpacity key={user.uid} style={s.profileCard} onPress={() => handleSelectUser(user)} activeOpacity={0.8}>

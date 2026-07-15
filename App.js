@@ -10,6 +10,7 @@ import { Image as ExpoImage } from 'expo-image';
 import NotificationSystem from './utils/NotificationSystem';
 import { ThemeProvider } from './ThemeContext';
 import { SeasonProvider } from './SeasonContext';
+import DevModeDot from './components/DevModeDot';
 import { DebugProvider } from './DebugContext';
 import { NewIndicatorProvider } from './NewIndicatorContext';
 import { TrofeosProvider } from './TrofeosContext';
@@ -156,6 +157,7 @@ export default function App() {
               <TrofeosProvider>
                 <MusicProvider>
                   <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
+                  <DevModeDot />
 
                   {/* Intro — sin pre-render oculto de Inicio, inicioReady siempre true */}
                   {currentScreen === 'intro' && (

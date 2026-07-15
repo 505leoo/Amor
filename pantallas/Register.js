@@ -18,6 +18,7 @@ const PIN_LENGTH = 6;
 const BubbleKey = React.memo(({ label, onPress, isDel }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const bg = useRef(new Animated.Value(0)).current;
+  const interval = useRef(null);
   const pressIn = () => {
     Animated.spring(scale, { toValue: 0.82, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
     Animated.timing(bg, { toValue: 1, duration: 60, useNativeDriver: false }).start();
@@ -25,13 +26,19 @@ const BubbleKey = React.memo(({ label, onPress, isDel }) => {
   const pressOut = () => {
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 6 }).start();
     Animated.timing(bg, { toValue: 0, duration: 150, useNativeDriver: false }).start();
+    if (interval.current) { clearInterval(interval.current); interval.current = null; }
+  };
+  const handleLongPress = () => {
+    if (!isDel) return;
+    onPress('⌫');
+    interval.current = setInterval(() => onPress('⌫'), 80);
   };
   const bgColor = bg.interpolate({
     inputRange: [0, 1],
     outputRange: isDel ? ['rgba(255,100,100,0.15)', 'rgba(255,100,100,0.5)'] : ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.42)'],
   });
   return (
-    <TouchableOpacity onPressIn={pressIn} onPressOut={pressOut} onPress={onPress} activeOpacity={1}>
+    <TouchableOpacity onPressIn={pressIn} onPressOut={pressOut} onPress={onPress} onLongPress={handleLongPress} delayLongPress={300} activeOpacity={1}>
       <Animated.View style={[kb.bubble, isDel && kb.deleteBubble, { backgroundColor: bgColor }]}>
         <Animated.View style={{ transform: [{ scale }] }}>
           <Text style={[kb.bubbleText, isDel && kb.deleteText]}>{label}</Text>
@@ -48,8 +55,8 @@ const PinKeyboard = React.memo(({ onPress }) => (
     {PIN_KEYS.map((row, ri) => (
       <View key={ri} style={kb.row}>
         {row.map((key, ki) => {
-          if (key === '') return <View key={ki} style={kb.empty} />;
-          return <BubbleKey key={key} label={key} onPress={() => onPress(key)} isDel={key === '⌫'} />;
+          if (key === '') return <View key={`${ri}-empty`} style={kb.empty} />;
+          return <BubbleKey key={`${ri}-${key}`} label={key} onPress={() => onPress(key)} isDel={key === '⌫'} />;
         })}
       </View>
     ))}
@@ -76,9 +83,10 @@ const PinDots = ({ length, filled }) => (
   </View>
 );
 
-const KeyButton = React.memo(({ label, onPress, style, textStyle }) => {
+const KeyButton = React.memo(({ label, onPress, style, textStyle, isDel }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const bg = useRef(new Animated.Value(0)).current;
+  const interval = useRef(null);
   const pressIn = () => {
     Animated.spring(scale, { toValue: 0.88, useNativeDriver: true, speed: 50, bounciness: 0 }).start();
     Animated.timing(bg, { toValue: 1, duration: 60, useNativeDriver: false }).start();
@@ -86,10 +94,16 @@ const KeyButton = React.memo(({ label, onPress, style, textStyle }) => {
   const pressOut = () => {
     Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 4 }).start();
     Animated.timing(bg, { toValue: 0, duration: 120, useNativeDriver: false }).start();
+    if (interval.current) { clearInterval(interval.current); interval.current = null; }
+  };
+  const handleLongPress = () => {
+    if (!isDel) return;
+    onPress('⌫');
+    interval.current = setInterval(() => onPress('⌫'), 80);
   };
   const bgColor = bg.interpolate({ inputRange: [0, 1], outputRange: ['rgba(255,255,255,0.12)', 'rgba(255,255,255,0.38)'] });
   return (
-    <TouchableOpacity onPressIn={pressIn} onPressOut={pressOut} onPress={onPress} activeOpacity={1}>
+    <TouchableOpacity onPressIn={pressIn} onPressOut={pressOut} onPress={onPress} onLongPress={handleLongPress} delayLongPress={300} activeOpacity={1}>
       <Animated.View style={[lk.key, style, { backgroundColor: bgColor }]}>
         <Animated.View style={{ transform: [{ scale }] }}>
           <Text style={[lk.keyText, textStyle]}>{label}</Text>
@@ -134,6 +148,7 @@ const LetterKeyboard = React.memo(({ onPress }) => {
                 key={ki}
                 label={label}
                 onPress={() => handlePress(key)}
+                isDel={isDel}
                 style={isDel ? lk.delKey : isSpace ? lk.spaceKey : lk.key}
                 textStyle={isDel ? lk.delText : null}
               />

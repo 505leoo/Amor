@@ -126,7 +126,7 @@ const Menu = ({ navigation, route }) => {
 
   const handleDebugToggle = () => {
     const userEmail = auth.currentUser?.email;
-    if (userEmail === 'leonel@gmail.com') {
+    if (userEmail === 'admin@gmail.com') {
       toggleDebugMode();
     } else {
       setErrorMessage('Acceso denegado');

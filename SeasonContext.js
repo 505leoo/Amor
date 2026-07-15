@@ -48,7 +48,9 @@ export const SeasonProvider = ({ children }) => {
   const [scheduledDate, setScheduledDate] = useState(null);
   const [devSeason, setDevSeason] = useState(null);
   const [isDevMode, setIsDevMode] = useState(false);
+  const [showSeasonCards, setShowSeasonCards] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [localSeasons, setLocalSeasons] = useState({ ...seasons });
 
   useEffect(() => {
     loadCurrentSeason();
@@ -76,7 +78,7 @@ export const SeasonProvider = ({ children }) => {
     } catch (error) {
       console.error('Error loading season:', error);
       setCurrentSeason(null);
-      setDevSeason(seasons.goldenDawn);
+      setDevSeason(localSeasons.goldenDawn ?? seasons.goldenDawn);
     } finally {
       setIsLoading(false);
     }
@@ -98,7 +100,7 @@ export const SeasonProvider = ({ children }) => {
   const getDisplaySeason = () => isDevMode ? devSeason : currentSeason;
 
   const changeSeason = async (seasonId) => {
-    const season = seasons[seasonId];
+    const season = localSeasons[seasonId];
     if (season) {
       setCurrentSeason(season);
       setScheduledSeason(season);
@@ -108,14 +110,38 @@ export const SeasonProvider = ({ children }) => {
   };
 
   const changeDevSeason = (seasonId) => {
-    const season = seasons[seasonId];
+    const season = localSeasons[seasonId];
     if (season) {
       setDevSeason(season);
     }
   };
 
   const toggleDevMode = () => {
-    setIsDevMode(!isDevMode);
+    setIsDevMode(prev => !prev);
+  };
+
+  // Edita el nombre de una temporada localmente
+  const updateSeasonName = (seasonId, newName) => {
+    setLocalSeasons(prev => {
+      const updated = { ...prev, [seasonId]: { ...prev[seasonId], name: newName, logo: newName } };
+      // Si es la temporada activa o dev, sincronizar
+      if (currentSeason?.id === seasonId) setCurrentSeason(updated[seasonId]);
+      if (devSeason?.id === seasonId) setDevSeason(updated[seasonId]);
+      if (scheduledSeason?.id === seasonId) setScheduledSeason(updated[seasonId]);
+      return updated;
+    });
+  };
+
+  // Elimina una temporada localmente (no afecta Firestore si no era la activa)
+  const deleteSeason = (seasonId) => {
+    setLocalSeasons(prev => {
+      const updated = { ...prev };
+      delete updated[seasonId];
+      return updated;
+    });
+    if (currentSeason?.id === seasonId) setCurrentSeason(null);
+    if (devSeason?.id === seasonId) setDevSeason(null);
+    if (scheduledSeason?.id === seasonId) setScheduledSeason(null);
   };
 
   const getDaysSinceScheduled = () => {
@@ -135,10 +161,14 @@ export const SeasonProvider = ({ children }) => {
       getActiveSeason, 
       getDevSeason,
       getDisplaySeason,
-      seasons, 
+      seasons: localSeasons,
       changeSeason,
       changeDevSeason,
       toggleDevMode,
+      showSeasonCards,
+      setShowSeasonCards,
+      updateSeasonName,
+      deleteSeason,
       getDaysSinceScheduled
     }}>
       {children}
