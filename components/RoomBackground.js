@@ -8,6 +8,7 @@ const RoomBackground = () => (
     style={StyleSheet.absoluteFill}
     contentFit="cover"
     contentPosition="center"
+    cachePolicy="memory"
   />
 );
 

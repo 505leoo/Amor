@@ -1,91 +1,71 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  StatusBar,
-} from 'react-native';
+import React, { useEffect, useCallback, memo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
-import { auth } from '../firebaseConfig';
-import NotificationSystem from '../utils/NotificationSystem';
 import Eventos from './Eventos';
 import Botones from './Botones';
 import BotonesDerecha from './BotonesDerecha';
 import Hud from './Hud';
 import Hud2 from './Hud2';
-import Player from '../Player';
 import PlayerRemera from '../PlayerRemera';
 import PlayerManos from '../PlayerManos';
 import Poster1 from '../Poster1';
 import Frases from '../Frases';
-import FrasesExpandida from '../FrasesExpandida';
 import Mensajes from './Mensajes';
 import { useTheme } from '../ThemeContext';
 import { useSeason } from '../SeasonContext';
-import ThemeParticles from '../components/ThemeParticles';
 import RoomBackground from '../components/RoomBackground';
 import Guirladas from '../components/Guirladas';
 import { useDebug } from '../DebugContext';
 
-const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker, frase, fraseColor }) => {
+const REMERA_STYLE = { bottom: -213, left: '24%', transform: [{ translateX: -50 }], width: 450, height: 700 };
+
+const Inicio = memo(({ navigation, onReady, cartaMessage, selectedSticker, frase, fraseColor, style }) => {
   const { currentTheme, themes } = useTheme();
   const { getDisplaySeason, isDevMode } = useSeason();
   const { isDebugMode } = useDebug();
   const theme = themes[currentTheme];
   const displaySeason = getDisplaySeason();
-  const [showFrasesExpandida, setShowFrasesExpandida] = React.useState(false);
 
-  const gradientColors = displaySeason ? displaySeason.gradient : theme?.gradient;
-  const particlesType = displaySeason ? displaySeason.particles : theme?.particles;
-
-  // Las notificaciones (registro + user_online + entrada) se gestionan solo en App.js al cambiar auth.
   useEffect(() => {
-    NotificationSystem.setupNotificationListeners();
+    onReady?.();
   }, []);
 
-  useEffect(() => {
-    if (onReady && gradientColors && displaySeason) {
-      onReady();
-    }
-  }, [displaySeason, gradientColors, onReady]);
+  const goFrases    = useCallback(() => navigation.navigate('frasesExpandida'), [navigation]);
+  const goVestuario = useCallback(() => navigation.navigate('Vestuario'), [navigation]);
+  const goTemas     = useCallback(() => navigation.navigate('Temas'), [navigation]);
+  const goSeason    = useCallback(() => navigation.navigate('seasonInfo'), [navigation]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, style]}>
       <RoomBackground />
       <Guirladas />
       <StatusBar hidden={true} />
-      {false ? <ThemeParticles particleType={particlesType} /> : null}
       <Eventos navigation={navigation} />
       <Botones navigation={navigation} />
       <BotonesDerecha navigation={navigation} />
       <Hud navigation={navigation} />
       <Hud2 navigation={navigation} />
       <Poster1 containerStyle={styles.poster1} />
-      <Frases containerStyle={styles.frases} frase={frase} fraseColor={fraseColor} onPress={() => navigation.navigate('frasesExpandida')} />
+      <Frases containerStyle={styles.frases} frase={frase} fraseColor={fraseColor} onPress={goFrases} />
       <PlayerManos containerStyle={styles.manos} />
-      <PlayerRemera containerStyle={{ bottom: -213, left: '24%', transform: [{ translateX: -50 }], width: 450, height: 700 }} />
-      {showFrasesExpandida && null}
+      <PlayerRemera containerStyle={REMERA_STYLE} />
       <Mensajes navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />
 
-      <TouchableOpacity style={styles.vestuarioBtn} onPress={() => navigation.navigate('Vestuario')}>
+      <TouchableOpacity style={styles.vestuarioBtn} onPress={goVestuario}>
         <Text style={styles.vestuarioBtnText}>Vestuario</Text>
       </TouchableOpacity>
-      
+
       {isDebugMode && (
-        <TouchableOpacity 
-          style={styles.temasButton} 
-          onPress={() => navigation.navigate('Temas')}
-        >
+        <TouchableOpacity style={styles.temasButton} onPress={goTemas}>
           <MaterialIcons name="palette" size={24} color="rgba(255,255,255,0.95)" />
           <Text style={styles.temasButtonText}>Temas</Text>
         </TouchableOpacity>
       )}
-      
-      <TouchableOpacity 
+
+      <TouchableOpacity
         style={styles.seasonIndicator}
-        onPress={isDebugMode ? () => navigation.navigate('seasonInfo') : undefined}
+        onPress={isDebugMode ? goSeason : undefined}
       >
         <View style={styles.textContainer}>
           {displaySeason ? (
@@ -103,12 +83,10 @@ const Inicio = ({ navigation, onReady, cartaMessage, selectedSticker, frase, fra
       </TouchableOpacity>
     </View>
   );
-};
+});
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   poster1: {
     position: 'absolute',
     width: 90,
@@ -118,14 +96,6 @@ const styles = StyleSheet.create({
     transform: [{ translateX: -100 }, { translateY: -150 }],
   },
   frases: { position: 'absolute' },
-  cabeza: {
-    position: 'absolute',
-    bottom: -213,
-    left: '24%',
-    transform: [{ translateX: -50 }],
-    width: 450,
-    height: 700,
-  },
   manos: {
     position: 'absolute',
     bottom: -213,
@@ -144,16 +114,12 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 20,
   },
-  vestuarioBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
+  vestuarioBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   temasButton: {
     position: 'absolute',
     top: 150,
     right: 20,
-    backgroundColor: 'rgba(167, 136, 136, 0.1)',
+    backgroundColor: 'rgba(167,136,136,0.1)',
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 15,
@@ -169,26 +135,10 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  seasonIndicator: {
-    position: 'absolute',
-    top: 63,
-    right: 13,
-  },
-  textContainer: {
-    alignItems: 'flex-start',
-  },
-  seasonTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 2,
-  },
-  seasonTitle: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 1.8,
-  },
+  seasonIndicator: { position: 'absolute', top: 63, right: 13 },
+  textContainer: { alignItems: 'flex-start' },
+  seasonTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
+  seasonTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '600', letterSpacing: 1.8 },
   seasonNumber: {
     color: 'rgba(255,255,255,0.8)',
     fontSize: 12,
@@ -205,15 +155,9 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 2,
   },
-  devModeTitle: {
-    color: '#FF9800',
-  },
-  devModeNumber: {
-    color: '#FF9800',
-  },
-  devModeName: {
-    color: '#FF9800',
-  },
+  devModeTitle:  { color: '#FF9800' },
+  devModeNumber: { color: '#FF9800' },
+  devModeName:   { color: '#FF9800' },
   noSeasonText: {
     color: 'rgba(255,255,255,0.7)',
     fontSize: 11,

@@ -96,7 +96,6 @@ export default function Login({ navigation }) {
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [selectedUser, setSelectedUser] = useState(null);
   const [pin, setPin] = useState('');
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   const shakeAnim = useRef(new Animated.Value(0)).current;
@@ -114,7 +113,9 @@ export default function Login({ navigation }) {
         const list = admin ? [...regular, { ...admin, _isAdmin: true }] : regular;
         setUsers(list);
         Animated.timing(profileFade, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-      } catch {} finally {
+      } catch {
+        global.showToast({ type: 'error', text1: 'Sin conexión', text2: 'No se pudieron cargar los perfiles', duration: 3000 });
+      } finally {
         setLoadingUsers(false);
       }
     };
@@ -124,7 +125,6 @@ export default function Login({ navigation }) {
   const handleSelectUser = (user) => {
     setSelectedUser(user);
     setPin('');
-    setError('');
     Animated.timing(pinFade, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   };
 
@@ -142,7 +142,6 @@ export default function Login({ navigation }) {
   const handleKeyPress = useCallback(async (key) => {
     if (key === '⌫') {
       setPin(p => p.slice(0, -1));
-      setError('');
       return;
     }
     const next = pin + key;
@@ -153,9 +152,10 @@ export default function Login({ navigation }) {
       try {
         const email = selectedUser.correo || selectedUser.email || `${selectedUser.displayName?.toLowerCase().replace(/\s/g, '')}@gmail.com`;
         await signInWithEmailAndPassword(auth, email, next);
-        navigation?.navigate('intro');
+        global.showToast({ type: 'success', text1: `Hola, ${displayName || 'bienvenid@'} 🌸`, text2: 'Iniciando sesión...', duration: 1500 });
+        setTimeout(() => navigation?.navigate('intro'), 400);
       } catch {
-        setError('PIN incorrecto');
+        global.showToast({ type: 'error', text1: 'PIN incorrecto', text2: 'Vuelve a intentarlo', duration: 2000 });
         shake();
         setPin('');
       } finally {
@@ -232,9 +232,7 @@ export default function Login({ navigation }) {
               <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
                 <PinDots length={PIN_LENGTH} filled={pin.length} />
               </Animated.View>
-              <View style={s.errorSlot}>
-                {error ? <Text style={s.errorText}>{error}</Text> : null}
-              </View>
+              <View style={s.errorSlot} />
               <PinKeyboard onPress={handleKeyPress} />
             </View>
 

@@ -16,6 +16,7 @@ import { NewIndicatorProvider } from './NewIndicatorContext';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
 import Loading from './components/Loading';
+import Toast from './components/Toast';
 import Intro from './Intro';
 import Login from './pantallas/Login';
 import Register from './pantallas/Register';
@@ -45,8 +46,11 @@ export default function App() {
   const [fraseColor, setFraseColor] = useState(null);
   const [isConnected, setIsConnected]   = useState(true);
   const [inicioReady, setInicioReady]   = useState(false);
+  const toastRef = useRef(null);
   const userRef = useRef(null);
   const loadingRef = useRef(null);
+
+  useEffect(() => { global.showToast = (opts) => toastRef.current?.show(opts); }, []);
 
   const ANIMATED_TRANSITIONS = new Set([
     'main|Vestuario', 'Vestuario|main',
@@ -162,7 +166,11 @@ export default function App() {
                   {/* Intro — sin pre-render oculto de Inicio, inicioReady siempre true */}
                   {currentScreen === 'intro' && (
                     <Intro
-                      onComplete={() => setCurrentScreen(userRef.current ? 'main' : 'login')}
+                      onComplete={() => {
+                        const next = userRef.current ? 'main' : 'login';
+                        currentScreenRef.current = next;
+                        setCurrentScreen(next);
+                      }}
                       isAuthenticated={!!userRef.current}
                       isConnected={isConnected}
                     />
@@ -171,7 +179,7 @@ export default function App() {
                   {currentScreen === 'login'    && <Login    navigation={navigation} />}
                   {currentScreen === 'register' && <Register navigation={navigation} />}
 
-                  {currentScreen === 'main'           && <Inicio          navigation={navigation} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} frase={frase} fraseColor={fraseColor} />}
+                  <Inicio style={{ display: currentScreen === 'main' ? 'flex' : 'none' }} navigation={navigation} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} frase={frase} fraseColor={fraseColor} />
                   {currentScreen === 'Vestuario'       && <Vestuario        navigation={navigation} />}
                   {currentScreen === 'carta'           && <CartaExpandida   navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />}
                   {currentScreen === 'frasesExpandida' && <FrasesExpandida  navigation={navigation} />}
@@ -188,6 +196,7 @@ export default function App() {
                   {currentScreen === 'seasonInfo'      && <SeasonInfo       navigation={navigation} />}
 
                   <Loading ref={loadingRef} />
+                  <Toast ref={toastRef} />
 
                 </MusicProvider>
               </TrofeosProvider>
