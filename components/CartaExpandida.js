@@ -2,11 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Image, Text, Dimensions, StatusBar, ScrollView, TouchableOpacity, FlatList } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useFonts } from 'expo-font';
-import { useTheme } from '../ThemeContext';
-import { useSeason } from '../SeasonContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import TabButtons from './TabButtons';
-import ThemeParticles from './ThemeParticles';
 import { collection, getDocs, query, where, doc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db, auth } from '../firebaseConfig';
 
@@ -23,10 +20,6 @@ const TEXT_H = 49 * SCALE;
 
 const CartaExpandida = ({ navigation, message = '', selectedSticker: initialSticker }) => {
   const [fontsLoaded] = useFonts({ Omori: require('../fonts/Omori.ttf') });
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason } = useSeason();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
 
   const [currentMessage, setCurrentMessage] = useState(message);
   const [stickerOptions, setStickerOptions] = useState([]);
@@ -122,10 +115,9 @@ const CartaExpandida = ({ navigation, message = '', selectedSticker: initialStic
     <View style={styles.container}>
       <StatusBar hidden={true} />
       <LinearGradient
-        colors={displaySeason ? displaySeason.gradient : theme.gradient}
+        colors={['#071029', '#0b1b2b']}
         style={StyleSheet.absoluteFill}
       >
-        <ThemeParticles particleType={displaySeason ? displaySeason.particles : theme.particles} />
       </LinearGradient>
 
       <TabButtons onExit={handleExit} />

@@ -1,7 +1,6 @@
-import React, { useEffect, useCallback, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar } from 'react-native';
+import React, { useEffect, useCallback, useRef, memo } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated } from 'react-native';
 import { Image } from 'expo-image';
-import { MaterialIcons } from '@expo/vector-icons';
 import Eventos from './Eventos';
 import Botones from './Botones';
 import BotonesDerecha from './BotonesDerecha';
@@ -12,29 +11,41 @@ import PlayerManos from '../PlayerManos';
 import Poster1 from '../Poster1';
 import Frases from '../Frases';
 import Mensajes from './Mensajes';
-import { useTheme } from '../ThemeContext';
-import { useSeason } from '../SeasonContext';
 import RoomBackground from '../components/RoomBackground';
 import Guirladas from '../components/Guirladas';
-import { useDebug } from '../DebugContext';
+const FloatingBook = ({ onPress }) => {
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: -10, duration: 1800, useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0,   duration: 1800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+  return (
+    <Animated.View style={[styles.temporadasBtn, { transform: [{ translateY: floatAnim }] }]}>
+      <TouchableOpacity onPress={onPress}>
+        <Image
+          source={require('../assets/temporadas/libro/libro1.png')}
+          style={styles.temporadasImg}
+          contentFit="contain"
+          cachePolicy="memory"
+        />
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
 
 const REMERA_STYLE = { bottom: -213, left: '24%', transform: [{ translateX: -50 }], width: 450, height: 700 };
 
 const Inicio = memo(({ navigation, onReady, cartaMessage, selectedSticker, frase, fraseColor, style }) => {
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason, isDevMode } = useSeason();
-  const { isDebugMode } = useDebug();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
-
   useEffect(() => {
     onReady?.();
   }, []);
 
   const goFrases    = useCallback(() => navigation.navigate('frasesExpandida'), [navigation]);
   const goVestuario = useCallback(() => navigation.navigate('Vestuario'), [navigation]);
-  const goTemas     = useCallback(() => navigation.navigate('Temas'), [navigation]);
-  const goSeason    = useCallback(() => navigation.navigate('seasonInfo'), [navigation]);
 
   return (
     <View style={[styles.container, style]}>
@@ -51,42 +62,17 @@ const Inicio = memo(({ navigation, onReady, cartaMessage, selectedSticker, frase
       <PlayerManos containerStyle={styles.manos} />
       <PlayerRemera containerStyle={REMERA_STYLE} />
       <Mensajes navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />
+      <FloatingBook onPress={() => navigation.navigate('temporadas')} />
 
       <TouchableOpacity style={styles.vestuarioBtn} onPress={goVestuario}>
         <Text style={styles.vestuarioBtnText}>Vestuario</Text>
-      </TouchableOpacity>
-
-      {isDebugMode && (
-        <TouchableOpacity style={styles.temasButton} onPress={goTemas}>
-          <MaterialIcons name="palette" size={24} color="rgba(255,255,255,0.95)" />
-          <Text style={styles.temasButtonText}>Temas</Text>
-        </TouchableOpacity>
-      )}
-
-      <TouchableOpacity
-        style={styles.seasonIndicator}
-        onPress={isDebugMode ? goSeason : undefined}
-      >
-        <View style={styles.textContainer}>
-          {displaySeason ? (
-            <>
-              <View style={styles.seasonTitleRow}>
-                <Text style={[styles.seasonTitle, isDevMode && styles.devModeTitle]}>TEMPORADA</Text>
-                <Text style={[styles.seasonNumber, isDevMode && styles.devModeNumber]}>{displaySeason.number}</Text>
-              </View>
-              <Text style={[styles.seasonName, isDevMode && styles.devModeName]}>{displaySeason.name}</Text>
-            </>
-          ) : (
-            <Text style={styles.noSeasonText}>SIN TEMPORADA</Text>
-          )}
-        </View>
       </TouchableOpacity>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, overflow: 'hidden' },
   poster1: {
     position: 'absolute',
     width: 90,
@@ -104,6 +90,15 @@ const styles = StyleSheet.create({
     width: 450,
     height: 700,
   },
+  temporadasBtn: {
+    position: 'absolute',
+    bottom: 85,
+    left: 30,
+  },
+  temporadasImg: {
+    width: 100,
+    height: 100,
+  },
   vestuarioBtn: {
     position: 'absolute',
     bottom: 40,
@@ -115,58 +110,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   vestuarioBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  temasButton: {
-    position: 'absolute',
-    top: 150,
-    right: 20,
-    backgroundColor: 'rgba(167,136,136,0.1)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-    borderRadius: 25,
-    gap: 8,
-  },
-  temasButtonText: {
-    color: 'rgba(255,255,255,0.95)',
-    fontSize: 16,
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
-  },
-  seasonIndicator: { position: 'absolute', top: 63, right: 13 },
-  textContainer: { alignItems: 'flex-start' },
-  seasonTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 },
-  seasonTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '600', letterSpacing: 1.8 },
-  seasonNumber: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 12,
-    fontWeight: '800',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  seasonName: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 13,
-    fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
-  devModeTitle:  { color: '#FF9800' },
-  devModeNumber: { color: '#FF9800' },
-  devModeName:   { color: '#FF9800' },
-  noSeasonText: {
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 1.5,
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 2,
-  },
 });
 
 export default Inicio;

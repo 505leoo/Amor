@@ -7,9 +7,6 @@ import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebas
 import { auth, db } from '../firebaseConfig';
 import TabButtons from '../components/TabButtons';
 import StickerUploader from '../components/StickerUploader';
-import { useTheme } from '../ThemeContext';
-import { useSeason } from '../SeasonContext';
-import ThemeParticles from '../components/ThemeParticles';
 import { useAudioPlayer } from 'expo-audio';
 import { getSeasonTemplates } from '../Coleccion';
 
@@ -24,10 +21,6 @@ const Tienda = ({ navigation }) => {
   const [currentAudioUrl, setCurrentAudioUrl] = useState(null);
   const player = useAudioPlayer(currentAudioUrl);
   const [isLoading, setIsLoading] = useState(false);
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason } = useSeason();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
 
   useEffect(() => {
     return () => {
@@ -283,7 +276,7 @@ const AnimatedCard = ({ item, index, ownedStickers, buySticker, getCardGradient,
 
   useEffect(() => {
     filterStickers();
-  }, [selectedTab, allStickers, displaySeason]);
+  }, [selectedTab, allStickers]);
 
   const loadAllStickers = async () => {
     try {
@@ -304,9 +297,7 @@ const AnimatedCard = ({ item, index, ownedStickers, buySticker, getCardGradient,
       : selectedTab === 'Stickers'
         ? ['StickerCarta']
         : [selectedTab];
-    const filtered = allStickers.filter(s =>
-      (!s.season || s.season === displaySeason?.id) && firestoreTab.includes(s.category)
-    );
+    const filtered = allStickers.filter(s => firestoreTab.includes(s.category));
     setStickers(filtered);
   };
 
@@ -404,64 +395,54 @@ const AnimatedCard = ({ item, index, ownedStickers, buySticker, getCardGradient,
       
       <View style={styles.backgroundContainer}>
         <LinearGradient
-          colors={displaySeason ? displaySeason.gradient : theme.gradient}
+          colors={['#071029', '#0b1b2b']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.gradient}
         >
-          <ThemeParticles particleType={displaySeason ? displaySeason.particles : theme.particles} />
-        {!displaySeason ? (
-          <View style={styles.noSeasonContainer}>
-            <View style={styles.noSeasonCard}>
-              <Text style={styles.noSeasonTitle}>¡La próxima temporada llegará pronto!</Text>
-              <Text style={styles.noSeasonSubtitle}>Mantente atento a las novedades</Text>
+          <View style={[
+            styles.contentContainer,
+            stickers.length === 4 && styles.contentContainerShifted
+          ]}>
+            <View style={[
+              styles.gridContainer,
+              stickers.length <= 3 && styles.gridContainerCentered
+            ]}>
+              {stickers.map((item, index) => (
+                <AnimatedCard
+                  key={item.id}
+                  item={item}
+                  index={index}
+                  ownedStickers={ownedStickers}
+                  buySticker={buySticker}
+                  getCardGradient={(rarity) => getCardGradient(rarity, item.season)}
+                  getDescription={getDescription}
+                  selectedTab={selectedTab}
+                  onPlayMusic={playMusic}
+                  onStopMusic={stopMusic}
+                  playingMusic={playingMusic}
+                  isLoading={isLoading}
+                  displaySeason={null}
+                  totalStickers={stickers.length}
+                />
+              ))}
             </View>
           </View>
-        ) : (
-        <View style={[
-          styles.contentContainer,
-          stickers.length === 4 && styles.contentContainerShifted
-        ]}>
-          <View style={[
-            styles.gridContainer,
-            stickers.length <= 3 && styles.gridContainerCentered
-          ]}>
-            {stickers.map((item, index) => (
-              <AnimatedCard
-                key={item.id}
-                item={item}
-                index={index}
-                ownedStickers={ownedStickers}
-                buySticker={buySticker}
-                getCardGradient={(rarity) => getCardGradient(rarity, item.season)}
-                getDescription={getDescription}
-                selectedTab={selectedTab}
-                onPlayMusic={playMusic}
-                onStopMusic={stopMusic}
-                playingMusic={playingMusic}
-                isLoading={isLoading}
-                displaySeason={displaySeason}
-                totalStickers={stickers.length}
-              />
+
+          <View style={styles.subTabContainer}>
+            {['Personajes', 'Stickers', 'Emoticonos', 'Marcos', 'Insignias', 'Otros'].map((tab) => (
+              <TouchableOpacity
+                key={tab}
+                onPress={() => handleTabChange(tab)}
+                activeOpacity={0.7}
+                style={styles.subTabButton}
+              >
+                <Text style={[styles.subTabText, selectedTab === tab && styles.subTabTextActive]}>
+                  {tab}
+                </Text>
+              </TouchableOpacity>
             ))}
           </View>
-        </View>
-        )}
-
-        <View style={styles.subTabContainer}>
-          {['Personajes', 'Stickers', 'Emoticonos', 'Marcos', 'Insignias', 'Otros'].map((tab) => (
-            <TouchableOpacity
-              key={tab}
-              onPress={() => handleTabChange(tab)}
-              activeOpacity={0.7}
-              style={styles.subTabButton}
-            >
-              <Text style={[styles.subTabText, selectedTab === tab && styles.subTabTextActive]}>
-                {tab}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
         </LinearGradient>
       </View>
 

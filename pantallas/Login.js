@@ -5,9 +5,7 @@ import { Image } from 'expo-image';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { collection, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
-import { useTheme } from '../ThemeContext';
-import { useSeason } from '../SeasonContext';
-import ThemeParticles from '../components/ThemeParticles';
+
 
 
 const { width } = Dimensions.get('window');
@@ -82,15 +80,7 @@ const PinDots = ({ length, filled }) => (
 );
 
 export default function Login({ navigation }) {
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason, isLoading: seasonLoading } = useSeason();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
-
-  const gradientColors = seasonLoading
-    ? ['#0a0a0a', '#000000', '#0a0a0a']
-    : (displaySeason ? displaySeason.gradient : theme?.gradient || ['#0a0a0a', '#000000', '#0a0a0a']);
-  const particlesType = seasonLoading ? null : (displaySeason ? displaySeason.particles : theme?.particles);
+  const gradientColors = ['#0a0a0a', '#000000', '#0a0a0a'];
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -171,8 +161,6 @@ export default function Login({ navigation }) {
     <View style={s.root}>
       <StatusBar hidden />
       <LinearGradient colors={gradientColors} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
-      {particlesType ? <ThemeParticles particleType={particlesType} /> : null}
-
       {!selectedUser ? (
         // — Pantalla de selección de perfil —
         <Animated.View style={[s.center, { opacity: profileFade }]}>

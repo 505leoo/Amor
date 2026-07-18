@@ -4,9 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
-import { useTheme } from '../ThemeContext';
-import { useSeason } from '../SeasonContext';
-import ThemeParticles from '../components/ThemeParticles';
 import TabButtons from '../components/TabButtons';
 import Player from '../Player';
 import TrophyIcon, { getTrophyRank, getTrophyColors } from '../components/TrophyIcon';
@@ -41,13 +38,6 @@ const generarCodigoBarras = (dni) => {
 };
 
 const Perfil = ({ navigation }) => {
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason } = useSeason();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
-  const gradientColors = displaySeason?.gradient || theme?.gradient || ['#1a1a2e', '#16213e'];
-  const particlesType = displaySeason ? displaySeason.particles : theme?.particles;
-
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -99,8 +89,6 @@ const Perfil = ({ navigation }) => {
   return (
     <View style={styles.root}>
       <StatusBar hidden />
-      {particlesType ? <ThemeParticles particleType={particlesType} /> : null}
-
       <TabButtons
         onExit={() => navigation?.navigate('main')}
         userMoney={userData?.dinero ?? 0}

@@ -6,9 +6,6 @@ import { Image } from 'expo-image';
 import { doc, getDoc, updateDoc, collection, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import Player from '../Player';
-import { useSeason } from '../SeasonContext';
-import { useTheme } from '../ThemeContext';
-import ThemeParticles from '../components/ThemeParticles';
 import TabButtons from '../components/TabButtons';
 
 const Stickers = ({ navigation }) => {
@@ -17,19 +14,7 @@ const Stickers = ({ navigation }) => {
   const [filteredStickers, setFilteredStickers] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('todos');
   const [loading, setLoading] = useState(true);
-  const { getDisplaySeason, isLoading: seasonLoading } = useSeason();
-  const { currentTheme, themes } = useTheme();
-  const theme = themes[currentTheme] || themes.nightSpace;
-  const displaySeason = getDisplaySeason();
   const gridRef = useRef(null);
-
-  // Avoid background flash while season loads (same approach as Inicio.js)
-  const gradientColors = seasonLoading
-    ? null
-    : (displaySeason ? displaySeason.gradient : theme?.gradient);
-  const particlesType = seasonLoading
-    ? null
-    : (displaySeason ? displaySeason.particles : theme?.particles);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -92,11 +77,7 @@ const Stickers = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar hidden={true} />
       <TabButtons onExit={() => navigation?.navigate('main')} userMoney={0} onAddSticker={() => {}} onStopMusic={null} />
-      {gradientColors ? null : (
-        <View style={[StyleSheet.absoluteFill, styles.neutralBackground]} />
-      )}
-
-      {particlesType ? <ThemeParticles particleType={particlesType} /> : null}
+      <View style={[StyleSheet.absoluteFill, styles.neutralBackground]} />
 
       <ScrollView ref={gridRef} style={styles.scrollView} contentContainerStyle={styles.gridContainer}>
         {filteredStickers.map((sticker) => (

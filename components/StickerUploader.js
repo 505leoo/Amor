@@ -9,11 +9,9 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 import { getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../firebaseConfig';
-import { useSeason } from '../SeasonContext';
 import { Buffer } from 'buffer';
 
 const StickerUploader = ({ visible, onClose, onSuccess }) => {
-  const { seasons } = useSeason();
   const [uploadData, setUploadData] = useState({
     name: '',
     price: 5,
@@ -353,18 +351,12 @@ const StickerUploader = ({ visible, onClose, onSuccess }) => {
               <View style={styles.raritySection}>
                 <Text style={styles.rarityLabel}>Temporada:</Text>
                 <View style={styles.rarityButtons}>
-                  {Object.entries(seasons).map(([key, season]) => (
-                    <TouchableOpacity
-                      key={key}
-                      style={[
-                        styles.seasonButton,
-                        uploadData.season === key && styles.selectedSeason
-                      ]}
-                      onPress={() => setUploadData({ ...uploadData, season: key })}
-                    >
-                      <Text style={styles.seasonButtonText}>{season.name}</Text>
-                    </TouchableOpacity>
-                  ))}
+                  <TouchableOpacity
+                    style={[styles.seasonButton, uploadData.season === 'goldenDawn' && styles.selectedSeason]}
+                    onPress={() => setUploadData({ ...uploadData, season: 'goldenDawn' })}
+                  >
+                    <Text style={styles.seasonButtonText}>Temporada 1</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 

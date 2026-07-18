@@ -14,22 +14,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import TabButtons from '../components/TabButtons';
-import { useTheme } from '../ThemeContext';
-import ThemeParticles from '../components/ThemeParticles';
 import NotificationSystem from '../utils/NotificationSystem';
 import { useTrofeos } from '../TrofeosContext';
 import { TROFEOS_DEF } from '../utils/trofeosDef';
-import { useSeason } from '../SeasonContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const MAX_XP = 100;
 
 const Trofeos = ({ navigation }) => {
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason, isLoading: seasonLoading } = useSeason();
   const { refreshTrofeos } = useTrofeos();
-  const theme = themes[currentTheme] || themes.nightSpace;
-  const displaySeason = getDisplaySeason();
 
   const [xp, setXp] = useState(0);
   const [userData, setUserData] = useState(null);
@@ -134,15 +127,9 @@ const Trofeos = ({ navigation }) => {
     return colorSets[Math.min(rankIndex, colorSets.length - 1)];
   };
 
-  const gradientColors = seasonLoading
-    ? ['#071029', '#0b1b2b']
-    : (displaySeason ? displaySeason.gradient : theme?.gradient || ['#071029', '#0b1b2b']);
-  const particlesType = seasonLoading
-    ? null
-    : (displaySeason ? displaySeason.particles : theme?.particles);
-
   const trophyColors = getTrophyColors();
   const trophyRank = getTrophyRank();
+  const gradientColors = ['#071029', '#0b1b2b'];
 
   const resetProgress = async () => {
     try {
@@ -221,10 +208,6 @@ const Trofeos = ({ navigation }) => {
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
         >
-          {particlesType && (
-            <ThemeParticles particleType={particlesType} />
-          )}
-
           <ScrollView contentContainerStyle={styles.scrollContent}>
             <View style={styles.centerArea}>
               <Trophy />

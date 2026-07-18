@@ -2,9 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, StatusBar, TouchableOpacity, Text, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useSeason } from '../SeasonContext';
-import { useTheme } from '../ThemeContext';
-import ThemeParticles from '../components/ThemeParticles';
 import TabButtons from '../components/TabButtons';
 import { auth, db } from '../firebaseConfig';
 import { collection, onSnapshot, doc, updateDoc, query, where, addDoc, serverTimestamp } from 'firebase/firestore';
@@ -13,10 +10,6 @@ import { collection, onSnapshot, doc, updateDoc, query, where, addDoc, serverTim
 const TOTAL_WEEKS = 3; // Cambiar si el número total de semanas varía
 
 const Ecos = ({ navigation }) => {
-  const { getDisplaySeason } = useSeason();
-  const { currentTheme, themes } = useTheme();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
   const [selectedTab, setSelectedTab] = useState('Preguntas');
 
   const currentUid = auth.currentUser?.uid;
@@ -37,8 +30,7 @@ const Ecos = ({ navigation }) => {
   const [nextQuestionCountdown, setNextQuestionCountdown] = useState('');
   const [weekDisplayIndex, setWeekDisplayIndex] = useState(1);
 
-  const goldenDawnGradient = ['#FFF8DC', '#FFE4B5', '#DEB887'];
-  const gradientToUse = displaySeason?.name === 'Amanecer Dorado' ? goldenDawnGradient : theme.gradient;
+  const gradientToUse = ['#071029', '#0b1b2b'];
 
   useEffect(() => {
     if (!currentUid || !db) return;
@@ -357,7 +349,6 @@ const Ecos = ({ navigation }) => {
         end={{ x: 1, y: 1 }}
         style={styles.gradient}
       >
-        <ThemeParticles particleType={displaySeason ? displaySeason.particles : theme.particles} />
         
         <TabButtons key={layoutReady ? 'ready' : 'init'} onExit={() => navigation?.navigate('main')} />
         

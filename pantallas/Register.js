@@ -9,9 +9,7 @@ import { auth, db } from '../firebaseConfig';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Buffer } from 'buffer';
-import { useTheme } from '../ThemeContext';
-import { useSeason } from '../SeasonContext';
-import ThemeParticles from '../components/ThemeParticles';
+
 
 const PIN_LENGTH = 6;
 
@@ -163,15 +161,7 @@ const LetterKeyboard = React.memo(({ onPress }) => {
 const STEPS = ['correo', 'pin', 'nombre', 'foto', 'genero'];
 
 export default function Register({ navigation }) {
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason, isLoading: seasonLoading } = useSeason();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
-
-  const gradientColors = seasonLoading
-    ? ['#0a0a0a', '#000000', '#0a0a0a']
-    : (displaySeason ? displaySeason.gradient : theme?.gradient || ['#0a0a0a', '#000000', '#0a0a0a']);
-  const particlesType = seasonLoading ? null : (displaySeason ? displaySeason.particles : theme?.particles);
+  const gradientColors = ['#0a0a0a', '#000000', '#0a0a0a'];
 
   const [step, setStep] = useState(0); // 0=correo, 1=pin, 2=nombre, 3=genero
   const [emailPrefix, setEmailPrefix] = useState('');
@@ -280,8 +270,6 @@ export default function Register({ navigation }) {
     <View style={s.root}>
       <StatusBar hidden />
       <LinearGradient colors={gradientColors} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
-      {particlesType ? <ThemeParticles particleType={particlesType} /> : null}
-
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => step === 0 ? navigation?.navigate('login') : setStep(s => s - 1)} style={s.backBtn}>

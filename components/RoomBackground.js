@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 const RoomBackground = () => (
   <Image
     source={require('../assets/paredes/pared1.png')}
-    style={StyleSheet.absoluteFill}
+    style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
     contentFit="cover"
     contentPosition="center"
     cachePolicy="memory"

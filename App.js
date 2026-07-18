@@ -8,10 +8,6 @@ import * as NavigationBar from 'expo-navigation-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
 import NotificationSystem from './utils/NotificationSystem';
-import { ThemeProvider } from './ThemeContext';
-import { SeasonProvider } from './SeasonContext';
-import DevModeDot from './components/DevModeDot';
-import { DebugProvider } from './DebugContext';
 import { NewIndicatorProvider } from './NewIndicatorContext';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
@@ -29,12 +25,11 @@ import Tienda from './menus/Tienda';
 import Trofeos from './menus/Trofeos';
 import Coleccion from './Coleccion';
 import Stickers from './menus/Stickers';
-import Temas from './menus/Temas';
-import SeasonInfo from './menus/SeasonInfo';
 import Perfil from './menus/Perfil';
 import CartaExpandida from './components/CartaExpandida';
 import Vestuario from './menus/Vestuario';
 import FrasesExpandida from './FrasesExpandida';
+import Temporadas from './Temporadas/Temporadas';
 
 export default function App() {
   const [loading, setLoading]           = useState(true);
@@ -54,6 +49,8 @@ export default function App() {
 
   const ANIMATED_TRANSITIONS = new Set([
     'main|Vestuario', 'Vestuario|main',
+    'main|temporadas', 'temporadas|main',
+    'temporadas|temporada1',
   ]);
 
   // navigation estable — useCallback + ref para que nunca cambie de referencia
@@ -90,7 +87,11 @@ export default function App() {
     try {
       const snap = await getDocs(collection(db, 'stickers'));
       const urls = snap.docs.map(d => d.data().imageUrl).filter(Boolean);
-      await Promise.all(urls.map(url => ExpoImage.prefetch(url, { cachePolicy: 'memory-disk', priority: 'high' })));
+      await Promise.all([
+        ...urls.map(url => ExpoImage.prefetch(url, { cachePolicy: 'memory-disk', priority: 'high' })),
+        ExpoImage.prefetch(require('./assets/temporadas/libro/libro1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+        ExpoImage.prefetch(require('./assets/temporadas/libro/libro2.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+      ]);
     } catch {}
   }, []);
 
@@ -154,14 +155,10 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <ThemeProvider>
-        <SeasonProvider>
-          <DebugProvider>
-            <NewIndicatorProvider>
+      <NewIndicatorProvider>
               <TrofeosProvider>
                 <MusicProvider>
                   <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
-                  <DevModeDot />
 
                   {/* Intro — sin pre-render oculto de Inicio, inicioReady siempre true */}
                   {currentScreen === 'intro' && (
@@ -192,18 +189,13 @@ export default function App() {
                   {currentScreen === 'trofeos'         && <Trofeos          navigation={navigation} />}
                   {currentScreen === 'menu'            && <Menu             navigation={navigation} />}
                   {currentScreen === 'pistas'          && <Pistas           navigation={navigation} />}
-                  {currentScreen === 'Temas'           && <Temas            navigation={navigation} />}
-                  {currentScreen === 'seasonInfo'      && <SeasonInfo       navigation={navigation} />}
-
+                  {currentScreen === 'temporadas'      && <Temporadas        navigation={navigation} />}
                   <Loading ref={loadingRef} />
                   <Toast ref={toastRef} />
 
                 </MusicProvider>
               </TrofeosProvider>
             </NewIndicatorProvider>
-          </DebugProvider>
-        </SeasonProvider>
-      </ThemeProvider>
     </View>
   );
 }

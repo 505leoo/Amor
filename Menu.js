@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated, TextInput, Image, Alert, Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Dimensions, Animated, TextInput, Image, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons, Feather } from '@expo/vector-icons';
 import Amistades from './menus/Amistades';
 import { signOut } from 'firebase/auth';
 import { auth } from './firebaseConfig';
-import { useDebug } from './DebugContext';
 import NotificationSystem from './utils/NotificationSystem';
 
 const { width } = Dimensions.get('window');
@@ -13,10 +12,7 @@ const { width } = Dimensions.get('window');
 const Menu = ({ navigation, route }) => {
   const [activeTab, setActiveTab] = useState(0);
   const [activeSubTab, setActiveSubTab] = useState(0);
-  const [customTabs, setCustomTabs] = useState([]);
   const [textOpacity] = useState(new Animated.Value(1));
-  const [errorMessage, setErrorMessage] = useState('');
-  const { isDebugMode, toggleDebugMode } = useDebug();
   
   // Estados para creación de eventos
   const [creationStep, setCreationStep] = useState(0);
@@ -90,7 +86,6 @@ const Menu = ({ navigation, route }) => {
           content: {
             title: 'Configuración General',
             description: 'Ajustes básicos de la aplicación.',
-            hasDebugToggle: true
           }
         },
         {
@@ -123,16 +118,6 @@ const Menu = ({ navigation, route }) => {
   ];
 
   const iconOptions = ['calendar', 'heart', 'star', 'gift', 'music', 'camera', 'coffee', 'home'];
-
-  const handleDebugToggle = () => {
-    const userEmail = auth.currentUser?.email;
-    if (userEmail === 'admin@gmail.com') {
-      toggleDebugMode();
-    } else {
-      setErrorMessage('Acceso denegado');
-      setTimeout(() => setErrorMessage(''), 2000);
-    }
-  };
 
   const resetCreationSteps = () => {
     setCreationStep(0);
@@ -354,25 +339,7 @@ const Menu = ({ navigation, route }) => {
           </View>
         )}
         
-        {currentContent.hasDebugToggle && (
-          <View style={styles.debugContainer}>
-            <View style={styles.debugToggleRow}>
-              <View style={styles.debugInfo}>
-                <Text style={styles.debugTitle}>Modo Debug</Text>
-                <Text style={styles.debugDescription}>Habilita funciones de desarrollador</Text>
-              </View>
-              <Switch
-                value={isDebugMode}
-                onValueChange={handleDebugToggle}
-                trackColor={{ false: '#d4a5c7', true: '#4CAF50' }}
-                thumbColor={isDebugMode ? '#ffffff' : '#ffffff'}
-              />
-            </View>
-            {errorMessage ? (
-              <Text style={styles.errorMessage}>{errorMessage}</Text>
-            ) : null}
-          </View>
-        )}
+
       </View>
     );
   };
@@ -1681,35 +1648,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#fff',
-  },
-  debugContainer: {
-    paddingHorizontal: 28,
-    paddingTop: 20,
-    paddingBottom: 28,
-  },
-  debugToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#F8F9FA',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-  },
-  debugInfo: {
-    flex: 1,
-  },
-  debugTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#2C3E50',
-    marginBottom: 4,
-  },
-  debugDescription: {
-    fontSize: 12,
-    color: '#7F8C8D',
   },
   errorMessage: {
     fontSize: 12,

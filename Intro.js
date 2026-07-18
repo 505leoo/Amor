@@ -6,9 +6,6 @@ import { auth, db } from './firebaseConfig';
 import { Image } from 'expo-image';
 import PushyService from './utils/PushyService';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useTheme } from './ThemeContext';
-import { useSeason } from './SeasonContext';
-import ThemeParticles from './components/ThemeParticles';
 
 const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
   const brandFade = useRef(new Animated.Value(0)).current;
@@ -20,23 +17,15 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
   const containerFade = useRef(new Animated.Value(0)).current;
   const [showContent, setShowContent] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('');
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason, isLoading: seasonLoading } = useSeason();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
 
-  const gradientColors = seasonLoading
-    ? ['#0a0a0a', '#000000', '#0a0a0a']
-    : (displaySeason ? displaySeason.gradient : theme?.gradient || ['#0a0a0a', '#000000', '#0a0a0a']);
-  const particlesType = seasonLoading
-    ? null
-    : (displaySeason ? displaySeason.particles : theme?.particles);
+  const gradientColors = ['#0a0a0a', '#000000', '#0a0a0a'];
 
   const preloadLocalAssets = async () => {
     await Asset.loadAsync([
       require('./assets/paredes/pared1.png'),
       require('./assets/paredes/vestuario1.png'),
       require('./assets/paredes/frasespared.png'),
+      require('./assets/paredes/pared3.png'),
       require('./assets/player/cabeza1.png'),
       require('./assets/player/manos1.png'),
       require('./assets/player/remera1.png'),
@@ -48,6 +37,9 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
       require('./assets/menu/pistas.png'),
       require('./assets/posters/poster1.png'),
       require('./assets/frases/frases1.png'),
+      require('./assets/temporadas/libro/libro1.png'),
+      require('./assets/temporadas/libro/libro2.png'),
+      require('./assets/temporadas/libro/Temporada1/logo1.png'),
     ]);
   };
 
@@ -203,7 +195,6 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       >
-        {particlesType ? <ThemeParticles particleType={particlesType} /> : null}
         {showContent && (
           <View style={styles.content}>
             <Animated.View 

@@ -6,9 +6,6 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import TabButtons from './components/TabButtons';
-import ThemeParticles from './components/ThemeParticles';
-import { useTheme } from './ThemeContext';
-import { useSeason } from './SeasonContext';
 
 export const getSeasonTemplates = (seasonId) => {
   const seasonMap = {
@@ -89,10 +86,8 @@ const rarityLabel = { 'Común': 'COMÚN', 'Épico': 'ÉPICO', 'Legendario': 'LEG
 const rarityColor = { 'Común': '#ffffff', 'Épico': '#a78bfa', 'Legendario': '#f59e0b' };
 
 const Coleccion = ({ onClose, navigation }) => {
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason } = useSeason();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
+
+  const gradientColors = ['#071029', '#0b1b2b'];
 
   const [selectedCategory, setSelectedCategory] = useState('Personajes');
   const [items, setItems] = useState([]);
@@ -230,14 +225,10 @@ const Coleccion = ({ onClose, navigation }) => {
     );
   };
 
-  const gradientColors = displaySeason ? displaySeason.gradient : theme?.gradient;
-  const particlesType = displaySeason ? displaySeason.particles : theme?.particles;
-
   return (
     <View style={styles.container}>
       <StatusBar hidden={true} />
       <LinearGradient colors={gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.gradient}>
-        <ThemeParticles particleType={particlesType} />
         <TabButtons onExit={handleClose} />
         <View style={styles.body}>
           {/* Sidebar categorías */}

@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../firebaseConfig';
 import { doc, getDoc, getDocs, collection, query, where, limit, updateDoc } from 'firebase/firestore';
-import { useTheme } from '../ThemeContext';
-import { useSeason } from '../SeasonContext';
 
 const generarMiniBarcode = () => {
   const bars = [];
@@ -18,12 +16,7 @@ const generarMiniBarcode = () => {
 const Hud = ({ navigation }) => {
   const openPerfil = () => navigation?.navigate?.('perfil');
   const bars = useMemo(() => generarMiniBarcode(), []);
-  const { currentTheme, themes } = useTheme();
-  const { getDisplaySeason } = useSeason();
-  const theme = themes[currentTheme];
-  const displaySeason = getDisplaySeason();
-  const gradientColors = displaySeason ? displaySeason.gradient : theme?.gradient;
-  const particlesType = displaySeason ? displaySeason.particles : theme?.particles;
+  const gradientColors = ['#4a1a10', '#7a1f06', '#8f2d0e'];
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -55,7 +48,7 @@ const Hud = ({ navigation }) => {
           style={styles.gradientShell}
         >
           <View style={styles.seasonBadge}>
-            <Text style={styles.seasonBadgeText}>{displaySeason?.icon || '✦'}</Text>
+            <Text style={styles.seasonBadgeText}>✦</Text>
           </View>
           <View style={styles.dniMini}>
             {/* Banda superior */}

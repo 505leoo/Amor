@@ -1,8 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAudioPlayer } from 'expo-audio';
-import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from './firebaseConfig';
-import { useSeason } from './SeasonContext';
 
 const MusicContext = createContext();
 
@@ -15,14 +13,13 @@ export const useMusicPlayer = () => {
 };
 
 export const MusicProvider = ({ children }) => {
-  const { getDisplaySeason } = useSeason();
   const [currentMusicUrl, setCurrentMusicUrl] = useState(null);
   const player = useAudioPlayer(currentMusicUrl);
   const [isPlayerReady, setIsPlayerReady] = useState(false);
 
   useEffect(() => {
     loadSeasonMusic();
-  }, [getDisplaySeason()]);
+  }, []);
 
   useEffect(() => {
     if (currentMusicUrl && player) {
@@ -35,7 +32,6 @@ export const MusicProvider = ({ children }) => {
           console.error('Error playing music:', error);
         }
       }, 1);
-      
       return () => clearTimeout(timer);
     } else {
       setIsPlayerReady(false);
@@ -43,34 +39,7 @@ export const MusicProvider = ({ children }) => {
   }, [currentMusicUrl, player]);
 
   const loadSeasonMusic = async () => {
-    try {
-      const displaySeason = getDisplaySeason();
-      
-      if (!displaySeason) {
-        setCurrentMusicUrl(null);
-        return;
-      }
-
-      const musicQuery = query(
-        collection(db, 'stickers'),
-        where('season', '==', displaySeason.id),
-        where('category', '==', 'Otros')
-      );
-      
-      const musicSnapshot = await getDocs(musicQuery);
-      
-      if (!musicSnapshot.empty) {
-        const firstMusic = musicSnapshot.docs[0].data();
-        
-        if (firstMusic.audioUrl && firstMusic.audioUrl !== currentMusicUrl) {
-          setCurrentMusicUrl(firstMusic.audioUrl);
-        }
-      } else {
-        setCurrentMusicUrl(null);
-      }
-    } catch (error) {
-      console.error('Error loading season music:', error);
-    }
+    setCurrentMusicUrl(null);
   };
 
   return (
