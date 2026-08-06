@@ -1,29 +1,15 @@
-import { legacyAsync as FileSystem } from 'expo-file-system/legacy';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const AUTH_FILE = `${FileSystem.documentDirectory}auth.dat`;
-
-const serializeData = (data) => JSON.stringify(data);
-const deserializeData = (text) => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return null;
-  }
-};
+const AUTH_KEY = 'auth_session';
 
 export const saveAuthSession = async (user) => {
   if (!user) return false;
-
   try {
-    const authData = {
+    await AsyncStorage.setItem(AUTH_KEY, JSON.stringify({
       email: user.email,
       uid: user.uid,
-      lastLogin: Date.now()
-    };
-
-    const text = serializeData(authData);
-    await FileSystem.writeAsStringAsync(AUTH_FILE, text);
-
+      lastLogin: Date.now(),
+    }));
     return true;
   } catch (error) {
     console.error('Error guardando sesión:', error);
@@ -33,12 +19,8 @@ export const saveAuthSession = async (user) => {
 
 export const getStoredAuth = async () => {
   try {
-    const fileInfo = await FileSystem.getInfoAsync(AUTH_FILE);
-    if (!fileInfo.exists) return null;
-
-    const storedText = await FileSystem.readAsStringAsync(AUTH_FILE);
-    const authData = deserializeData(storedText);
-    return authData;
+    const data = await AsyncStorage.getItem(AUTH_KEY);
+    return data ? JSON.parse(data) : null;
   } catch (error) {
     console.error('Error recuperando sesión:', error);
     return null;
@@ -47,10 +29,7 @@ export const getStoredAuth = async () => {
 
 export const clearStoredAuth = async () => {
   try {
-    const fileInfo = await FileSystem.getInfoAsync(AUTH_FILE);
-    if (fileInfo.exists) {
-      await FileSystem.deleteAsync(AUTH_FILE);
-    }
+    await AsyncStorage.removeItem(AUTH_KEY);
     return true;
   } catch (error) {
     console.error('Error limpiando sesión:', error);

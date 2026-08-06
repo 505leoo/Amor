@@ -1,58 +1,33 @@
-# Product Overview — Amor App
+# Product Overview
 
-## Purpose
-A private, intimate mobile app built for a couple. It serves as a shared digital space where two people can interact, share memories, send messages, complete love-themed challenges, and personalize their shared experience.
+## Project: Amor
 
-## Core Features
-
-### Main Room (Inicio)
-- A virtual "room" with a customizable background, player avatar (remera + manos), decorative elements (posters, frases, guirladas), and seasonal themes.
-- Acts as the home screen hub from which all other screens are accessed.
-
-### Pistas (Clues / Gift Hunt)
-- A sequential puzzle game with 7 clues tied to real physical gifts.
-- Each clue unlocks the next; progress is persisted in Firestore per user.
-- Includes mini-games: multiple choice, word spelling, color sequence memory, number input, and scratch cards.
-
-### Mensajes / Buzón
-- Messaging system between the two users, including carta (letter) and sticker sending.
-
-### Eventos & Creación
-- Users can create custom tabs/events with sub-tabs and images.
-- Built-in tab editor with multi-step creation flow.
-
-### Conexiones (Amistades)
-- Friend/partner connection system.
-
-### Vestuario
-- Avatar customization (outfit/clothing).
-
-### Colección / Stickers
-- Sticker collection and upload system.
-
-### Trofeos
-- Achievement/trophy system based on user activity (e.g., friend count).
-
-### Tienda
-- In-app store using virtual currency (dinero).
-
-### Temas
-- Visual theme switcher (nightSpace, goldenDawn, deepOcean, moonlitNight, sweetCake).
-
-### Temporadas (Seasons)
-- Seasonal content system loaded from Firestore, affecting background gradients and particles.
-
-### Ecos / Frases
-- Shared quotes/phrases between the couple.
-
-### Perfil
-- User profile screen.
-
-### Notificaciones
-- Push notifications via Pushy when partner connects, sends messages, shares moods, quotes, or photos.
-
-## Target Users
-Two people in a romantic relationship — the app is intentionally private and intimate, designed for exactly two users sharing a paired experience.
+A private, romantic mobile app built for a couple — a shared digital space with games, messages, stickers, seasons/story content, and personalization features.
 
 ## Value Proposition
-A deeply personalized, gamified love companion app that blends real-world gift hunts, shared memories, avatar customization, and real-time partner notifications into a single intimate experience.
+A deeply personal, gamified relationship app with real-time Firebase sync, push notifications, custom avatars, and seasonal story content — designed to feel like a shared world between two people.
+
+## Key Features
+- **Inicio (Home)**: Main hub with animated room background, player avatar, and navigation
+- **Mensajes / Buzón**: Messaging and letter/card system between partners
+- **Pistas**: Clue/hint game system
+- **Ecos**: Echo/memory feature
+- **Temporadas**: Seasonal story content organized in chapters (Temporada 1–4)
+- **Colección / Frases**: Collectible phrases and expandable card views
+- **Stickers**: Custom sticker upload and display system
+- **Vestuario**: Avatar customization (outfit/clothing)
+- **Tienda**: In-app shop using virtual currency (dinero)
+- **Trofeos**: Trophy/achievement system with XP and levels
+- **Perfil**: User profile screen
+- **Notificaciones**: Push notification system (online/offline presence, partner alerts)
+- **Música**: Background music player with global context
+
+## Target Users
+A couple — two specific users sharing a private app instance connected via Firebase.
+
+## App Identity
+- App name: **Amor**
+- Bundle ID: `com.leitof7.amor`
+- Orientation: **Landscape only**
+- Platform: Android (primary), iOS
+- Version: 1.0.60 (runtime: 0.1)

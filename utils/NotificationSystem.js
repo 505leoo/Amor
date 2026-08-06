@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { auth, db } from '../firebaseConfig';
-import { doc, updateDoc, collection, query, where, getDocs, addDoc, getDoc, setDoc, runTransaction } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 // Configurar comportamiento de notificaciones
 Notifications.setNotificationHandler({
@@ -108,79 +108,6 @@ class NotificationSystem {
     }
   }
 
-  // Notificar conexión del usuario (throttled: máx 1 vez cada 10 min por usuario)
-  async notifyUserOnline() {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const now = Date.now();
-      if (now - NotificationSystem._lastUserOnlineSent < NotificationSystem._MEMORY_THROTTLE_MS) {
-        console.log('[NotificationSystem] user_online throttled en memoria (10 min)');
-        return;
-      }
-      const allowed = await this._canSendLimitedNotificationMinutes(user.uid, 'broadcast', 'user_online', 10, 1);
-      if (!allowed) {
-        console.log('[NotificationSystem] user_online throttled en Firestore (10 min)');
-        return;
-      }
-      NotificationSystem._lastUserOnlineSent = Date.now();
-
-      // Obtener todos los usuarios excepto el actual
-      const usersQuery = query(
-        collection(db, 'usuarios'),
-        where('uid', '!=', user.uid)
-      );
-      
-      const usersSnapshot = await getDocs(usersQuery);
-      const offlineUsers = [];
-
-      usersSnapshot.forEach(doc => {
-        const userData = doc.data();
-        const preferred = this._getPreferredToken(userData);
-        if (preferred.token && userData.isOnline !== true) {
-          offlineUsers.push({
-            token: preferred.token,
-            name: userData.displayName || 'Tu pareja'
-          });
-        }
-      });
-
-      // Enviar notificaciones
-      for (const offlineUser of offlineUsers) {
-        await this.sendPushNotification(
-          offlineUser.token,
-          '💕 ¡Tu pareja se conectó!',
-          `${user.displayName || 'Tu amor'} acaba de conectarse`,
-          { type: 'user_online', userId: user.uid }
-        );
-      }
-
-      // Actualizar estado online
-      const userDocRef = doc(db, 'usuarios', user.uid);
-      const userDoc = await getDoc(userDocRef);
-      
-      if (userDoc.exists()) {
-        await updateDoc(userDocRef, {
-          isOnline: true,
-          lastSeen: new Date()
-        });
-      } else {
-        // Crear documento si no existe
-        await setDoc(userDocRef, {
-          uid: user.uid,
-          isOnline: true,
-          lastSeen: new Date(),
-          displayName: user.displayName || 'Usuario',
-          email: user.email
-        });
-      }
-
-    } catch (error) {
-      console.error('Error notificando conexión:', error);
-    }
-  }
-
   // Notificar desconexión del usuario
   async notifyUserOffline() {
     try {
@@ -204,11 +131,20 @@ class NotificationSystem {
   // Enviar notificación push usando PushyService
   async sendPushNotification(pushyToken, title, body, data = {}) {
     try {
+      console.log('[NotificationSystem] sendPushNotification start', { token: pushyToken && pushyToken.substring ? pushyToken.substring(0,10)+'...' : pushyToken, title, data });
       const PushyService = require('./PushyService').default;
-      return await PushyService.sendCustomNotification([pushyToken], title, body);
+      const res = await PushyService.sendCustomNotification([pushyToken], title, body, data);
+      console.log('[NotificationSystem] sendPushNotification result', { token: pushyToken && pushyToken.substring ? pushyToken.substring(0,10)+'...' : pushyToken, result: res });
+      return res;
     } catch (error) {
+      console.error('[NotificationSystem] sendPushNotification error', error);
       return { success: false, provider: 'pushy', error: error.message || error };
     }
+  }
+
+  _getSenderDisplayName(userData, forcedName) {
+    if (!userData) return forcedName || 'Tu pareja';
+    return forcedName || userData.datosCompletos?.nombre || userData.nombre || userData.displayName || 'Tu pareja';
   }
 
   // Helper: obtener token de Pushy del documento de usuario
@@ -220,115 +156,15 @@ class NotificationSystem {
     return { token: null, provider: null };
   }
 
-  // Throttle en memoria como respaldo (evita doble envío en la misma sesión al recargar)
-  static _lastEntradaSentByUser = {};
-  static _lastUserOnlineSent = 0;
-  static _MEMORY_THROTTLE_MS = 10 * 60 * 1000; // 10 min
-
-  // --- Rate limiting con transacción atómica (evita condición de carrera al recargar) ---
-  async _canSendLimitedNotificationMinutes(fromId, toId, type = 'generic', windowMinutes = 10, maxCount = 1) {
-    try {
-      const limitDocId = `${fromId}_${toId}_${type}`;
-      const limitRef = doc(db, 'notification_limits', limitDocId);
-      const now = new Date();
-      const windowStartIso = now.toISOString();
-
-      const allowed = await runTransaction(db, async (transaction) => {
-        const limitSnap = await transaction.get(limitRef);
-        if (!limitSnap.exists()) {
-          transaction.set(limitRef, { windowStart: windowStartIso, count: 1 });
-          return true;
-        }
-        const data = limitSnap.data();
-        const windowStart = data.windowStart ? new Date(data.windowStart) : null;
-        const count = data.count || 0;
-        const elapsedMinutes = windowStart ? (now - windowStart) / (1000 * 60) : windowMinutes + 1;
-
-        if (!windowStart || elapsedMinutes > windowMinutes) {
-          transaction.set(limitRef, { windowStart: windowStartIso, count: 1 });
-          return true;
-        }
-        if (count >= maxCount) return false;
-        transaction.update(limitRef, { count: count + 1 });
-        return true;
-      });
-      return allowed;
-    } catch (error) {
-      console.error('Error en limitador (minutos):', error);
-      return false; // en error no enviar, para evitar spam
-    }
-  }
-
-  // Usa colección 'notification_limits' para controlar envíos repetidos (ventana en horas)
-  async _canSendLimitedNotification(fromId, toId, type = 'generic', windowHours = 24, maxCount = 1) {
-    try {
-      const limitDocId = `${fromId}_${toId}_${type}`;
-      const limitRef = doc(db, 'notification_limits', limitDocId);
-      const limitSnap = await getDoc(limitRef);
-      const now = new Date();
-
-      if (!limitSnap.exists()) {
-        // Crear registro inicial
-        await setDoc(limitRef, {
-          windowStart: now.toISOString(),
-          count: 1
-        });
-        return true;
-      }
-
-      const data = limitSnap.data();
-      const windowStart = data.windowStart ? new Date(data.windowStart) : null;
-      const count = data.count || 0;
-
-      if (!windowStart || (now - windowStart) / (1000 * 60 * 60) > windowHours) {
-        // Reiniciar ventana
-        await updateDoc(limitRef, {
-          windowStart: now.toISOString(),
-          count: 1
-        }).catch(async () => {
-          await setDoc(limitRef, { windowStart: now.toISOString(), count: 1 });
-        });
-        return true;
-      }
-
-      if (count >= maxCount) return false;
-
-      // Incrementar contador
-      await updateDoc(limitRef, { count: count + 1 }).catch(async () => {
-        await setDoc(limitRef, { windowStart: windowStart ? windowStart.toISOString() : now.toISOString(), count: count + 1 });
-      });
-      return true;
-    } catch (error) {
-      console.error('Error en limitador de notificaciones:', error);
-      // En caso de error, permitir envío para evitar bloquear funcionalidad
-      return true;
-    }
-  }
-
-  // Notificar a la pareja que el usuario acaba de entrar (1 vez cada 10 min como mínimo)
+  // Notificar a la pareja que el usuario acaba de entrar (throttle de 5 min persistido en Firestore)
   async notifyPartnerUserEntered(userId, userName) {
     try {
-      // Respaldo en memoria: no enviar si ya enviamos en los últimos 10 min (misma sesión/recarga)
-      const now = Date.now();
-      const last = NotificationSystem._lastEntradaSentByUser[userId];
-      if (last != null && (now - last) < NotificationSystem._MEMORY_THROTTLE_MS) {
-        console.log('[NotificationSystem] Notificación "tu amor está aquí" throttled en memoria (10 min)');
-        return;
-      }
-
       const userRef = doc(db, 'usuarios', userId);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) return;
       const userData = userSnap.data();
       const partnerId = userData.pareja;
-      if (!partnerId) return;
-
-      const allowed = await this._canSendLimitedNotificationMinutes(userId, partnerId, 'user_entered', 10, 1);
-      if (!allowed) {
-        console.log('[NotificationSystem] Notificación "tu amor está aquí" throttled en Firestore (10 min)');
-        return;
-      }
-      NotificationSystem._lastEntradaSentByUser[userId] = Date.now();
+      if (!partnerId || partnerId === userId) return;
 
       const partnerRef = doc(db, 'usuarios', partnerId);
       const partnerSnap = await getDoc(partnerRef);
@@ -337,18 +173,31 @@ class NotificationSystem {
       const preferred = this._getPreferredToken(partnerData);
       if (!preferred.token) return;
 
-      const displayName = userName || userData.datosCompletos?.nombre || userData.nombre || 'Tu pareja';
+      // Throttle persistido: no enviar si ya se notificó en los últimos 5 minutos
+      const THROTTLE_MS = 5 * 60 * 1000;
+      const lastNotif = partnerData.lastEntradaNotif;
+      if (lastNotif) {
+        const lastMs = lastNotif.toMillis ? lastNotif.toMillis() : Number(lastNotif);
+        if (Date.now() - lastMs < THROTTLE_MS) {
+          console.log('[NotificationSystem] notifyPartnerUserEntered throttled, skipping');
+          return;
+        }
+      }
+
+      // Marcar timestamp ANTES de enviar para evitar race conditions
+      await setDoc(partnerRef, { lastEntradaNotif: serverTimestamp() }, { merge: true });
+
       const title = '💕 Tu amor está aquí';
-      const body = `${displayName} acaba de entrar a la app ❤️`;
+      const body = 'Tu amor acaba de entrar a la app ❤️';
+      const pairKey = [String(userId), String(partnerId)].sort().join('_');
+      const collapseKey = `user_pair_entered_${pairKey}`;
+      await this.sendPushNotification(preferred.token, title, body, { type: 'user_pair_entered', userId, partnerId, collapseKey });
 
-      await this.sendPushNotification(preferred.token, title, body, { type: 'user_entered', userId, partnerId });
-
-      // Llamar cloud function userEntered si existe (lógica adicional en backend)
       try {
         await fetch('https://us-central1-amor-9df0d.cloudfunctions.net/userEntered', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userName: displayName, partnerId })
+          body: JSON.stringify({ userName: 'Tu pareja', partnerId })
         });
       } catch (_) {}
     } catch (error) {
@@ -373,13 +222,6 @@ class NotificationSystem {
       const parejaId = fromData.pareja;
       if (!parejaId) return null;
 
-      // Verificar limitador
-      const allowed = await this._canSendLimitedNotification(fromUserId, parejaId, options.type || 'partner_alert', options.windowHours || 6, options.maxCount || 1);
-      if (!allowed) {
-        
-        return null;
-      }
-
       const parejaRef = doc(db, 'usuarios', parejaId);
       const parejaSnap = await getDoc(parejaRef);
       if (!parejaSnap.exists()) return null;
@@ -391,7 +233,7 @@ class NotificationSystem {
       }
 
       // Enriquecer datos con remitente
-      const enriched = { ...data, fromUserId, fromName: fromData.displayName || fromData.nombre || 'Tu pareja' };
+      const enriched = { ...data, fromUserId, fromName: this._getSenderDisplayName(fromData) };
 
       // Si el proveedor es pushy, sendPushNotification decidirá usar PushyService
       return await this.sendPushNotification(preferred.token, title, body, enriched);
@@ -418,140 +260,75 @@ class NotificationSystem {
     }
   }
 
-  // Notificar nueva frase
   async notifyNewQuote(quoteText) {
     try {
       const user = auth.currentUser;
       if (!user) return;
-
-      const usersQuery = query(
-        collection(db, 'usuarios'),
-        where('uid', '!=', user.uid)
+      await this.sendToPartner(user.uid,
+        '\u{1F48C} Nueva frase de amor',
+        `"${quoteText.substring(0, 50)}${quoteText.length > 50 ? '...' : ''}"`,
+        { type: 'new_quote', userId: user.uid }
       );
-      
-      const usersSnapshot = await getDocs(usersQuery);
-
-      usersSnapshot.forEach(async (doc) => {
-        const userData = doc.data();
-        const preferred = this._getPreferredToken(userData);
-        if (preferred.token) {
-          await this.sendPushNotification(
-            preferred.token,
-            '💌 Nueva frase de amor',
-            `"${quoteText.substring(0, 50)}${quoteText.length > 50 ? '...' : ''}"`,
-            { type: 'new_quote', userId: user.uid }
-          );
-        }
-      });
     } catch (error) {
       console.error('Error notificando nueva frase:', error);
     }
   }
 
-  // Notificar nueva foto
   async notifyNewPhoto(photoTitle) {
     try {
       const user = auth.currentUser;
       if (!user) return;
-
-      const usersQuery = query(
-        collection(db, 'usuarios'),
-        where('uid', '!=', user.uid)
+      await this.sendToPartner(user.uid,
+        '\u{1F4F8} Nuevo recuerdo',
+        `${user.displayName || 'Tu pareja'} agreg\u00f3: "${photoTitle}"`,
+        { type: 'new_photo', userId: user.uid }
       );
-      
-      const usersSnapshot = await getDocs(usersQuery);
-
-      usersSnapshot.forEach(async (doc) => {
-        const userData = doc.data();
-        const preferred = this._getPreferredToken(userData);
-        if (preferred.token) {
-          await this.sendPushNotification(
-            preferred.token,
-            '📸 Nuevo recuerdo',
-            `${user.displayName || 'Tu pareja'} agregó: "${photoTitle}"`,
-            { type: 'new_photo', userId: user.uid }
-          );
-        }
-      });
     } catch (error) {
       console.error('Error notificando nueva foto:', error);
     }
   }
 
-  // Notificar nuevo estado de ánimo
   async notifyNewMood(mood, note = '') {
     try {
       const user = auth.currentUser;
       if (!user) return;
 
-      const usersQuery = query(collection(db, 'usuarios'));
-      
-      const usersSnapshot = await getDocs(usersQuery);
-      
+      const userSnap = await getDoc(doc(db, 'usuarios', user.uid));
+      if (!userSnap.exists()) return;
+      const partnerId = userSnap.data().pareja;
+      if (!partnerId || partnerId === user.uid) return;
 
-      // Usar Promise.all para enviar notificaciones en paralelo
-      const notifications = [];
-      usersSnapshot.forEach((doc) => {
-        const userData = doc.data();
-        const docId = doc.id;
-        const preferred = this._getPreferredToken(userData);
-        
+      const partnerSnap = await getDoc(doc(db, 'usuarios', partnerId));
+      if (!partnerSnap.exists()) return;
+      const partnerData = partnerSnap.data();
+      const preferred = this._getPreferredToken(partnerData);
+      if (!preferred.token) return;
 
-        // Solo enviar a usuarios que no sean el actual
-        if (docId !== user.uid && preferred.token) {
-          // Obtener el nombre del usuario actual (quien envía), no del que recibe
-          const senderName = user.displayName || 'Tu pareja';
-          const message = note ? `${senderName} se siente ${mood.toLowerCase()}: "${note}"` : `${senderName} se siente ${mood.toLowerCase()}`;
-          
-          console.log('Enviando notificación de estado a:', preferred.token.toString().substring(0, 20) + '...');
-          
-          notifications.push(
-            this.sendPushNotification(
-              preferred.token,
-              '💭 Nuevo estado emocional',
-              message,
-              { type: 'new_mood', userId: user.uid, mood }
-            )
-          );
-        }
-      });
-      
-      if (notifications.length === 0) {
-        
-      } else {
-        
-        await Promise.all(notifications);
-      }
+      const senderName = user.displayName || 'Tu pareja';
+      const message = note
+        ? `${senderName} se siente ${mood.toLowerCase()}: "${note}"`
+        : `${senderName} se siente ${mood.toLowerCase()}`;
+
+      await this.sendPushNotification(
+        preferred.token,
+        '\u{1F4AD} Nuevo estado emocional',
+        message,
+        { type: 'new_mood', userId: user.uid, mood }
+      );
     } catch (error) {
       console.error('Error notificando nuevo estado:', error);
     }
   }
 
-  // Notificar nuevo testamento
   async notifyNewTestamento(titulo) {
     try {
       const user = auth.currentUser;
       if (!user) return;
-
-      const usersQuery = query(
-        collection(db, 'usuarios'),
-        where('uid', '!=', user.uid)
+      await this.sendToPartner(user.uid,
+        '\u{1F495} Nuevo testamento de amor',
+        `${user.displayName || 'Tu pareja'} escribi\u00f3: "${titulo}"`,
+        { type: 'new_testamento', userId: user.uid }
       );
-      
-      const usersSnapshot = await getDocs(usersQuery);
-
-      usersSnapshot.forEach(async (doc) => {
-        const userData = doc.data();
-        const preferred = this._getPreferredToken(userData);
-        if (preferred.token) {
-          await this.sendPushNotification(
-            preferred.token,
-            '💕 Nuevo testamento de amor',
-            `${user.displayName || 'Tu pareja'} escribió: "${titulo}"`,
-            { type: 'new_testamento', userId: user.uid }
-          );
-        }
-      });
     } catch (error) {
       console.error('Error notificando nuevo testamento:', error);
     }

@@ -21,8 +21,11 @@ const DEDUPE_CLEAN_AFTER_MS = 60 * 60 * 1000; // limpiar entradas antiguas cada 
 class PushyService {
   static notificationQueue = [];
   static MAX_NOTIFICATIONS = 2;
+  static QUEUE_CLEANUP_MS = 15 * 1000; // mantener entradas pendientes 15 s
+  static RECENT_SEND_WINDOW_MS = 15 * 1000; // 15 segundos
   /** Evitar enviar la misma notificación (title+body) más de una vez cada 10 min */
   static _lastSentByKey = {};
+  static _recentSends = [];
 
   static _dedupeKey(title, body) {
     return `${String(title)}|${String(body)}`;
@@ -42,6 +45,102 @@ class PushyService {
     Object.keys(this._lastSentByKey).forEach(k => {
       if (Date.now() - this._lastSentByKey[k] > DEDUPE_CLEAN_AFTER_MS) delete this._lastSentByKey[k];
     });
+  }
+
+  static _cleanupQueue() {
+    const now = Date.now();
+    this.notificationQueue = this.notificationQueue.filter(entry => (now - entry.timestamp) < this.QUEUE_CLEANUP_MS);
+    this._recentSends = this._recentSends.filter(entry => (now - entry.timestamp) < this.RECENT_SEND_WINDOW_MS);
+  }
+
+  static _removeQueueEntry(token, collapseKey) {
+    this.notificationQueue = this.notificationQueue.filter(entry => {
+      if (entry.token !== token) return true;
+      if (collapseKey && entry.collapseKey === collapseKey) return false;
+      if (!collapseKey && !entry.collapseKey) return false;
+      return true;
+    });
+  }
+
+  static _addRecentSend(token, collapseKey) {
+    this._recentSends.push({ token, collapseKey, timestamp: Date.now() });
+  }
+
+  static _isRecentSend(token, collapseKey) {
+    return this._recentSends.some(entry => entry.token === token && entry.collapseKey === collapseKey);
+  }
+
+  static _canQueueNotification(token, collapseKey) {
+    this._cleanupQueue();
+    const tokenQueue = this.notificationQueue.filter(entry => entry.token === token);
+    if (tokenQueue.length < this.MAX_NOTIFICATIONS) return true;
+    if (collapseKey) {
+      return tokenQueue.some(entry => entry.collapseKey === collapseKey);
+    }
+    return false;
+  }
+
+  static manageNotificationQueue(token, title, body, collapseKey) {
+    if (!token) return false;
+    this._cleanupQueue();
+    console.log('[PUSHY][QUEUE] manageNotificationQueue start', { token: token && token.substring ? token.substring(0,10)+'...' : token, collapseKey, queueLength: this.notificationQueue.length });
+    const existingIndex = this.notificationQueue.findIndex(entry => entry.token === token && entry.collapseKey && collapseKey && entry.collapseKey === collapseKey);
+    if (existingIndex !== -1) {
+      console.log('[PUSHY][QUEUE] merged into existing pending entry', { token: token && token.substring ? token.substring(0,10)+'...' : token, collapseKey, existingIndex });
+      this.notificationQueue[existingIndex].timestamp = Date.now();
+      this.notificationQueue[existingIndex].title = title;
+      this.notificationQueue[existingIndex].body = body;
+      return 'merged';
+    }
+
+    if (collapseKey && this._isRecentSend(token, collapseKey)) {
+      console.log('[PUSHY][QUEUE] skipped_recently', { token: token && token.substring ? token.substring(0,10)+'...' : token, collapseKey });
+      return 'skipped_recently';
+    }
+
+    // Aggressive replacement: if token already has MAX_PENDING entries, replace the oldest
+    const tokenQueue = this.notificationQueue.filter(entry => entry.token === token);
+    if (tokenQueue.length >= this.MAX_NOTIFICATIONS) {
+      // try to replace an entry that doesn't have the same collapseKey
+      let replaceIndex = -1;
+      let oldestTs = Infinity;
+      for (let i = 0; i < this.notificationQueue.length; i++) {
+        const e = this.notificationQueue[i];
+        if (e.token !== token) continue;
+        // prefer replacing entries with different collapseKey
+        if (collapseKey && (!e.collapseKey || e.collapseKey !== collapseKey)) {
+          if (e.timestamp < oldestTs) {
+            oldestTs = e.timestamp;
+            replaceIndex = i;
+          }
+        }
+      }
+      // if not found, just replace the absolute oldest for this token
+      if (replaceIndex === -1) {
+        for (let i = 0; i < this.notificationQueue.length; i++) {
+          const e = this.notificationQueue[i];
+          if (e.token !== token) continue;
+          if (e.timestamp < oldestTs) {
+            oldestTs = e.timestamp;
+            replaceIndex = i;
+          }
+        }
+      }
+
+      if (replaceIndex !== -1) {
+        console.log('[PUSHY][QUEUE] replacing oldest pending notification', { token: token && token.substring ? token.substring(0,10)+'...' : token, replaceIndex });
+        this.notificationQueue[replaceIndex] = { token, title, body, collapseKey, timestamp: Date.now() };
+        this._addRecentSend(token, collapseKey);
+        return 'replaced';
+      }
+      console.log('[PUSHY][QUEUE] skipped_max_reached', { token: token && token.substring ? token.substring(0,10)+'...' : token });
+      return false;
+    }
+
+    this.notificationQueue.push({ token, title, body, collapseKey, timestamp: Date.now() });
+    this._addRecentSend(token, collapseKey);
+    console.log('[PUSHY][QUEUE] enqueued', { token: token && token.substring ? token.substring(0,10)+'...' : token, collapseKey, queueLength: this.notificationQueue.length });
+    return 'queued';
   }
 
   static async register() {
@@ -77,49 +176,55 @@ class PushyService {
     }
   }
 
-  static manageNotificationQueue(title, body) {
-    const notification = { title, body, timestamp: Date.now() };
-    
-    // Si ya hay 2 notificaciones, eliminar la más antigua
-    if (this.notificationQueue.length >= this.MAX_NOTIFICATIONS) {
-      this.notificationQueue.shift();
-    }
-    
-    this.notificationQueue.push(notification);
-    
-  }
-
-  static async sendCustomNotification(tokens, title, body, imageUrl = null, sound = true) {
+static async sendCustomNotification(tokens, title, body, data = {}, imageUrl = null, sound = true) {
     try {
       if (!this._canSendDedupe(title, body)) {
         console.log('[PUSHY] Notificación duplicada omitida (mismo title+body en 10 min)');
         return { success: true, sent: 0, dedupe: true };
       }
 
-      this.manageNotificationQueue(title, body);
+      const collapseKey = data && data.collapseKey ? data.collapseKey : undefined;
+      const queueResults = tokens.map(token => ({ token, status: this.manageNotificationQueue(token, title, body, collapseKey) }));
+      if (queueResults.some(r => r.status === false)) {
+        return { success: false, sent: 0, error: 'queue_limit_reached' };
+      }
+      const tokensToSend = queueResults.filter(r => r.status === 'queued' || r.status === 'replaced' || r.status === 'merged').map(r => r.token);
+      if (tokensToSend.length === 0) {
+        return { success: true, sent: 0, dedupe: true };
+      }
 
-      if (!tokens || tokens.length === 0) {
-        
+      if (!tokensToSend || tokensToSend.length === 0) {
         return { success: true, sent: 0 };
       }
 
-      
-      
       const sendNotification = httpsCallable(functions, 'sendPushyNotification');
-      
+      const payloadData = { ...data, title, message: body };
+
+      console.log('[PUSHY] sending notifications', { tokensToSend, collapseKey, payloadData });
       const results = await Promise.allSettled(
-        tokens.map(token => sendNotification({ token, title, body }).then(res => {
+        tokensToSend.map(token => sendNotification({ token, title, body, data: payloadData, collapseKey }).then(res => {
           return res;
         }).catch(err => {
           console.error('[PUSHY] sendPushyNotification error for token:', token, err);
           return { error: err.message || err, token };
         }))
       );
+      console.log('[PUSHY] send results', { tokensToSend, rawResults: results });
       
-      const successful = results.filter(r => r.status === 'fulfilled' && r.value && !r.value.error).length;
+      const successfulResults = results.map((r, i) => ({ result: r, token: tokensToSend[i] }));
+      const successful = successfulResults.filter(r => r.result && r.result.status === 'fulfilled' && r.result.value && !r.result.value.error).length;
       const errors = results
         .filter(r => r.status === 'rejected' || (r.value && r.value.error))
         .map(r => r.status === 'rejected' ? r.reason : r.value.error);
+      // For each successful send, remove the pending queue entry and mark sent
+      successfulResults.forEach(r => {
+        try {
+          if (r.result && r.result.status === 'fulfilled' && r.result.value && !r.result.value.error) {
+            this._removeQueueEntry(r.token, collapseKey);
+            this._addRecentSend(r.token, collapseKey);
+          }
+        } catch (_) {}
+      });
 
       if (successful > 0) this._markSent(title, body);
       
@@ -143,6 +248,8 @@ class PushyService {
       usersSnapshot.forEach(doc => {
         const data = doc.data();
         if (doc.id === excludeUid) return;
+        const email = (data.email || data.correo || '').toString().trim().toLowerCase();
+        if (email === 'admin@gmail.com') return;
         const t = data.MyPushyToken || data.pushyToken;
         if (t) tokens.push(t);
       });

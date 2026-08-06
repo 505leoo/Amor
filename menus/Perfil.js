@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, StatusBar } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Image as ExpoImage } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { Svg, Ellipse, Circle, Rect, Path, Line } from 'react-native-svg';
 import TabButtons from '../components/TabButtons';
-import Player from '../Player';
 import TrophyIcon, { getTrophyRank, getTrophyColors } from '../components/TrophyIcon';
 
 const generoCorto = (g) => {
@@ -15,27 +15,300 @@ const generoCorto = (g) => {
   return '—';
 };
 
-const generarCodigoBarras = (dni) => {
-  const digits = (dni || '').replace(/-/g, '').replace(/\D/g, '');
-  const seed =
-    digits
-      .split('')
-      .reduce((acc, ch, idx) => acc + (parseInt(ch || '0', 10) + 1) * (idx + 13), 0) +
-    digits.length * 997;
+const Torta = () => (
+  <View style={tk.wrap}>
+    {/* Velas encima de la torta */}
+    <View style={tk.velasRow}>
+      {[0,1,2].map(i => (
+        <View key={i} style={tk.velaWrap}>
+          <View style={tk.llamita} />
+          <View style={[tk.vela, { backgroundColor: i === 0 ? '#FF69B4' : i === 1 ? '#a78bfa' : '#60d394' }]} />
+        </View>
+      ))}
+    </View>
+    {/* Crema top */}
+    <View style={tk.cremaTop}>
+      {[0,1,2,3].map(i => (
+        <View key={i} style={[tk.cremaPico, { left: i * 5 }]} />
+      ))}
+    </View>
+    {/* Capa 1 */}
+    <View style={tk.capa1}>
+      <View style={tk.capa1Deco} />
+      <View style={[tk.capa1Deco, { left: 8 }]} />
+      <View style={[tk.capa1Deco, { left: 16 }]} />
+    </View>
+    {/* Plato */}
+    <View style={tk.plato} />
+  </View>
+);
 
-  const count = 40;
-  const bars = [];
-  let x = seed || 123456;
+const tk = StyleSheet.create({
+  wrap: { alignItems: 'center' },
+  velasRow: { flexDirection: 'row', gap: 3, alignItems: 'flex-end', marginBottom: 0 },
+  velaWrap: { alignItems: 'center' },
+  llamita: {
+    width: 3, height: 4, borderRadius: 2,
+    backgroundColor: '#fbbf24',
+    shadowColor: '#f59e0b', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 2, elevation: 3,
+  },
+  vela: { width: 2.5, height: 6, borderRadius: 1 },
+  cremaTop: {
+    width: 24, height: 4,
+    flexDirection: 'row', overflow: 'hidden',
+  },
+  cremaPico: {
+    position: 'absolute',
+    width: 6, height: 4, borderRadius: 3,
+    backgroundColor: '#fff8f0',
+    bottom: 0,
+  },
+  capa1: {
+    width: 26, height: 12, borderRadius: 2,
+    backgroundColor: '#f9a8c9',
+    justifyContent: 'center', overflow: 'hidden',
+    borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  capa1Deco: {
+    position: 'absolute', left: 2,
+    width: 4, height: 4, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  plato: {
+    width: 30, height: 2.5, borderRadius: 2,
+    backgroundColor: '#e8d5c4',
+  },
+});
 
-  for (let i = 0; i < count; i++) {
-    x = (Math.imul(x, 1103515245) + 12345) % 2147483647;
-    const r = x % 1000;
-    const isGuard = i === 0 || i === 1 || i === count - 1 || i === count - 2;
-    const isThick = isGuard || r < 300 || i % 7 === 0;
-    bars.push({ i, w: isThick ? 2.5 : 1.5, h: isThick ? 24 : 17, opacity: isThick ? 1 : 0.7 });
-  }
-  return bars;
+const Luna = () => (
+  <View style={ln.wrap}>
+    {/* Estrellitas */}
+    <View style={[ln.star, { top: 0, right: 2, width: 3, height: 3, borderRadius: 1.5 }]} />
+    <View style={[ln.star, { top: 7, right: 0, width: 2, height: 2, borderRadius: 1 }]} />
+    <View style={[ln.star, { bottom: 2, right: 1, width: 2.5, height: 2.5, borderRadius: 1.5 }]} />
+    <View style={[ln.star, { top: 0, left: 4, width: 2, height: 2, borderRadius: 1 }]} />
+    <View style={[ln.star, { bottom: 5, left: 0, width: 1.5, height: 1.5, borderRadius: 1 }]} />
+    {/* Luna llena */}
+    <View style={ln.luna}>
+      <View style={ln.anillo} />
+      <View style={ln.brillo1} />
+      <View style={ln.brillo2} />
+      <View style={ln.brillo3} />
+      <View style={ln.crater1} />
+      <View style={ln.crater2} />
+      <View style={ln.crater3} />
+    </View>
+  </View>
+);
+
+const ln = StyleSheet.create({
+  wrap: { width: 28, height: 28, justifyContent: 'center', alignItems: 'center' },
+  star: {
+    position: 'absolute',
+    backgroundColor: '#e8e8f8',
+    shadowColor: '#fff', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 1, shadowRadius: 3, elevation: 2,
+  },
+  luna: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#e8edf8',
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.8)',
+    shadowColor: '#a0b4d4', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9, shadowRadius: 7, elevation: 6,
+    overflow: 'hidden',
+  },
+  anillo: {
+    position: 'absolute', top: 1, left: 1,
+    width: 18, height: 18, borderRadius: 9,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'transparent',
+  },
+  brillo1: {
+    position: 'absolute', top: 2, left: 3,
+    width: 7, height: 3.5, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  brillo2: {
+    position: 'absolute', top: 6, left: 2,
+    width: 3, height: 2, borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+  },
+  brillo3: {
+    position: 'absolute', top: 3, right: 4,
+    width: 2, height: 2, borderRadius: 1,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+  },
+  crater1: {
+    position: 'absolute', bottom: 4, left: 4,
+    width: 5, height: 5, borderRadius: 2.5,
+    backgroundColor: 'rgba(150,168,200,0.35)',
+    borderWidth: 0.5, borderColor: 'rgba(130,150,185,0.3)',
+  },
+  crater2: {
+    position: 'absolute', bottom: 7, right: 3,
+    width: 3.5, height: 3.5, borderRadius: 2,
+    backgroundColor: 'rgba(150,168,200,0.3)',
+    borderWidth: 0.5, borderColor: 'rgba(130,150,185,0.25)',
+  },
+  crater3: {
+    position: 'absolute', top: 9, right: 3,
+    width: 2.5, height: 2.5, borderRadius: 1.5,
+    backgroundColor: 'rgba(150,168,200,0.25)',
+  },
+});
+
+const Flor = () => (
+  <View style={fl.wrap}>
+    {/* Pétalos */}
+    {[0,45,90,135,180,225,270,315].map(deg => (
+      <View key={deg} style={[fl.petalo, { transform: [{ rotate: `${deg}deg` }, { translateY: -7 }] }]} />
+    ))}
+    {/* Centro */}
+    <View style={fl.centro}>
+      <View style={fl.centroBrello} />
+    </View>
+  </View>
+);
+
+const fl = StyleSheet.create({
+  wrap: { width: 26, height: 26, justifyContent: 'center', alignItems: 'center' },
+  petalo: {
+    position: 'absolute',
+    width: 7, height: 9, borderRadius: 4,
+    backgroundColor: '#ffb7d5',
+    shadowColor: '#FF69B4', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4, shadowRadius: 2, elevation: 1,
+  },
+  centro: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: '#fdd835',
+    borderWidth: 1, borderColor: 'rgba(255,200,50,0.6)',
+    shadowColor: '#f5a623', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8, shadowRadius: 3, elevation: 3,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  centroBrello: {
+    width: 3, height: 3, borderRadius: 1.5,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    position: 'absolute', top: 2, left: 2,
+  },
+});
+
+const HelloKitty = () => (
+  <Svg width={36} height={28} viewBox="0 0 36 28">
+    {/* Sombra/base del moño */}
+    <Ellipse cx="18" cy="15" rx="16" ry="7" fill="rgba(120,0,20,0.12)" />
+
+    {/* Ala izquierda — capa trasera más oscura */}
+    <Path d="M18 14 C15 8 8 6 5 9 C3 11 5 16 10 17 C13 18 16 16 18 14 Z"
+      fill="#b0001e" stroke="#800015" strokeWidth="0.4" />
+    {/* Ala derecha — capa trasera */}
+    <Path d="M18 14 C21 8 28 6 31 9 C33 11 31 16 26 17 C23 18 20 16 18 14 Z"
+      fill="#b0001e" stroke="#800015" strokeWidth="0.4" />
+
+    {/* Ala izquierda — capa principal */}
+    <Path d="M18 13.5 C15 7 7 5 4 8.5 C2 11 4 16.5 10 17.5 C14 18.5 17 16 18 13.5 Z"
+      fill="#e8002a" stroke="#a00020" strokeWidth="0.5" />
+    {/* Ala derecha — capa principal */}
+    <Path d="M18 13.5 C21 7 29 5 32 8.5 C34 11 32 16.5 26 17.5 C22 18.5 19 16 18 13.5 Z"
+      fill="#e8002a" stroke="#a00020" strokeWidth="0.5" />
+
+    {/* Pliegues ala izquierda */}
+    <Path d="M7 7.5 C9 10 12 12.5 18 13.5" stroke="#c0001f" strokeWidth="0.6" fill="none" strokeLinecap="round" />
+    <Path d="M5 11 C7 12.5 11 13.5 16 13.8" stroke="#c0001f" strokeWidth="0.4" fill="none" strokeLinecap="round" />
+    {/* Pliegues ala derecha */}
+    <Path d="M29 7.5 C27 10 24 12.5 18 13.5" stroke="#c0001f" strokeWidth="0.6" fill="none" strokeLinecap="round" />
+    <Path d="M31 11 C29 12.5 25 13.5 20 13.8" stroke="#c0001f" strokeWidth="0.4" fill="none" strokeLinecap="round" />
+
+    {/* Brillo ala izquierda */}
+    <Path d="M7 8 C9 9 11 10 14 11" stroke="rgba(255,180,180,0.5)" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+    {/* Brillo ala derecha */}
+    <Path d="M29 8 C27 9 25 10 22 11" stroke="rgba(255,180,180,0.5)" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+
+    {/* Nudo central — capa trasera */}
+    <Ellipse cx="18" cy="13.5" rx="3.8" ry="3" fill="#a00020" stroke="#800015" strokeWidth="0.4" />
+    {/* Nudo central — capa principal */}
+    <Ellipse cx="18" cy="13" rx="3.2" ry="2.5" fill="#d40028" stroke="#a00020" strokeWidth="0.5" />
+    {/* Pliegue nudo */}
+    <Path d="M15.5 12 C16.5 13 17 14 15.5 15" stroke="#a00020" strokeWidth="0.5" fill="none" strokeLinecap="round" />
+    <Path d="M20.5 12 C19.5 13 19 14 20.5 15" stroke="#a00020" strokeWidth="0.5" fill="none" strokeLinecap="round" />
+    {/* Brillo nudo */}
+    <Ellipse cx="17" cy="11.8" rx="1.2" ry="0.7" fill="rgba(255,200,200,0.55)" />
+    <Circle cx="17.2" cy="11.5" r="0.4" fill="rgba(255,255,255,0.4)" />
+  </Svg>
+);
+
+const Sol = () => {
+  const rayos = Array.from({ length: 8 }, (_, i) => i * 45);
+  return (
+    <View style={sol.wrap}>
+      <View style={sol.rayosWrap}>
+        {rayos.map(deg => (
+          <View key={deg} style={[sol.rayo, { transform: [{ rotate: `${deg}deg` }, { translateY: -10 }] }]} />
+        ))}
+      </View>
+      <View style={sol.circulo}>
+        <View style={sol.brillo} />
+      </View>
+    </View>
+  );
 };
+
+const sol = StyleSheet.create({
+  wrap: { width: 26, height: 26, justifyContent: 'center', alignItems: 'center' },
+  rayosWrap: { position: 'absolute', width: 26, height: 26, justifyContent: 'center', alignItems: 'center' },
+  rayo: {
+    position: 'absolute',
+    width: 2,
+    height: 5,
+    borderRadius: 1,
+    backgroundColor: '#f5a623',
+  },
+  circulo: {
+    width: 13,
+    height: 13,
+    borderRadius: 6.5,
+    backgroundColor: '#fdd835',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  brillo: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.55)',
+    position: 'absolute',
+    top: 2,
+    left: 2,
+  },
+});
+
+const Row = ({ label, value }) => (
+  <View style={s.rowWrap}>
+    <Text style={s.label}>{label}</Text>
+    <Text style={s.value}>{value}</Text>
+  </View>
+);
+
+const MiniRow = ({ label, value, children }) => (
+  <View style={s.miniWrap}>
+    <Text style={s.label}>{label}</Text>
+    {children ?? <Text style={s.value}>{value}</Text>}
+  </View>
+);
+
+const Stat = ({ label, value }) => (
+  <View style={s.statCell}>
+    <Text style={s.statValue}>{value}</Text>
+    <Text style={s.statLabel}>{label}</Text>
+  </View>
+);
 
 const Perfil = ({ navigation }) => {
   const [userData, setUserData] = useState(null);
@@ -57,6 +330,7 @@ const Perfil = ({ navigation }) => {
             edad: d.edad ?? null,
             fechaNacimiento: d.fechaNacimiento || null,
             genero: d.genero ?? null,
+            photoURL: d.photoURL || null,
             dinero: typeof d.dinero === 'number' ? d.dinero : 0,
             nivel: typeof d.nivel === 'number' ? d.nivel : 1,
             exp: typeof d.exp === 'number' ? d.exp : 0,
@@ -69,7 +343,7 @@ const Perfil = ({ navigation }) => {
             nombre: user.displayName || 'Usuario',
             dni: null, correo: user.email || '—',
             edad: null, fechaNacimiento: null, genero: null,
-            dinero: 0, nivel: 1, exp: 0, racha: 0, estado: '—', uid: user.uid,
+            photoURL: null, dinero: 0, nivel: 1, exp: 0, racha: 0, estado: '—', uid: user.uid,
           });
         }
         setLoading(false);
@@ -80,488 +354,219 @@ const Perfil = ({ navigation }) => {
   }, []);
 
   const d = userData;
-  const mrzDni = (d?.dni || '--------').replace(/-/g, '');
-  const barcodeBars = generarCodigoBarras(d?.dni);
   const nivel = d?.nivel ?? 1;
   const trophyRank = getTrophyRank(nivel);
   const trophyColors = getTrophyColors(nivel);
 
   return (
-    <View style={styles.root}>
+    <View style={s.root}>
       <StatusBar hidden />
+      <ExpoImage
+        source={require('../assets/temporadas/neutral.png')}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+      />
       <TabButtons
         onExit={() => navigation?.navigate('main')}
         userMoney={userData?.dinero ?? 0}
         onAddSticker={() => navigation?.navigate?.('coleccion')}
       />
 
-      <View style={styles.contentWrap}>
-        {loading ? (
-          <View style={styles.loadingCard}>
-            <View style={styles.loadingPulse} />
-            <Text style={styles.loadingText}>Cargando…</Text>
-          </View>
-        ) : d ? (
-          <View style={styles.cardOuter}>
-            {/* Header band */}
-            <LinearGradient
-              colors={['#4a1a10', '#7a1f06', '#8f2d0e']}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={styles.cardBand}
-            >
-              <View style={styles.bandRow}>
-                <View>
-                  <Text style={styles.bandCountry}>REPÚBLICA DE LOVE</Text>
-                  <Text style={styles.bandTitle}>DOCUMENTO NACIONAL DE IDENTIDAD</Text>
+      <View style={s.center}>
+        <ExpoImage
+          source={require('../assets/temporadas/libro/panel2.png')}
+          style={s.panelImg}
+          contentFit="contain"
+          cachePolicy="memory-disk"
+        />
+        <View style={s.box}>
+          {loading ? (
+            <Text style={s.loadingText}>Cargando…</Text>
+          ) : d ? (
+            <View style={s.inner}>
+
+              {/* Columna izquierda: avatar + trofeo */}
+              <View style={s.leftCol}>
+                <View style={s.photoShell}>
+                  {d.photoURL
+                    ? <ExpoImage source={{ uri: d.photoURL }} style={s.photoImg} contentFit="cover" cachePolicy="memory-disk" />
+                    : <View style={s.photoFallback}><Text style={s.photoLetter}>{(d.nombre || '?')[0].toUpperCase()}</Text></View>
+                  }
                 </View>
-                <View style={styles.bandAccent}>
-                  <Text style={styles.bandAccentText}>LOVE</Text>
-                </View>
-              </View>
-              <View style={styles.bandDivider} />
-            </LinearGradient>
-
-            {/* Body */}
-            <View style={styles.cardBody}>
-
-              {/* ZONA 1: foto + trofeo | nombre + DNI + estado */}
-              <View style={styles.mainRow}>
-
-                {/* Columna izquierda: foto arriba, trofeo+nivel abajo */}
-                <View style={styles.leftCol}>
-                  <View style={styles.photoShell}>
-                    <View style={styles.photoScaleBox}>
-                      <Player
-                        centered
-                        showNameTag={false}
-                        onSelectSticker={() => navigation?.navigate?.('coleccion')}
-                      />
-                    </View>
+                <View style={s.trophyBlock}>
+                  <View style={s.trophyClip}>
+                    <TrophyIcon nivel={nivel} scale={0.2} />
                   </View>
-                  <Text style={styles.photoHint}>TOCA PARA CAMBIAR</Text>
-
-                  <View style={styles.trophyBlock}>
-                    <View style={styles.trophyClip}>
-                      <TrophyIcon nivel={nivel} scale={0.18} />
-                    </View>
-                    <Text style={[styles.trophyRankText, { color: trophyColors[0] }]}>{trophyRank}</Text>
-                    <Text style={styles.nivelText}>NV. {nivel}</Text>
-                  </View>
-                </View>
-
-                {/* Columna derecha: info principal */}
-                <View style={styles.infoCol}>
-                  <Text style={styles.fieldLabel}>APELLIDOS Y NOMBRE</Text>
-                  <Text style={styles.nombre} numberOfLines={2}>{d.nombre}</Text>
-
-                  <View style={styles.sectionDividerLight} />
-
-                  <Text style={styles.fieldLabel}>NÚMERO DE DOCUMENTO</Text>
-                  <Text style={styles.idDigits}>{d.dni || '···-···-···'}</Text>
-
-                  <View style={styles.sectionDividerLight} />
-
-                  <View style={styles.rowFields}>
-                    {d.edad != null && (
-                      <View style={styles.fieldBlock}>
-                        <Text style={styles.fieldLabel}>EDAD</Text>
-                        <Text style={styles.fieldValue}>{d.edad} años</Text>
-                      </View>
-                    )}
-                    <View style={styles.fieldBlock}>
-                      <Text style={styles.fieldLabel}>SEXO</Text>
-                      <Text style={styles.fieldValue}>{generoCorto(d.genero)}</Text>
-                    </View>
-                    <View style={styles.fieldBlock}>
-                      <Text style={styles.fieldLabel}>ESTADO</Text>
-                      <View style={styles.chip}>
-                        <MaterialIcons name="verified" size={9} color="#1565C0" style={styles.chipIcon} />
-                        <Text style={styles.chipText}>
-                          {d.estado === 'activo' ? 'VIGENTE' : String(d.estado).toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {d.fechaNacimiento ? (
-                    <>
-                      <Text style={styles.fieldLabel}>FECHA DE NACIMIENTO</Text>
-                      <Text style={styles.fieldValue}>{d.fechaNacimiento}</Text>
-                    </>
-                  ) : null}
-
-                  <Text style={styles.fieldLabel}>CORREO</Text>
-                  <Text style={styles.correo} numberOfLines={1}>{d.correo}</Text>
+                  <Text style={[s.trophyRank, { color: trophyColors[0] }]}>{trophyRank}</Text>
+                  <Text style={s.nivelText}>NV. {nivel}</Text>
                 </View>
               </View>
 
-              {/* ZONA 2: barcode + MRZ */}
-              <View style={styles.sectionDivider} />
-              <View style={styles.barcodeRow}>
-                <View style={styles.barcodeLeft}>
-                  <Text style={styles.barcodeLabel}>LOV-DNI</Text>
-                  <View style={styles.barcodeInner}>
-                    {barcodeBars.map((b) => (
-                      <View
-                        key={b.i}
-                        style={[styles.barcodeBar, { width: b.w, height: b.h, opacity: b.opacity }]}
-                      />
-                    ))}
-                  </View>
-                  <Text style={styles.barcodeDigits} numberOfLines={1}>
-                    {d?.dni || '···-···-···'}
-                  </Text>
+              <View style={s.dividerV} />
+
+              {/* Columna datos */}
+              <View style={s.rightCol}>
+                <Text style={s.nombre}>{d.nombre}</Text>
+                <View style={s.dividerH} />
+                <Row label="DOCUMENTO" value={d.dni || '···-···-···'} />
+                <Row label="CORREO" value={d.correo} />
+                <View style={s.rowFields}>
+                  {d.edad != null && <MiniRow label="EDAD" value={`${d.edad} años`} />}
+                  <MiniRow label="SEXO" value={generoCorto(d.genero)} />
+                  <MiniRow label="ESTADO">
+                    <View style={s.chip}>
+                      <MaterialIcons name="verified" size={8} color="#1565C0" />
+                      <Text style={s.chipText}>
+                        {d.estado === 'activo' ? 'VIGENTE' : String(d.estado).toUpperCase()}
+                      </Text>
+                    </View>
+                  </MiniRow>
                 </View>
-                <View style={styles.barcodeRight}>
-                  <Text style={styles.mrzLabel}>ZONA DE LECTURA MECÁNICA</Text>
-                  <Text style={styles.mrz} numberOfLines={1}>
-                    {`I<LOV${mrzDni}${(d.nombre || 'X').replace(/\s/g, '<').slice(0, 12)}<<`}
-                  </Text>
-                  <Text style={styles.mrz} numberOfLines={1}>
-                    {`${mrzDni.padEnd(9, '<')}${String(d.edad ?? '00').padStart(2, '0')}${generoCorto(d.genero)}`}
-                  </Text>
+                {d.fechaNacimiento ? <Row label="NACIMIENTO" value={d.fechaNacimiento} /> : null}
+                <View style={s.dividerH} />
+                <View style={s.statsRow}>
+                  <Stat label="RACHA" value={`${d.racha}d`} />
+                  <View style={s.statDiv} />
+                  <Stat label="EXP" value={d.exp} />
+                  <View style={s.statDiv} />
+                  <Stat label="MONEDAS" value={d.dinero} />
                 </View>
               </View>
+
+              <View style={s.dividerV} />
+
+              {/* Columna extra */}
+              <View style={s.extraCol}>
+                <Text style={s.extraText}>Chau</Text>
+                <View style={s.extraDivider} />
+                <View style={[s.extraBottom, { marginLeft: -10 }]}>
+                  <View style={s.iconItem}>
+                    <Sol />
+                    <Text style={s.holaX}>✕</Text>
+                  </View>
+                  <View style={s.iconItem}>
+                    <Torta />
+                    <Text style={s.holaX}>✕</Text>
+                  </View>
+                  <View style={s.iconItem}>
+                    <Luna />
+                    <Text style={s.holaX}>✕</Text>
+                  </View>
+                  <View style={s.iconItem}>
+                    <Flor />
+                    <Text style={s.holaX}>✕</Text>
+                  </View>
+                </View>
+                <View style={[s.extraBottom, { marginTop: 6, marginLeft: -15 }]}>
+                  <View style={s.iconItem}>
+                    <HelloKitty />
+                    <Text style={s.holaX}>✕</Text>
+                  </View>
+                </View>
+              </View>
+
             </View>
-
-            {/* Footer strip */}
-            <View style={styles.cardFooter}>
-              <Text style={styles.footerText}>VÁLIDO EN TODO EL TERRITORIO LOVE · NO TRANSFERIBLE</Text>
-            </View>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   root: { flex: 1 },
-  contentWrap: {
-    flex: 1,
-    alignItems: 'stretch',
-    paddingLeft: 40,
-    paddingRight: 36,
-    paddingTop: 14,
-    paddingBottom: 10,
-  },
-  loadingCard: {
-    alignSelf: 'center',
-    marginTop: 10,
-    paddingVertical: 24,
-    paddingHorizontal: 40,
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
-    borderRadius: 6,
-  },
-  loadingPulse: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.35)', marginBottom: 8,
-  },
-  loadingText: { color: 'rgba(255,255,255,0.9)', fontSize: 13 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingLeft: 220 },
 
-  /* Card */
-  cardOuter: {
-    borderRadius: 6,
-    overflow: 'hidden',
+  box: {
+    width: 520,
+    height: 280,
     borderWidth: 1.5,
-    borderColor: 'rgba(200, 160, 30, 0.7)',
-    backgroundColor: '#f5f0e8',
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 500,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-  },
-
-  /* Band */
-  cardBand: {
-    paddingTop: 9,
-    paddingBottom: 7,
-    paddingHorizontal: 14,
-  },
-  bandRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  bandCountry: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 7,
-    fontWeight: '700',
-    letterSpacing: 2.5,
-  },
-  bandTitle: {
-    color: 'rgba(255,255,255,0.95)',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1.8,
-    marginTop: 1,
-  },
-  bandAccent: {
-    borderWidth: 1.5,
-    borderColor: 'rgba(232, 197, 71, 0.8)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 3,
-  },
-  bandAccentText: {
-    color: '#e8c547',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  bandDivider: {
-    height: 1.5,
-    marginTop: 7,
-    backgroundColor: 'rgba(232, 197, 71, 0.6)',
-  },
-
-  /* Body */
-  cardBody: {
-    backgroundColor: '#fdfbf6',
-    paddingHorizontal: 14,
-    paddingTop: 6,
-    paddingBottom: 6,
-  },
-
-  /* Main row */
-  mainRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  leftCol: {
-    alignItems: 'center',
-    width: 88,
-    marginRight: 14,
-  },
-  trophyBlock: {
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  trophyClip: {
-    width: 36,
-    height: 36,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trophyRankText: {
-    fontSize: 8,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  nivelText: {
-    fontSize: 7,
-    fontWeight: '700',
-    color: '#6d4c41',
-    letterSpacing: 1,
-    marginTop: 1,
-  },
-  photoShell: {
-    width: 82,
-    height: 100,
+    borderColor: 'rgba(255,255,255,0.03)',
+    backgroundColor: 'rgba(255,255,255,0.07)',
     borderRadius: 4,
+    left: -90,
+  },
+
+  panelImg: {
+    position: 'absolute',
+    width: 650,
+    height: 650,
+    opacity: 0.85,
+    left: 100,
+  },
+
+  loadingText: { color: 'rgba(255,255,255,0.7)', fontSize: 13, margin: 20 },
+
+  inner: {
+    flex: 1,
+    flexDirection: 'row',
+    padding: 53,
+    paddingLeft: 40,
+    gap: 20,
+  },
+
+  leftCol: { alignItems: 'center', width: 100, justifyContent: 'space-between' },
+  photoShell: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     overflow: 'hidden',
     borderWidth: 2,
-    borderColor: '#3e2723',
+    top: -7,
+    borderColor: '#c9748f',
+    backgroundColor: 'transparent',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#e8e2d8',
   },
-  photoScaleBox: {
-    width: 140,
-    height: 160,
-    transform: [{ scale: 0.5 }],
-    marginTop: -12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoHint: {
-    marginTop: 4,
-    fontSize: 6,
-    color: '#795548',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
+  photoImg: { width: '100%', height: '100%' },
+  photoFallback: { width: 88, height: 88, borderRadius: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(201,116,143,0.2)' },
+  photoLetter: { fontSize: 32, fontWeight: '800', color: '#c9748f' },
 
-  /* Info */
-  infoCol: { flex: 1, minWidth: 0 },
-  sectionDividerLight: {
-    height: 1,
-    backgroundColor: 'rgba(62, 39, 35, 0.07)',
-    marginVertical: 3,
-  },
-  fieldLabel: {
-    fontSize: 7,
-    color: '#8d6e63',
-    fontWeight: '700',
-    letterSpacing: 1,
-    marginBottom: 1,
-    marginTop: 3,
-  },
-  nombre: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#1a0f0a',
-    lineHeight: 19,
-    letterSpacing: 0.3,
-  },
-  rowFields: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  fieldBlock: { flex: 1 },
-  idDigits: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1a0f0a',
-    letterSpacing: 1.5,
-    fontVariant: ['tabular-nums'],
-  },
-  fieldValue: {
-    fontSize: 9,
-    color: '#3e2723',
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
+  trophyBlock: { alignItems: 'center', marginTop: 8 },
+  trophyClip: { width: 38, height: 38, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  trophyRank: { fontSize: 8, fontWeight: '900', letterSpacing: 0.5, marginTop: 2 },
+  nivelText: { fontSize: 7, fontWeight: '700', color: '#8a5a6a', letterSpacing: 1, marginTop: 1 },
+
+  dividerV: { width: 1, backgroundColor: 'rgba(90,42,58,0.2)', marginVertical: 4 },
+  dividerH: { height: 1, backgroundColor: 'rgba(90,42,58,0.15)', marginVertical: 8 },
+
+  rightCol: { flex: 1, justifyContent: 'center' },
+  nombre: { fontSize: 22, fontWeight: '800', color: '#5a2a3a', letterSpacing: 0.5, marginBottom: 2 },
+
+  rowWrap: { marginBottom: 5 },
+  label: { fontSize: 7, color: '#c9748f', fontWeight: '700', letterSpacing: 1.2, marginBottom: 1 },
+  value: { fontSize: 11, color: '#3a1a2a', fontWeight: '600', letterSpacing: 0.3 },
+
+  rowFields: { flexDirection: 'row', gap: 16, marginBottom: 5 },
+  miniWrap: { minWidth: 50 },
+
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(21, 101, 192, 0.08)',
-    paddingHorizontal: 6,
+    gap: 3,
+    backgroundColor: 'rgba(21,101,192,0.1)',
+    paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 3,
     borderWidth: 1,
-    borderColor: 'rgba(21, 101, 192, 0.2)',
+    borderColor: 'rgba(21,101,192,0.25)',
+    alignSelf: 'flex-start',
   },
-  chipIcon: { marginRight: 3 },
-  chipText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#0D47A1',
-    letterSpacing: 0.4,
-  },
-  correo: {
-    fontSize: 8,
-    color: '#6d4c41',
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
+  chipText: { fontSize: 7, fontWeight: '800', color: '#1565C0', letterSpacing: 0.4 },
 
-  /* Stats row */
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(74, 26, 16, 0.05)',
-    borderRadius: 4,
-    marginTop: 12,
-    paddingVertical: 8,
-  },
-  statCell: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  statValue: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1a0f0a',
-    letterSpacing: 0.3,
-  },
-  statLabel: {
-    fontSize: 6,
-    fontWeight: '700',
-    color: '#8d6e63',
-    letterSpacing: 1,
-    marginTop: 1,
-  },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(62, 39, 35, 0.15)',
-  },
+  statsRow: { flexDirection: 'row', alignItems: 'center' },
+  statCell: { flex: 1, alignItems: 'center' },
+  statValue: { fontSize: 14, fontWeight: '800', color: '#5a2a3a' },
+  statLabel: { fontSize: 6, fontWeight: '700', color: '#c9748f', letterSpacing: 1, marginTop: 1 },
+  statDiv: { width: 1, height: 22, backgroundColor: 'rgba(90,42,58,0.15)' },
 
-  /* Divider */
-  sectionDivider: {
-    height: 1,
-    backgroundColor: 'rgba(62, 39, 35, 0.12)',
-    marginVertical: 7,
-  },
-
-  /* Barcode row */
-  barcodeRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 12,
-  },
-  barcodeLeft: {
-    flex: 1,
-    maxWidth: 140,
-  },
-  barcodeLabel: {
-    fontSize: 7,
-    fontWeight: '900',
-    letterSpacing: 2,
-    color: 'rgba(62, 39, 35, 0.6)',
-    marginBottom: 4,
-  },
-  barcodeInner: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 1.5,
-    height: 24,
-  },
-  barcodeBar: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 0,
-  },
-  barcodeDigits: {
-    marginTop: 4,
-    fontSize: 8,
-    fontWeight: '700',
-    color: 'rgba(62, 39, 35, 0.7)',
-    letterSpacing: 1,
-    fontVariant: ['tabular-nums'],
-  },
-  barcodeRight: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  mrzLabel: {
-    fontSize: 6,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: 'rgba(62, 39, 35, 0.45)',
-    marginBottom: 3,
-  },
-  mrz: {
-    fontFamily: 'monospace',
-    fontSize: 7,
-    color: '#4e342e',
-    opacity: 0.65,
-    letterSpacing: 0.5,
-  },
-
-  /* Footer */
-  cardFooter: {
-    backgroundColor: 'rgba(74, 26, 16, 0.06)',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(62, 39, 35, 0.1)',
-    paddingVertical: 5,
-    paddingHorizontal: 14,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 6,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    color: 'rgba(62, 39, 35, 0.45)',
-  },
+  extraCol: { width: 80, justifyContent: 'center', alignItems: 'flex-start', paddingLeft: 0 },
+  extraText: { fontSize: 10, color: '#5a2a3a', fontWeight: '600' },
+  extraDivider: { height: 1, backgroundColor: 'rgba(90,42,58,0.15)', marginVertical: 8, width: '160%', marginLeft: '-9%' },
+  holaX: { fontSize: 7, color: '#F44336', fontWeight: '800', marginTop: 2 },
+  extraBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginLeft: -15 },
+  iconItem: { alignItems: 'center' },
 });
 
 export default Perfil;

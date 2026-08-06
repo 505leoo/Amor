@@ -8,7 +8,6 @@ import * as NavigationBar from 'expo-navigation-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
 import NotificationSystem from './utils/NotificationSystem';
-import { NewIndicatorProvider } from './NewIndicatorContext';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
 import Loading from './components/Loading';
@@ -19,26 +18,24 @@ import Register from './pantallas/Register';
 import Inicio from './menus/Inicio';
 import Menu from './Menu';
 import Pistas from './menus/Pistas';
-import Ecos from './menus/Ecos';
 import Buzon from './menus/Buzon';
 import Tienda from './menus/Tienda';
 import Trofeos from './menus/Trofeos';
 import Coleccion from './Coleccion';
-import Stickers from './menus/Stickers';
 import Perfil from './menus/Perfil';
-import CartaExpandida from './components/CartaExpandida';
-import Vestuario from './menus/Vestuario';
-import FrasesExpandida from './FrasesExpandida';
 import Temporadas from './Temporadas/Temporadas';
+import Temporada1 from './Temporadas/Temporada1/temporada1';
+import Historia1 from './Temporadas/Temporada1/Historia/Historia1';
+import LibroTemp1 from './Temporadas/Temporada1/librotemp1';
+import Capsula1 from './Temporadas/Temporada1/Eventos/capsula';
+import Animalitos from './Animalitos';
+import Canjear from './menus/Canjear';
+import AdminCodigos from './menus/AdminCodigos';
 
 export default function App() {
   const [loading, setLoading]           = useState(true);
   const [authChecked, setAuthChecked]   = useState(false);
   const [currentScreen, setCurrentScreen] = useState('intro');
-  const [cartaMessage, setCartaMessage] = useState('');
-  const [selectedSticker, setSelectedSticker] = useState(null);
-  const [frase, setFrase] = useState(null);
-  const [fraseColor, setFraseColor] = useState(null);
   const [isConnected, setIsConnected]   = useState(true);
   const [inicioReady, setInicioReady]   = useState(false);
   const toastRef = useRef(null);
@@ -48,9 +45,12 @@ export default function App() {
   useEffect(() => { global.showToast = (opts) => toastRef.current?.show(opts); }, []);
 
   const ANIMATED_TRANSITIONS = new Set([
-    'main|Vestuario', 'Vestuario|main',
     'main|temporadas', 'temporadas|main',
     'temporadas|temporada1',
+    'temporada1|historia1', 'historia1|temporada1',
+    'temporada1|capsula1', 'capsula1|temporada1',
+    'temporada1|librotemp1', 'librotemp1|temporada1',
+    'main|animalitos', 'animalitos|main',
   ]);
 
   // navigation estable — useCallback + ref para que nunca cambie de referencia
@@ -60,10 +60,6 @@ export default function App() {
   const navigateToScreen = useCallback((screenName, params) => {
     const key = `${currentScreenRef.current}|${screenName}`;
     const doNavigate = () => {
-      if (params?.message !== undefined)        setCartaMessage(params.message);
-      if (params?.selectedSticker !== undefined) setSelectedSticker(params.selectedSticker);
-      if (params?.frase !== undefined)           setFrase(params.frase);
-      if (params?.fraseColor !== undefined)      setFraseColor(params.fraseColor);
       currentScreenRef.current = screenName;
       setCurrentScreen(screenName);
     };
@@ -91,6 +87,13 @@ export default function App() {
         ...urls.map(url => ExpoImage.prefetch(url, { cachePolicy: 'memory-disk', priority: 'high' })),
         ExpoImage.prefetch(require('./assets/temporadas/libro/libro1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
         ExpoImage.prefetch(require('./assets/temporadas/libro/libro2.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+        ExpoImage.prefetch(require('./assets/temporadas/neutral.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+        ExpoImage.prefetch(require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+        ExpoImage.prefetch(require('./assets/temporadas/libro/Temporada1/logo1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+        ExpoImage.prefetch(require('./assets/temporadas/libro/Temporada2/logo1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+        ExpoImage.prefetch(require('./assets/paredes/pared3.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+        ExpoImage.prefetch(require('./assets/temporadas/libro/libro3.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
+        ExpoImage.prefetch(require('./assets/temporadas/libro/panel2.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
       ]);
     } catch {}
   }, []);
@@ -104,7 +107,6 @@ export default function App() {
 
         Promise.all([
           NotificationSystem.registerForPushNotifications(),
-          NotificationSystem.notifyUserOnline(),
           NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName),
         ]).catch(() => {});
 
@@ -118,6 +120,7 @@ export default function App() {
             if (data.nivel         === undefined) updates.nivel         = 1;
             if (data.exp           === undefined) updates.exp           = 0;
             if (data.racha         === undefined) updates.racha         = 1;
+            if (data.animalito     === undefined) updates.animalito     = 'halcon';
             if (data.ultimaActividad    === undefined) updates.ultimaActividad    = new Date().toISOString();
             if (data.fechaUltimaRacha   === undefined) updates.fechaUltimaRacha   = new Date().toISOString();
             if (Object.keys(updates).length > 0)
@@ -155,47 +158,46 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <NewIndicatorProvider>
-              <TrofeosProvider>
-                <MusicProvider>
-                  <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
+      <TrofeosProvider>
+        <MusicProvider>
+          <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
 
-                  {/* Intro — sin pre-render oculto de Inicio, inicioReady siempre true */}
-                  {currentScreen === 'intro' && (
-                    <Intro
-                      onComplete={() => {
-                        const next = userRef.current ? 'main' : 'login';
-                        currentScreenRef.current = next;
-                        setCurrentScreen(next);
-                      }}
-                      isAuthenticated={!!userRef.current}
-                      isConnected={isConnected}
-                    />
-                  )}
+          {currentScreen === 'intro' && (
+            <Intro
+              onComplete={() => {
+                const next = userRef.current ? 'main' : 'login';
+                currentScreenRef.current = next;
+                setCurrentScreen(next);
+              }}
+              isAuthenticated={!!userRef.current}
+              isConnected={isConnected}
+            />
+          )}
 
-                  {currentScreen === 'login'    && <Login    navigation={navigation} />}
-                  {currentScreen === 'register' && <Register navigation={navigation} />}
+          {currentScreen === 'login'    && <Login    navigation={navigation} />}
+          {currentScreen === 'register' && <Register navigation={navigation} />}
 
-                  <Inicio style={{ display: currentScreen === 'main' ? 'flex' : 'none' }} navigation={navigation} onReady={() => setInicioReady(true)} cartaMessage={cartaMessage} selectedSticker={selectedSticker} frase={frase} fraseColor={fraseColor} />
-                  {currentScreen === 'Vestuario'       && <Vestuario        navigation={navigation} />}
-                  {currentScreen === 'carta'           && <CartaExpandida   navigation={navigation} message={cartaMessage} selectedSticker={selectedSticker} />}
-                  {currentScreen === 'frasesExpandida' && <FrasesExpandida  navigation={navigation} />}
-                  {currentScreen === 'coleccion'       && <Coleccion        navigation={navigation} />}
-                  {currentScreen === 'stickers'        && <Stickers         navigation={navigation} />}
-                  {currentScreen === 'tienda'          && <Tienda           navigation={navigation} />}
-                  {currentScreen === 'ecos'            && <Ecos             navigation={navigation} />}
-                  {currentScreen === 'perfil'          && <Perfil           navigation={navigation} />}
-                  {currentScreen === 'buzon'           && <Buzon            navigation={navigation} />}
-                  {currentScreen === 'trofeos'         && <Trofeos          navigation={navigation} />}
-                  {currentScreen === 'menu'            && <Menu             navigation={navigation} />}
-                  {currentScreen === 'pistas'          && <Pistas           navigation={navigation} />}
-                  {currentScreen === 'temporadas'      && <Temporadas        navigation={navigation} />}
-                  <Loading ref={loadingRef} />
-                  <Toast ref={toastRef} />
+          <Inicio style={{ display: currentScreen === 'main' ? 'flex' : 'none' }} navigation={navigation} onReady={() => setInicioReady(true)} />
+          {currentScreen === 'coleccion'       && <Coleccion        navigation={navigation} />}
+          {currentScreen === 'tienda'          && <Tienda           navigation={navigation} />}
+          {currentScreen === 'perfil'          && <Perfil           navigation={navigation} />}
+          {currentScreen === 'buzon'           && <Buzon            navigation={navigation} />}
+          {currentScreen === 'trofeos'         && <Trofeos          navigation={navigation} />}
+          {currentScreen === 'menu'            && <Menu             navigation={navigation} />}
+          {currentScreen === 'pistas'          && <Pistas           navigation={navigation} />}
+          {currentScreen === 'temporadas'      && <Temporadas       navigation={navigation} />}
+          {currentScreen === 'temporada1'      && <Temporada1       navigation={navigation} />}
+          {currentScreen === 'historia1'       && <Historia1        navigation={navigation} />}
+          {currentScreen === 'capsula1'        && <Capsula1         navigation={navigation} />}
+          {currentScreen === 'librotemp1'      && <LibroTemp1       navigation={navigation} />}
+          {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} />}
+          {currentScreen === 'canjear'          && <Canjear          navigation={navigation} />}
+          {currentScreen === 'adminCodigos'      && <AdminCodigos     navigation={navigation} />}
+          <Loading ref={loadingRef} />
+          <Toast ref={toastRef} />
 
-                </MusicProvider>
-              </TrofeosProvider>
-            </NewIndicatorProvider>
+        </MusicProvider>
+      </TrofeosProvider>
     </View>
   );
 }

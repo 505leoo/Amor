@@ -3,9 +3,8 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Animated, St
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
-import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, getDoc, addDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, getDoc, addDoc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
 import TabButtons from '../components/TabButtons';
-import { useNewIndicator } from '../NewIndicatorContext';
 
 const Avatar = ({ name }) => {
   const initials = (name || 'U').split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
@@ -15,7 +14,6 @@ const Avatar = ({ name }) => {
 };
 
 export default function Buzon({ navigation }) {
-  const { markBuzonVisited } = useNewIndicator();
   const [requests, setRequests] = useState([]);
   const [gifts, setGifts] = useState([]);
   const [fadeAnim] = useState(new Animated.Value(0));
@@ -28,17 +26,13 @@ export default function Buzon({ navigation }) {
   const [giftDescription, setGiftDescription] = useState('');
   const [giftColor, setGiftColor] = useState('#FF6B6B');
   const [userMoney, setUserMoney] = useState(0);
+  const [invitacionesPareja, setInvitacionesPareja] = useState([]);
   const currentUid = auth.currentUser?.uid;
 
   const giftColors = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#A8E6CF', '#FF8B94', '#C7CEEA'];
 
   const allItems = [...requests.map(r => ({ ...r, type: 'request' })), ...gifts.map(g => ({ ...g, type: 'gift' }))]
     .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-
-  // Quitar indicador "nuevo" del icono de Buzón en Hud2 al entrar aquí
-  useEffect(() => {
-    markBuzonVisited();
-  }, [markBuzonVisited]);
 
   useEffect(() => {
     if (!currentUid) return;
@@ -82,12 +76,59 @@ export default function Buzon({ navigation }) {
       }
     });
 
+    // Invitaciones de pareja
+    const invQuery = query(collection(db, 'invitaciones_pareja'), where('para', '==', currentUid), where('estado', '==', 'pendiente'));
+    const unsubInv = onSnapshot(invQuery, async snap => {
+      const lista = await Promise.all(snap.docs.map(async d => {
+        const data = d.data();
+        const remSnap = await getDoc(doc(db, 'usuarios', data.de));
+        return { id: d.id, ...data, remitente: remSnap.data() };
+      }));
+      setInvitacionesPareja(lista);
+    });
+
     return () => {
       unsubRequests();
       unsubGifts();
       unsubUser();
+      unsubInv();
     };
   }, [currentUid]);
+
+  const aceptarPareja = async (inv) => {
+    try {
+      const miSnap = await getDoc(doc(db, 'usuarios', currentUid));
+      const miPareja = miSnap.data()?.pareja;
+      if (miPareja) {
+        // Separarse de la pareja actual primero
+        await setDoc(doc(db, 'usuarios', currentUid), { pareja: null }, { merge: true });
+        await setDoc(doc(db, 'usuarios', miPareja), { pareja: null }, { merge: true });
+      }
+      await setDoc(doc(db, 'usuarios', currentUid), { pareja: inv.de }, { merge: true });
+      await setDoc(doc(db, 'usuarios', inv.de), { pareja: currentUid }, { merge: true });
+      await deleteDoc(doc(db, 'invitaciones_pareja', inv.id));
+      global.showToast?.({ text1: '¡Ahora son pareja!', type: 'success' });
+    } catch (e) {
+      console.error('Error al aceptar pareja:', e);
+    }
+  };
+
+  const rechazarPareja = async (inv) => {
+    try {
+      await deleteDoc(doc(db, 'invitaciones_pareja', inv.id));
+    } catch (e) {
+      console.error('Error al rechazar pareja:', e);
+    }
+  };
+
+  const tiempoRelativo = (ts) => {
+    if (!ts?.seconds) return '';
+    const diff = Math.floor((Date.now() / 1000) - ts.seconds);
+    if (diff < 60) return 'hace un momento';
+    if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+    if (diff < 86400) return `hace ${Math.floor(diff / 3600)} h`;
+    return `hace ${Math.floor(diff / 86400)} d`;
+  };
 
   const accept = async (req) => {
     try {
@@ -253,7 +294,26 @@ export default function Buzon({ navigation }) {
       />
       
       <View style={styles.content}>
-          <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+          {invitacionesPareja.length > 0 && (
+          <View style={styles.seccionPareja}>
+            <Text style={styles.seccionTitulo}>💌 Invitaciones de pareja</Text>
+            {invitacionesPareja.map(inv => (
+              <View key={inv.id} style={styles.invRow}>
+                <View style={styles.invInfo}>
+                  <Text style={styles.invNombre}>{inv.remitente?.nombre || 'Usuario'}</Text>
+                  <Text style={styles.invTiempo}>{tiempoRelativo(inv.timestamp)}</Text>
+                </View>
+                <TouchableOpacity style={styles.invBtnRojo} onPress={() => rechazarPareja(inv)}>
+                  <Text style={styles.invBtnText}>✕</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.invBtnVerde} onPress={() => aceptarPareja(inv)}>
+                  <Text style={styles.invBtnText}>✓</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        )}
+        <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
             <FlatList
               data={allItems}
               keyExtractor={i => i.id}
@@ -682,6 +742,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  seccionPareja: {
+    margin: 16,
+    marginBottom: 0,
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  seccionTitulo: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#2C3E50',
+    marginBottom: 10,
+  },
+  invRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    gap: 8,
+  },
+  invInfo: { flex: 1 },
+  invNombre: { fontSize: 13, fontWeight: '600', color: '#2C3E50' },
+  invTiempo: { fontSize: 11, color: '#aaa', marginTop: 1 },
+  invBtnRojo: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#F44336',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  invBtnVerde: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  invBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   touchable: {
     pointerEvents: 'auto',
   },

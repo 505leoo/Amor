@@ -4,7 +4,7 @@ import { Asset } from 'expo-asset';
 import { doc, getDoc, collection, getDocs, query, limit } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import { Image } from 'expo-image';
-import PushyService from './utils/PushyService';
+
 import { LinearGradient } from 'expo-linear-gradient';
 
 const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
@@ -77,30 +77,6 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
     }
   };
 
-  const notifyPartnerUserEntered = async () => {
-    try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const userRef = doc(db, 'usuarios', user.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) return;
-      
-      const userData = userSnap.data();
-      const userName = userData.datosCompletos?.nombre || userData.nombre || user.displayName || 'Tu pareja';
-      
-      PushyService.broadcastToAllExcept(
-        db, 
-        user.uid, 
-        '💕 Tu amor está aquí', 
-        `${userName} acaba de entrar a la app ❤️`
-      ).catch(err => console.log('Notificación no enviada:', err.message));
-    } catch (error) {
-      
-    }
-  };
-
   useEffect(() => {
     const startSequence = async () => {
       await new Promise(resolve => setTimeout(resolve, 300));
@@ -140,12 +116,16 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
         Animated.delay(400),
       ]).start();
       
-      // Verificar conexión con Firebase
-      try {
-        await getDocs(query(collection(db, 'usuarios'), limit(1)));
-      } catch (error) {
-        setLoadingStatus('Sin conexión a Internet');
-        return;
+      // Verificar conexión con Firebase solo si estamos autenticados.
+      if (isAuthenticated) {
+        try {
+          await Promise.race([
+            getDocs(query(collection(db, 'usuarios'), limit(1))),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
+          ]);
+        } catch (error) {
+          if (!isConnected) setLoadingStatus('Sin conexión a Internet');
+        }
       }
       
       setLoadingStatus('Cargando datos...');
@@ -157,7 +137,10 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
         useNativeDriver: false,
       }).start();
       
-      const preloadPromise = Promise.all([preloadLocalAssets(), preloadFirebaseData()]);
+      const preloadPromise = Promise.race([
+        Promise.all([preloadLocalAssets(), isAuthenticated ? preloadFirebaseData() : Promise.resolve()]),
+        new Promise(resolve => setTimeout(resolve, 5000)),
+      ]);
       
       // Esperar mínimo 2s para ver la barra
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -175,10 +158,6 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
           useNativeDriver: false,
         }).start(resolve);
       });
-      
-      if (isAuthenticated) {
-        await notifyPartnerUserEntered();
-      }
       
       onComplete();
     };

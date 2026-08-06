@@ -1,311 +1,222 @@
-# Development Guidelines — Amor App
+# Development Guidelines
 
-## Code Style & Formatting
+## Code Quality Standards
 
-### General
-- JavaScript ES2022+, JSX — no TypeScript, no PropTypes
-- Functional components only — no class components
-- `const` for all component definitions and most variables
-- Arrow functions for handlers: `const handleX = () => {}`
-- Inline ternaries preferred over if/else in JSX
-- Optional chaining used extensively: `auth.currentUser?.uid`, `navigation?.navigate?.()`
-
-### Imports Order (consistent across files)
-1. React and React Native core
-2. Expo packages (`expo-linear-gradient`, `expo-image`, etc.)
-3. Firebase imports
-4. Third-party icon libraries (`@expo/vector-icons`)
-5. Local components and screens
-6. Local contexts and utils
+### File & Component Structure
+- Every screen/component is a single default-exported functional component
+- StyleSheet always named `s` (short alias) in screens, `styles` in components
+- Styles defined at the bottom of the file with `StyleSheet.create({...})`
+- Imports grouped: React → React Native → Expo → Firebase → local utils → local components
 
 ### Naming Conventions
-- Components: PascalCase (`RoomBackground`, `NotificationSystem`)
-- Files: PascalCase for components/screens, camelCase for utils (`firebase.js`, `eventBus.js`)
-- State variables: camelCase, boolean states prefixed with `is`/`has` (`isDebugMode`, `hasNewBuzon`)
-- Handler functions: `handleX` or `onX` (`handleLogout`, `handleAnswer`, `onPress`)
-- Navigation callbacks: `goX` pattern (`goFrases`, `goVestuario`, `goTemas`)
-- Style objects: always named `styles` (or `s` for compact components like Toast)
+- Components: PascalCase (`Temporadas`, `TabButtons`, `CartaExpandida`)
+- Style objects: short alias `s` in screens, `styles` in components/utils
+- Firebase collections: Spanish nouns (`usuarios`, `posts`, `pistas`, `notification_limits`)
+- Firestore field names: camelCase Spanish (`dinero`, `ultimaActividad`, `fechaUltimaRacha`, `pareja`)
+- State variables: camelCase, numbered suffixes for repeated patterns (`isCorrect`, `isCorrect2`, `isCorrect3`)
+- Event handlers: `handle` prefix (`handleAnswer`, `handleLetterPress`, `handleColorPress`)
+
+### Language
+- All UI text, comments, variable names, and Firestore fields are in **Spanish**
+- Error messages and console logs mix Spanish and English
 
 ---
 
-## Component Patterns
+## Architectural Patterns
 
-### Standard Component Structure
+### Navigation Pattern
+Navigation is a custom ref-based state machine — never use React Navigation:
 ```js
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+// Correct: navigate via prop
+navigation.navigate('screenName', { param: value });
 
-const MyComponent = ({ navigation }) => {
-  const [state, setState] = useState(null);
+// In App.js: screens rendered conditionally
+{currentScreen === 'screenName' && <Screen navigation={navigation} />}
 
-  useEffect(() => {
-    // side effects
-  }, []);
-
-  return (
-    <View style={styles.container}>
-      {/* JSX */}
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-});
-
-export default MyComponent;
+// Inicio is always mounted (hidden via display:none to preserve state)
+<Inicio style={{ display: currentScreen === 'main' ? 'flex' : 'none' }} ... />
 ```
 
-### Performance Optimizations
-- `memo()` wrapping for screens that receive stable props: `export default memo(Inicio)`
-- `useCallback` for navigation handlers passed as props to avoid re-renders:
-  ```js
-  const goFrases = useCallback(() => navigation.navigate('frasesExpandida'), [navigation]);
-  ```
-- `useMemo` for expensive computations: `const bars = useMemo(() => generarMiniBarcode(), [])`
-- `useRef` for stable navigation object to prevent cascade re-renders:
-  ```js
-  const navigation = useRef({ navigate: navigateToScreen }).current;
-  ```
-
-### forwardRef Pattern (Toast, Loading)
+### Firebase Access Pattern
+Always import `auth` and `db` from `../firebaseConfig` (or `./firebaseConfig` from root):
 ```js
-const Toast = forwardRef((_, ref) => {
-  useImperativeHandle(ref, () => ({
-    show({ text1, text2, type, duration }) { /* ... */ }
-  }));
-});
-```
-Global access via: `global.showToast = (opts) => toastRef.current?.show(opts)`
+import { db, auth } from '../firebaseConfig';
+import { doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 
----
+// Always use merge:true for partial updates
+await setDoc(doc(db, 'usuarios', uid), { field: value }, { merge: true });
 
-## Context Pattern
-
-All contexts follow the same structure:
-```js
-const MyContext = createContext();
-
-export const useMyContext = () => {
-  const context = useContext(MyContext);
-  if (!context) throw new Error('useMyContext must be used within MyProvider');
-  return context;
-};
-
-export const MyProvider = ({ children }) => {
-  const [state, setState] = useState(null);
-  return (
-    <MyContext.Provider value={{ state, setState }}>
-      {children}
-    </MyContext.Provider>
-  );
-};
-```
-- Always throw descriptive error if hook used outside provider
-- Contexts: ThemeContext, SeasonContext, DebugContext, TrofeosContext, MusicContext, NewIndicatorContext
-
----
-
-## Navigation Pattern
-
-No React Navigation library. Custom manual router in App.js:
-```js
-const navigateToScreen = useCallback((screenName, params) => {
-  if (params?.message !== undefined) setCartaMessage(params.message);
-  currentScreenRef.current = screenName;
-  setCurrentScreen(screenName);
-}, []);
-
-const navigation = useRef({ navigate: navigateToScreen }).current;
-```
-
-Screens receive `navigation` prop and call:
-```js
-navigation.navigate('screenName')
-navigation.navigate('screenName', { param: value })
-navigation?.navigate?.('screenName')  // safe call when navigation may be undefined
-```
-
-Screen names (lowercase unless legacy): `'main'`, `'login'`, `'register'`, `'menu'`, `'pistas'`, `'carta'`, `'Vestuario'`, `'Temas'`, `'ecos'`, `'perfil'`, `'buzon'`, `'trofeos'`, `'tienda'`, `'stickers'`, `'coleccion'`, `'frasesExpandida'`, `'seasonInfo'`
-
----
-
-## Firebase Patterns
-
-### Firestore Read
-```js
-const snap = await getDoc(doc(db, 'usuarios', uid));
+// Always check existence before updateDoc
+const snap = await getDoc(ref);
 if (snap.exists()) {
-  const data = snap.data();
+  await updateDoc(ref, updates);
+} else {
+  await setDoc(ref, fullData);
 }
 ```
 
-### Firestore Write (merge pattern)
+### Error Handling Pattern
+All async functions use try/catch and swallow errors silently (`.catch(() => {})`):
 ```js
-await setDoc(doc(db, 'usuarios', uid), { field: value }, { merge: true });
-// or
-await updateDoc(doc(db, 'usuarios', uid), { field: value });
+// Fire-and-forget pattern (used extensively in App.js)
+someAsyncCall().catch(() => {});
+
+// In utility functions: log and rethrow
+try {
+  // ...
+} catch (error) {
+  console.error('Error al [action]:', error);
+  throw error;
+}
+
+// In UI handlers: log and swallow
+try {
+  // ...
+} catch (error) {
+  console.error('Error:', error);
+}
 ```
 
-### Error Handling
-All Firebase calls wrapped in try/catch. Errors logged with `console.error('Context:', error)`. Non-critical failures silently caught with empty catch `catch {}` or `catch (_) {}`.
-
-### Pista Progress Save Pattern
+### Global Toast Pattern
+Use the global `showToast` function (set up in App.js):
 ```js
-const savePistaProgress = async (pistaNumber, completed) => {
-  try {
-    const user = auth.currentUser;
-    if (user) {
-      await setDoc(doc(db, 'usuarios', user.uid), {
-        [`pista${pistaNumber}`]: completed
-      }, { merge: true });
-    }
-  } catch (error) {
-    console.error('Error saving pista progress:', error);
-  }
-};
+global.showToast({ message: 'Texto', type: 'success' });
 ```
 
-### Image Upload Pattern (firebase.js)
+---
+
+## UI & Styling Patterns
+
+### Image Rendering
+Always use `expo-image` (`Image as ExpoImage`) for remote/cached images, native `Image` only for backgrounds:
+```js
+import { Image as ExpoImage } from 'expo-image';
+
+// Standard usage
+<ExpoImage
+  source={require('../assets/...')}
+  style={s.image}
+  contentFit="contain"
+  cachePolicy="memory"
+/>
+
+// For backgrounds: native Image with StyleSheet.absoluteFill
+<Image source={require('../assets/paredes/pared3.png')} style={StyleSheet.absoluteFill} contentFit="cover" />
+```
+
+### Animation Pattern
+Use `Animated.loop` + `Animated.sequence` for idle/floating animations, always `useNativeDriver: true`:
+```js
+const floatAnim = useRef(new Animated.Value(0)).current;
+
+Animated.loop(
+  Animated.sequence([
+    Animated.timing(floatAnim, { toValue: -1.2, duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    Animated.timing(floatAnim, { toValue: 1.2,  duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+    Animated.timing(floatAnim, { toValue: 0,    duration: 1800, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+  ])
+).start();
+```
+
+Fade-in on data load pattern:
+```js
+const [pistasOpacity] = React.useState(new Animated.Value(0));
+// After data loads:
+Animated.timing(pistasOpacity, { toValue: 1, duration: 800, useNativeDriver: true }).start();
+```
+
+### Screen Layout
+- Root view always `flex: 1` with `justifyContent: 'center', alignItems: 'center'`
+- `StatusBar hidden` on most screens (landscape immersive)
+- Background image uses `StyleSheet.absoluteFill`
+- `TabButtons` component included on most screens with `onExit={() => navigation?.navigate?.('main')}`
+
+### Color Palette
+- Primary pink: `#FF69B4`, `#FF6B6B`
+- Success green: `#4CAF50`
+- Error red: `#F44336`
+- Background cards: `rgba(255,255,255,0.98)` or `rgba(255,255,255,0.9)`
+- Overlay dark: `rgba(0,0,0,0.6)`
+- Card background warm: `#fcf7d0`
+
+### Shadow Pattern (consistent across cards)
+```js
+shadowColor: '#000',
+shadowOffset: { width: 0, height: 4 },
+shadowOpacity: 0.15,
+shadowRadius: 12,
+elevation: 8,
+```
+
+---
+
+## Data Persistence Patterns
+
+### User Progress (Firestore merge)
+Save progress with `setDoc + merge: true` using dynamic field keys:
+```js
+await setDoc(doc(db, 'usuarios', user.uid), {
+  [`pista${pistaNumber}`]: completed
+}, { merge: true });
+```
+
+### User Document Initialization
+Always check for missing fields and patch them on login (see App.js pattern):
+```js
+const updates = {};
+if (data.dinero === undefined) updates.dinero = 0;
+if (data.nivel  === undefined) updates.nivel  = 1;
+if (Object.keys(updates).length > 0) updateDoc(ref, updates).catch(() => {});
+```
+
+### Image Upload Pattern (Firebase Storage)
 ```js
 const response = await fetch(uri);
 const blob = await response.blob();
-const storageRef = ref(storage, `posts/${imageName}`);
+const storageRef = ref(storage, `posts/${Date.now()}.${ext}`);
 const uploadTask = uploadBytesResumable(storageRef, blob);
-// resolve/reject in uploadTask.on('state_changed', ...)
+// Wrap in Promise, resolve with getDownloadURL on complete
 ```
-
----
-
-## Styling Patterns
-
-### StyleSheet
-- Always `StyleSheet.create({})` at bottom of file, named `styles` (or `s` for compact)
-- Absolute positioning used heavily for overlapping UI elements
-- `position: 'absolute'` with explicit `top/bottom/left/right` values
-- Shadow pattern (cross-platform):
-  ```js
-  shadowColor: '#000',
-  shadowOffset: { width: 0, height: 4 },
-  shadowOpacity: 0.15,
-  shadowRadius: 12,
-  elevation: 8,
-  ```
-
-### Color Palette
-- Primary pink: `#FF69B4`, `#FF6B6B`, `#f9a8d4`, `#e879f9`
-- Purple accent: `#8b5a83`, `#9C27B0`, `#2d1b3d`
-- Success green: `#4CAF50`
-- Error red: `#F44336`, `#ff6b6b`
-- Backgrounds: `rgba(255,255,255,0.9x)` semi-transparent whites
-- Text on dark: `rgba(255,255,255,0.6-0.9)`
-
-### LinearGradient Usage
-```js
-<LinearGradient
-  colors={['#color1', '#color2']}
-  start={{ x: 0, y: 0 }}
-  end={{ x: 1, y: 1 }}
-  style={styles.gradient}
->
-```
-Used for: backgrounds, buttons, HUD, toast icons, card headers.
-
-### Themed Styling
-Components read from context to apply season/theme colors:
-```js
-const { currentTheme, themes } = useTheme();
-const { getDisplaySeason } = useSeason();
-const theme = themes[currentTheme];
-const displaySeason = getDisplaySeason();
-const gradientColors = displaySeason ? displaySeason.gradient : theme?.gradient;
-```
-
----
-
-## Animation Patterns
-
-### Animated.Value with useRef
-```js
-const opacity = useRef(new Animated.Value(0)).current;
-// or useState for component-level:
-const [fadeAnim] = useState(new Animated.Value(0));
-```
-
-### Sequence + Parallel
-```js
-Animated.sequence([
-  Animated.parallel([
-    Animated.timing(opacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-    Animated.spring(translateY, { toValue: 0, speed: 7, bounciness: 4, useNativeDriver: true }),
-  ]),
-  Animated.timing(barWidth, { toValue: TOAST_W, duration, useNativeDriver: false }),
-]).start(({ finished }) => { if (finished) cleanup(); });
-```
-
-- `useNativeDriver: true` for opacity/transform animations
-- `useNativeDriver: false` for layout properties (width, height)
-- Store sequence ref to allow stopping: `seqRef.current = Animated.sequence(...); seqRef.current.stop()`
 
 ---
 
 ## Notification System Patterns
 
-### Sending to Partner
-```js
-await NotificationSystem.sendToPartner(userId, title, body, data, {
-  windowHours: 6,
-  maxCount: 1,
-  type: 'partner_alert'
-});
-```
-
 ### Rate Limiting
-Uses Firestore `notification_limits` collection with atomic transactions for minute-level throttling, and in-memory static timestamps for session-level throttling:
-```js
-static _lastUserOnlineSent = 0;
-static _MEMORY_THROTTLE_MS = 10 * 60 * 1000;
-```
+Always throttle notifications with dual-layer protection:
+1. In-memory static throttle (`NotificationSystem._lastEntradaSentByUser`)
+2. Firestore transaction-based rate limiter (`_canSendLimitedNotificationMinutes`)
 
-### Token Resolution
-```js
-const preferred = this._getPreferredToken(userData);
-// Returns { token, provider } — prefers MyPushyToken, falls back to pushyToken
-if (!preferred.token) return;
-await this.sendPushNotification(preferred.token, title, body, data);
-```
+### Push Token Storage
+Tokens stored in Firestore under `usuarios/{uid}` as both `MyPushyToken` and `pushyToken` (redundant for safety).
 
 ---
 
-## Debug Mode Pattern
+## Context Usage
 
-- `DebugContext` stores `isDebugMode` in AsyncStorage
-- Only `admin@gmail.com` can toggle debug mode (enforced in Menu.js)
-- Debug-only UI wrapped in: `{isDebugMode && <Component />}`
-- `DevModeDot` component always rendered in App.js, shows only when debug active
-- Season dev mode separate from app debug mode (`isDevMode` in SeasonContext)
-
----
-
-## Multi-Step Form Pattern (Menu.js creation flow)
-
-State machine using integer step index:
-```js
-const [creationStep, setCreationStep] = useState(0);
-// Render switch:
-switch (creationStep) {
-  case 0: return <StepOne />;
-  case 1: return <StepTwo />;
-  // ...
-}
+Three global contexts wrap the entire app:
+```jsx
+<NewIndicatorProvider>
+  <TrofeosProvider>
+    <MusicProvider>
+      {/* all screens */}
+    </MusicProvider>
+  </TrofeosProvider>
+</NewIndicatorProvider>
 ```
-Reset functions clear all related state: `resetCreationSteps()`, `resetEditSteps()`
+
+Consume with standard `useContext` hook in any child component.
 
 ---
 
-## Common Anti-Patterns to Avoid
-- Don't use React Navigation — use `navigation.navigate('screenName')` with the custom router
-- Don't import from `@react-native-firebase/firestore` in new code — use `firebase/firestore` (Web SDK) from `firebaseConfig.js`
-- Don't add `console.log` in production paths — only `console.error` for caught errors
-- Don't use `defaultValue` on controlled inputs — use `value` + `onChangeText` state
-- Don't create new `Animated.Value` inside render — use `useRef` or `useState`
+## OTA Update Workflow
+
+Run `npm run actualizar` to:
+1. `git add .`
+2. Bump patch version in `package.json`
+3. Optionally sync `app.json` runtimeVersion
+4. `git commit -m "<newVersion>"`
+5. `git push`
+6. `eas update --branch production --platform android`
+
+Use `--no-publish`, `--no-push`, `--no-commit` flags to skip steps.

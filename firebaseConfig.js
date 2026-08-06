@@ -1,12 +1,11 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { initializeAuth, getAuth, getReactNativePersistence } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';
 import { getFunctions } from 'firebase/functions';
 import { getStorage } from 'firebase/storage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LogBox } from 'react-native';
 
-// Configuración de Firebase
 const firebaseConfig = {
   apiKey: 'AIzaSyBksEJLaWlj5uRo0ipJU1dec5h7p18wdy8',
   projectId: 'amor-9df0d',
@@ -15,10 +14,8 @@ const firebaseConfig = {
   appId: '1:580063862777:android:dc7c47da3566b574fe2728',
 };
 
-// Suprimir warnings de Firestore
 LogBox.ignoreLogs(['@firebase/firestore']);
 
-// Inicializa Firebase
 let app;
 let db;
 
@@ -26,17 +23,22 @@ if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
   db = initializeFirestore(app, {
     experimentalForceLongPolling: true,
-    ignoreUndefinedProperties: true
+    ignoreUndefinedProperties: true,
   });
 } else {
   app = getApp();
   db = getFirestore(app);
 }
 
-// Inicializa Auth con AsyncStorage para persistencia
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+// Guard: initializeAuth lanza si ya fue llamado en hot-reload
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+} catch {
+  auth = getAuth(app);
+}
 
 const functions = getFunctions(app);
 const storage = getStorage(app);

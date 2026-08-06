@@ -20,7 +20,9 @@
       "**/*"
     ],
     "fonts": [
-      "./fonts/Omori.ttf"
+      "./fonts/Omori.ttf",
+      "./fonts/Globo.ttf",
+      "./fonts/Titulos.ttf"
     ],
     "newArchEnabled": true,
     "android": {

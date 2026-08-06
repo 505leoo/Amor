@@ -1,80 +1,75 @@
-# Tech Stack — Amor App
+# Technology Stack
 
-## Platform
-- React Native 0.86.0 with Expo SDK 57
-- Targets: Android (primary), iOS
-- Entry: index.js → App.js
+## Core Framework
+- **React Native** 0.86.0 with **React** 19.2.3
+- **Expo** ^57.0.4 (managed workflow with dev client)
+- **New Architecture enabled** (`newArchEnabled: true`)
 
-## Languages
-- JavaScript (ES2022+), JSX — no TypeScript
+## Key Libraries
 
-## Core Dependencies
+### Navigation & UI
+- Custom state-machine navigation (no React Navigation)
+- `expo-image` ~57.0.0 — optimized image rendering with cache policies
+- `expo-linear-gradient` ~57.0.0
+- `@expo/vector-icons` ^15.1.1
+- `react-native-svg` 15.15.4
+- `lottie-react-native` ~7.3.8 — animations
+- `@react-native-community/blur` ^4.4.1
 
-### Framework & Navigation
-- `expo` ^57.0.4
-- `react` 19.2.3
-- `react-native` 0.86.0
-- No React Navigation — custom manual screen router in App.js
+### Firebase
+- `firebase` ^12.10.0 — Firestore, Auth (web SDK)
+- `@react-native-firebase/app` ^17.4.2 — native Firebase (notifications)
 
-### Firebase (Backend)
-- `firebase` ^12.10.0 — Web SDK (Auth, Firestore, Storage, Functions)
-- `@react-native-firebase/app` ^17.4.2 — Native SDK (used in FirebaseService.js)
-- Firestore initialized with `experimentalForceLongPolling: true`
-- Auth persistence via `AsyncStorage` (`getReactNativePersistence`)
+### Notifications
+- `expo-notifications` ^57.0.3
+- `pushy-react-native` ^1.0.61 — alternative push service
 
-### Push Notifications
-- `pushy-react-native` ^1.0.61 — primary push provider
-- `expo-notifications` ^57.0.3 — permission handling and local notification config
-- Rate limiting stored in Firestore `notification_limits` collection
+### Media & Storage
+- `expo-audio` ~57.0.0
+- `expo-image-picker` ~57.0.2
+- `expo-document-picker` ~57.0.0
+- `expo-file-system` ~57.0.0
+- `@react-native-async-storage/async-storage` ^2.2.0
 
-### UI & Styling
-- `expo-linear-gradient` ~57.0.0 — gradients throughout the app
-- `@expo/vector-icons` ^15.1.1 — Feather, Ionicons, MaterialIcons
-- `lottie-react-native` ~7.3.8 — Lottie animations
-- `react-native-svg` 15.15.4 — SVG support
-- `@react-native-community/blur` ^4.4.1 — blur effects
-- All styles via `StyleSheet.create()` — no CSS-in-JS libraries
+### Networking
+- `@react-native-community/netinfo` 12.0.1
 
-### Media & Assets
-- `expo-image` ~57.0.0 — optimized image rendering with `cachePolicy`
-- `expo-image-picker` ~57.0.2 — gallery access
-- `expo-audio` ~57.0.0 — background music
-- `expo-document-picker` ~57.0.0 — file picking
-- `expo-file-system` ~57.0.0 — file operations
-- Custom fonts: Delius.ttf, Mensa.ttf, Omori.ttf (in /fonts)
+### Other
+- `react-native-game-engine` ^1.2.0
+- `react-native-toast-message` ^2.4.0
+- `expo-navigation-bar` ~57.0.1
+- `expo-updates` ^57.0.6 — OTA updates
 
-### Storage & Persistence
-- `@react-native-async-storage/async-storage` ^2.2.0 — local persistence (debug mode, cache)
-- Firebase Storage — image uploads (posts, stickers)
+## Build & Tooling
+- **EAS Build** (`eas-cli`) for native builds
+- **Expo Updates** for OTA hot updates
+- `babel-preset-expo` ~57.0.0
+- `@react-native-community/cli` (devDependency)
+- Android: compileSdk 35, targetSdk 35, arm64-v8a only
+- Proguard + resource shrinking enabled in release
 
-### Networking & Device
-- `@react-native-community/netinfo` 12.0.1 — connectivity detection
-- `@react-native-community/geolocation` ^3.4.0
-- `expo-navigation-bar` ~57.0.1 — hide Android nav bar
-
-### OTA Updates
-- `expo-updates` ^57.0.6
-- `expo-dev-client` ^57.0.5
-- EAS Build configured via `eas.json`
-
-### Game Engine
-- `react-native-game-engine` ^1.2.0 — used for game-like interactions
-
-## Build & Dev Commands
+## Development Commands
 ```bash
 npm start          # expo start --dev-client
 npm run android    # expo run:android
 npm run ios        # expo run:ios
-npm run actualizar # node ./scripts/actualizar.js (OTA update)
+npm run actualizar # node ./scripts/actualizar.js --use-app-runtime  (OTA update)
+npm run actualizar:sync  # sync runtime version
 ```
 
 ## Firebase Cloud Functions
-Located in `/functions/index.js` (Node.js). Deployed separately via Firebase CLI.
-Endpoint example: `https://us-central1-amor-9df0d.cloudfunctions.net/userEntered`
+- Located in `functions/` directory
+- Separate `package.json` with own dependencies
+- Entry: `functions/index.js`
 
-## Build Config
-- `app.json` / `eas.json` — Expo/EAS configuration
-- `babel.config.js` — Babel with `babel-preset-expo`
-- Android: `/android/` with Gradle 8.14.3
-- iOS: `/ios/` with CocoaPods (Podfile)
-- Firebase: `google-services.json` (Android), `firebase.json`, `.firebaserc`
+## Fonts
+- `Omori.ttf` — primary display font (loaded via app.json)
+- `Delius.ttf`
+- `Mensa.ttf`
+
+## App Configuration
+- Orientation: **landscape only**
+- Runtime version: `0.1`
+- EAS project ID: `1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec`
+- Android package: `com.leitof7.amor`
+- iOS bundle: `com.leitof7.amor`
