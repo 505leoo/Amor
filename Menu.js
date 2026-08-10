@@ -294,11 +294,6 @@ const Menu = ({ navigation, route }) => {
           style={styles.pistasImageContainer}
           onPress={() => navigation && navigation.navigate('pistas')}
         >
-          <Image 
-            source={require('./assets/menu/pistas.png')}
-            style={styles.pistasImage}
-            resizeMode="cover"
-          />
           <Animated.Text style={[styles.moreInfoText, { opacity: textOpacity }]}>Más información</Animated.Text>
         </TouchableOpacity>
       );

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -331,6 +331,7 @@ const Perfil = ({ navigation }) => {
             fechaNacimiento: d.fechaNacimiento || null,
             genero: d.genero ?? null,
             photoURL: d.photoURL || null,
+            iconoUrl: d.iconoUrl || null,
             dinero: typeof d.dinero === 'number' ? d.dinero : 0,
             nivel: typeof d.nivel === 'number' ? d.nivel : 1,
             exp: typeof d.exp === 'number' ? d.exp : 0,
@@ -344,6 +345,7 @@ const Perfil = ({ navigation }) => {
             dni: null, correo: user.email || '—',
             edad: null, fechaNacimiento: null, genero: null,
             photoURL: null, dinero: 0, nivel: 1, exp: 0, racha: 0, estado: '—', uid: user.uid,
+            iconoUrl: null,
           });
         }
         setLoading(false);
@@ -388,12 +390,14 @@ const Perfil = ({ navigation }) => {
 
               {/* Columna izquierda: avatar + trofeo */}
               <View style={s.leftCol}>
-                <View style={s.photoShell}>
-                  {d.photoURL
-                    ? <ExpoImage source={{ uri: d.photoURL }} style={s.photoImg} contentFit="cover" cachePolicy="memory-disk" />
-                    : <View style={s.photoFallback}><Text style={s.photoLetter}>{(d.nombre || '?')[0].toUpperCase()}</Text></View>
+                <TouchableOpacity style={s.photoShell} onPress={() => navigation?.navigate('iconos')} activeOpacity={0.8}>
+                  {d.iconoUrl
+                    ? <ExpoImage source={{ uri: d.iconoUrl }} style={s.photoImg} contentFit="cover" cachePolicy="memory-disk" />
+                    : d.photoURL
+                      ? <ExpoImage source={{ uri: d.photoURL }} style={s.photoImg} contentFit="cover" cachePolicy="memory-disk" />
+                      : <View style={s.photoFallback}><Text style={s.photoLetter}>{(d.nombre || '?')[0].toUpperCase()}</Text></View>
                   }
-                </View>
+                </TouchableOpacity>
                 <View style={s.trophyBlock}>
                   <View style={s.trophyClip}>
                     <TrophyIcon nivel={nivel} scale={0.2} />

@@ -64,7 +64,8 @@
       "expo-navigation-bar",
       "expo-audio",
       "expo-image",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-splash-screen"
     ],
     "runtimeVersion": "0.1",
     "extra": {

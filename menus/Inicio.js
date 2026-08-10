@@ -167,6 +167,10 @@ const Inicio = memo(({ navigation, onReady, style }) => {
       </View>
       <RegaloDaily />
       <LibrosRepisa onPressTemporadas={() => navigation.navigate('temporadas')} onPressAnimalitos={() => navigation.navigate('animalitos')} />
+      {/* TEMP */}
+      <TouchableOpacity onPress={() => navigation.navigate('pase')} style={{ position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -30 }, { translateY: -18 }], backgroundColor: 'rgba(0,0,0,0.5)', padding: 8, borderRadius: 6 }}>
+        <Text style={{ color: '#fff', fontSize: 11 }}>Pase →</Text>
+      </TouchableOpacity>
     </View>
   );
 });

@@ -22,21 +22,6 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
 
   const preloadLocalAssets = async () => {
     await Asset.loadAsync([
-      require('./assets/paredes/pared1.png'),
-      require('./assets/paredes/vestuario1.png'),
-      require('./assets/paredes/frasespared.png'),
-      require('./assets/paredes/pared3.png'),
-      require('./assets/player/cabeza1.png'),
-      require('./assets/player/manos1.png'),
-      require('./assets/player/remera1.png'),
-      require('./assets/player/inicial1.png'),
-      require('./assets/player/mano1d.png'),
-      require('./assets/player/mano1i.png'),
-      require('./assets/menu/mensajes.png'),
-      require('./assets/menu/pared1.png'),
-      require('./assets/menu/pistas.png'),
-      require('./assets/posters/poster1.png'),
-      require('./assets/frases/frases1.png'),
       require('./assets/temporadas/libro/libro1.png'),
       require('./assets/temporadas/libro/libro2.png'),
       require('./assets/temporadas/libro/Temporada1/logo1.png'),

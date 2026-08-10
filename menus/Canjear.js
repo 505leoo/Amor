@@ -1,7 +1,7 @@
 // TODO: Migrar validación a Cloud Function en producción.
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Animated, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Animated, Modal, Image, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Rect, Path } from 'react-native-svg';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -13,44 +13,43 @@ import RecompensaOverlay from '../components/RecompensaOverlay';
 
 const ADMIN = 'admin@gmail.com';
 
-const ROWS = [
-  ['1','2','3','4','5','6','7','8','9','0'],
-  ['Q','W','E','R','T','Y','U','I','O','P'],
-  ['A','S','D','F','G','H','J','K','L'],
-  ['Z','X','C','V','B','N','M'],
-];
+const ROWS = [];
 
 // QR decorativo SVG
 const QRDecorativo = () => (
-  <Svg width={90} height={90} viewBox="0 0 90 90">
+  <Svg width={48} height={48} viewBox="0 0 48 48">
     {/* esquina sup-izq */}
-    <Rect x="5"  y="5"  width="30" height="30" rx="4" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="3"/>
-    <Rect x="13" y="13" width="14" height="14" rx="2" fill="rgba(255,255,255,0.7)"/>
+    <Rect x="2" y="2" width="16" height="16" rx="3" fill="none" stroke="#fff" strokeWidth="2"/>
+    <Rect x="6" y="6" width="8" height="8" rx="1.5" fill="#fff"/>
     {/* esquina sup-der */}
-    <Rect x="55" y="5"  width="30" height="30" rx="4" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="3"/>
-    <Rect x="63" y="13" width="14" height="14" rx="2" fill="rgba(255,255,255,0.7)"/>
+    <Rect x="30" y="2" width="16" height="16" rx="3" fill="none" stroke="#fff" strokeWidth="2"/>
+    <Rect x="34" y="6" width="8" height="8" rx="1.5" fill="#fff"/>
     {/* esquina inf-izq */}
-    <Rect x="5"  y="55" width="30" height="30" rx="4" fill="none" stroke="rgba(255,255,255,0.7)" strokeWidth="3"/>
-    <Rect x="13" y="63" width="14" height="14" rx="2" fill="rgba(255,255,255,0.7)"/>
-    {/* puntos centrales */}
-    <Rect x="42" y="5"  width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="42" y="15" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="42" y="25" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="5"  y="42" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="15" y="42" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="25" y="42" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="55" y="42" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="65" y="42" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="75" y="42" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="42" y="55" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="55" y="55" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="65" y="65" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="75" y="75" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="55" y="75" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="42" y="75" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="42" y="65" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="75" y="55" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
-    <Rect x="75" y="65" width="6" height="6"  rx="1" fill="rgba(255,255,255,0.5)"/>
+    <Rect x="2" y="30" width="16" height="16" rx="3" fill="none" stroke="#fff" strokeWidth="2"/>
+    <Rect x="6" y="34" width="8" height="8" rx="1.5" fill="#fff"/>
+    {/* datos zona derecha-abajo */}
+    <Rect x="30" y="30" width="4" height="4" rx="1" fill="#fff"/>
+    <Rect x="36" y="30" width="4" height="4" rx="1" fill="#fff"/>
+    <Rect x="42" y="30" width="4" height="4" rx="1" fill="#fff"/>
+    <Rect x="30" y="36" width="4" height="4" rx="1" fill="#fff"/>
+    <Rect x="42" y="36" width="4" height="4" rx="1" fill="#fff"/>
+    <Rect x="30" y="42" width="4" height="4" rx="1" fill="#fff"/>
+    <Rect x="36" y="42" width="4" height="4" rx="1" fill="#fff"/>
+    <Rect x="42" y="42" width="4" height="4" rx="1" fill="#fff"/>
+    {/* fila central */}
+    <Rect x="22" y="2"  width="4" height="4" rx="1" fill="rgba(255,255,255,0.6)"/>
+    <Rect x="22" y="8"  width="4" height="4" rx="1" fill="rgba(255,255,255,0.4)"/>
+    <Rect x="22" y="14" width="4" height="4" rx="1" fill="rgba(255,255,255,0.6)"/>
+    <Rect x="2"  y="22" width="4" height="4" rx="1" fill="rgba(255,255,255,0.4)"/>
+    <Rect x="8"  y="22" width="4" height="4" rx="1" fill="rgba(255,255,255,0.6)"/>
+    <Rect x="14" y="22" width="4" height="4" rx="1" fill="rgba(255,255,255,0.4)"/>
+    <Rect x="22" y="22" width="4" height="4" rx="1" fill="#fff"/>
+    <Rect x="28" y="22" width="4" height="4" rx="1" fill="rgba(255,255,255,0.6)"/>
+    <Rect x="34" y="22" width="4" height="4" rx="1" fill="rgba(255,255,255,0.4)"/>
+    <Rect x="40" y="22" width="4" height="4" rx="1" fill="rgba(255,255,255,0.6)"/>
+    <Rect x="22" y="28" width="4" height="4" rx="1" fill="rgba(255,255,255,0.4)"/>
+    <Rect x="22" y="34" width="4" height="4" rx="1" fill="rgba(255,255,255,0.6)"/>
+    <Rect x="22" y="40" width="4" height="4" rx="1" fill="rgba(255,255,255,0.4)"/>
   </Svg>
 );
 
@@ -72,6 +71,7 @@ export default function Canjear({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
   const shakeAnim  = useRef(new Animated.Value(0)).current;
   const cursorAnim = useRef(new Animated.Value(1)).current;
+  const inputRef = useRef(null);
   const isAdmin = auth.currentUser?.email === ADMIN;
 
   useEffect(() => {
@@ -80,7 +80,6 @@ export default function Canjear({ navigation }) {
       Animated.timing(cursorAnim, { toValue: 1, duration: 530, useNativeDriver: true }),
     ])).start();
   }, []);
-
   useEffect(() => {
     getDocs(collection(db, 'codigos')).then(snap => {
       setCodigos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -133,6 +132,7 @@ export default function Canjear({ navigation }) {
   const handleKey    = (key) => { if (cargando || recompensa || input.length >= 16) return; setInput(p => p + key); };
   const handleDelete = ()    => { if (cargando || recompensa) return; setInput(p => p.slice(0, -1)); };
   const handleConfirmar = () => { if (!input || cargando || recompensa) return; validarCodigo(input); };
+  const abrirTeclado = () => { if (!cargando && !recompensa) inputRef.current?.focus(); };
 
   const handleScan = async ({ data }) => {
     if (scanned) return;
@@ -163,59 +163,51 @@ export default function Canjear({ navigation }) {
 
         {/* Columna izquierda — QR */}
         <View style={s.qrCol}>
-          <Text style={s.qrHint}>Presiona aquí</Text>
           <TouchableOpacity onPress={abrirScanner} activeOpacity={0.7} style={s.qrBtn}>
             <QRDecorativo />
+            <Text style={s.qrHint}>escanear</Text>
           </TouchableOpacity>
+          <Image source={require('../assets/inicio/menta1.png')} style={s.menta} />
         </View>
 
-        {/* Columna derecha — teclado */}
+        {/* Columna derecha — input */}
         <View style={s.center}>
           <View style={s.topSection}>
             <Text style={s.titulo}>canjear código</Text>
             <View style={s.tituloLinea} />
           </View>
 
-          <Animated.View style={[s.inputRow, { transform: [{ translateX: shakeAnim }] }]}>
-            {input.split('').map((ch, i) => (
-              <View key={i} style={s.charWrap}>
-                <Text style={s.inputChar}>{ch}</Text>
-                <View style={s.charLinea} />
-              </View>
-            ))}
-            {!recompensa && (
-              <View style={s.charWrap}>
-                <Animated.View style={[s.cursor, { opacity: cursorAnim }]} />
-                <View style={s.charLineaCursor} />
-              </View>
-            )}
-          </Animated.View>
+          <TextInput
+            ref={inputRef}
+            value={input}
+            onChangeText={t => { if (!cargando && !recompensa) setInput(t.toUpperCase().slice(0, 16)); }}
+            onSubmitEditing={handleConfirmar}
+            style={s.hiddenInput}
+            autoCapitalize="characters"
+            returnKeyType="done"
+            editable={!cargando && !recompensa}
+          />
 
-          {!recompensa && (
-            <View style={s.keyboard}>
-              {ROWS.map((row, ri) => (
-                <View key={ri} style={s.keyRow}>
-                  {row.map(key => (
-                    <TouchableOpacity key={key} style={s.key} onPress={() => handleKey(key)} activeOpacity={0.5}>
-                      <Text style={s.keyText}>{key}</Text>
-                    </TouchableOpacity>
-                  ))}
-                  {ri === ROWS.length - 1 && (
-                    <TouchableOpacity style={[s.key, s.keyDel]} onPress={handleDelete} activeOpacity={0.5}>
-                      <Text style={s.keyText}>⌫</Text>
-                    </TouchableOpacity>
-                  )}
+          <Animated.View style={[s.inputRow, { transform: [{ translateX: shakeAnim }] }]}>
+            <TouchableOpacity onPress={abrirTeclado} activeOpacity={0.7} style={s.barsRow}>
+              {[0,1,2,3,4].map(i => (
+                <View key={i} style={s.barSlot}>
+                  <Text style={s.barChar}>{input[i] ?? ''}</Text>
+                  <View style={[s.barLine, input.length === i && s.barLineActive]} />
                 </View>
               ))}
-              <TouchableOpacity
-                style={[s.keyConfirmar, (!input || cargando) && s.keyConfirmarDisabled]}
-                onPress={handleConfirmar}
-                disabled={!input || cargando}
-                activeOpacity={0.7}
-              >
-                <Text style={s.keyConfirmarText}>{cargando ? '...' : 'confirmar'}</Text>
-              </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {input.length > 0 && !recompensa && (
+            <TouchableOpacity
+              style={[s.keyConfirmar, cargando && s.keyConfirmarDisabled]}
+              onPress={handleConfirmar}
+              disabled={cargando}
+              activeOpacity={0.7}
+            >
+              <Text style={s.keyConfirmarText}>{cargando ? '...' : 'confirmar'}</Text>
+            </TouchableOpacity>
           )}
         </View>
       </View>
@@ -260,36 +252,39 @@ const s = StyleSheet.create({
 
   layout: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 80,
-    paddingBottom: 10,
+    paddingTop: 60,
   },
 
   // QR col
   qrCol: {
+    position: 'absolute',
+    left: 150,
+    top: '30%',
     alignItems: 'center',
-    gap: 14,
-    marginRight: 40,
-    marginLeft: 60,
+    gap: 10,
   },
   qrHint: {
-    fontSize: 11, fontWeight: '300', color: 'rgba(255,255,255,0.7)',
-    letterSpacing: 3, textTransform: 'uppercase', fontFamily: 'Delius',
+    fontSize: 10, fontWeight: '400', color: 'rgba(255,255,255,0.65)',
+    letterSpacing: 2, textTransform: 'lowercase',
+    marginTop: 4,
   },
+  menta: { width: 180, height: 180, resizeMode: 'contain', position: 'absolute', bottom: -130, left: 15 },
   qrBtn: {
-    padding: 12,
+    padding: 8,
     borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.25)',
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    alignItems: 'center',
   },
 
-  // Teclado col
   center: {
-    alignItems: 'center',
+    position: 'absolute',
+    right: 100,
+    top: '25%',
+    alignItems: 'flex-start',
     gap: 18,
+    marginLeft: -50,
   },
 
   topSection: { alignItems: 'center', gap: 10 },
@@ -303,28 +298,15 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.4)', marginTop: -6,
   },
 
-  inputRow: {
-    flexDirection: 'row', alignItems: 'flex-end',
-    gap: 7, minHeight: 44, flexWrap: 'wrap', justifyContent: 'center',
-    maxWidth: 360,
-  },
-  charWrap:        { alignItems: 'center', gap: 5 },
-  inputChar:       { fontSize: 20, fontWeight: '300', color: '#fff', fontFamily: 'Delius', textAlign: 'center', minWidth: 18 },
-  charLinea:       { width: 18, height: 0.5, backgroundColor: 'rgba(255,255,255,0.5)' },
-  charLineaCursor: { width: 18, height: 0.5, backgroundColor: 'rgba(255,255,255,0.7)' },
-  cursor:          { width: 1.5, height: 20, backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 1 },
+  hiddenInput: { position: 'absolute', width: 0, height: 0, opacity: 0 },
 
-  keyboard:  { gap: 6, alignItems: 'center' },
-  keyRow:    { flexDirection: 'row', justifyContent: 'center', gap: 5 },
-  key: {
-    width: 36, height: 40,
-    backgroundColor: 'rgba(255,105,180,0.35)',
-    borderRadius: 7,
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 0.5, borderColor: 'rgba(255,105,180,0.5)',
-  },
-  keyDel:  { width: 50, backgroundColor: 'rgba(255,105,180,0.18)' },
-  keyText: { fontSize: 13, fontWeight: '400', color: '#fff', fontFamily: 'Delius' },
+  barsRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-end' },
+  barSlot: { alignItems: 'center', gap: 6 },
+  barChar: { fontSize: 22, fontWeight: '300', color: '#fff', minWidth: 22, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  barLine: { width: 22, height: 1.5, backgroundColor: 'rgba(255,255,255,0.7)' },
+  barLineActive: { backgroundColor: '#fff' },
+
+  inputRow: { flexDirection: 'row', alignItems: 'flex-end' },
 
   keyConfirmar:         { marginTop: 6, paddingHorizontal: 36, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.45)' },
   keyConfirmarDisabled: { opacity: 0.25 },

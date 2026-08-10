@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Image, Modal, PixelRatio } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Modal, PixelRatio } from 'react-native';
 
 const sc = 1 / PixelRatio.getFontScale();
 import { Image as ExpoImage } from 'expo-image';
@@ -40,7 +40,6 @@ const Temporadas = ({ navigation }) => {
   return (
     <View style={s.container}>
       <StatusBar hidden />
-      <Image source={require('../assets/paredes/pared3.png')} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory" />
       <TabButtons onExit={() => navigation?.navigate?.('main')} customAddButton={<View />} />
 
       {tienePareja === false && (

@@ -94,13 +94,13 @@ const styles = StyleSheet.create({
 
   capsulaBtn: {
     position: 'absolute',
-    bottom: '12%',
-    right: '12%',
-    width: 90,
-    height: 90,
+    bottom: '5%',
+    right: '8%',
+    width: 130,
+    height: 130,
     zIndex: 10,
   },
-  capsulaImg: { width: '140%', height: '140%', left: 73, top: 27 },
+  capsulaImg: { width: '100%', height: '100%' },
 
   evBase: {
     position: 'absolute',

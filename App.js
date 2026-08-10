@@ -31,6 +31,8 @@ import Capsula1 from './Temporadas/Temporada1/Eventos/capsula';
 import Animalitos from './Animalitos';
 import Canjear from './menus/Canjear';
 import AdminCodigos from './menus/AdminCodigos';
+import Iconos from './menus/Iconos';
+import Pase from './menus/Pase';
 
 export default function App() {
   const [loading, setLoading]           = useState(true);
@@ -81,20 +83,12 @@ export default function App() {
   // Precargar imágenes después de que Firestore esté listo
   const preloadImages = useCallback(async () => {
     try {
+      ExpoImage.prefetch(require('./assets/temporadas/libro/panel1.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
       const snap = await getDocs(collection(db, 'stickers'));
       const urls = snap.docs.map(d => d.data().imageUrl).filter(Boolean);
-      await Promise.all([
-        ...urls.map(url => ExpoImage.prefetch(url, { cachePolicy: 'memory-disk', priority: 'high' })),
-        ExpoImage.prefetch(require('./assets/temporadas/libro/libro1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-        ExpoImage.prefetch(require('./assets/temporadas/libro/libro2.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-        ExpoImage.prefetch(require('./assets/temporadas/neutral.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-        ExpoImage.prefetch(require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-        ExpoImage.prefetch(require('./assets/temporadas/libro/Temporada1/logo1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-        ExpoImage.prefetch(require('./assets/temporadas/libro/Temporada2/logo1.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-        ExpoImage.prefetch(require('./assets/paredes/pared3.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-        ExpoImage.prefetch(require('./assets/temporadas/libro/libro3.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-        ExpoImage.prefetch(require('./assets/temporadas/libro/panel2.png'), { cachePolicy: 'memory-disk', priority: 'high' }),
-      ]);
+      await Promise.all(
+        urls.map(url => ExpoImage.prefetch(url, { cachePolicy: 'memory-disk', priority: 'high' }))
+      );
     } catch {}
   }, []);
 
@@ -193,6 +187,8 @@ export default function App() {
           {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} />}
           {currentScreen === 'canjear'          && <Canjear          navigation={navigation} />}
           {currentScreen === 'adminCodigos'      && <AdminCodigos     navigation={navigation} />}
+          {currentScreen === 'iconos'             && <Iconos           navigation={navigation} />}
+          {currentScreen === 'pase'               && <Pase             navigation={navigation} />}
           <Loading ref={loadingRef} />
           <Toast ref={toastRef} />
 
