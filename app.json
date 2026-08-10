@@ -54,6 +54,12 @@
     },
     "plugins": [
       [
+        "expo-dev-client",
+        {
+          "launchModeExperimental": "launcher"
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/notifications.png",
