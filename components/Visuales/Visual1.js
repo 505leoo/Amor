@@ -1,9 +1,9 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, { Path, Circle, Ellipse, Rect, Defs, LinearGradient, RadialGradient, Stop } from 'react-native-svg';
 
 const TRACK_H = 360;
-const PATH_Y = TRACK_H - 118;
+const PATH_Y = TRACK_H - 128;
 
 // Suaviza 0→1 entre dos fracciones del canvas
 const easeIn  = (x, tw, a, b) => { const t = Math.max(0, Math.min(1, (x / tw - a) / (b - a))); return t * t; };
@@ -13,48 +13,56 @@ const fadeOut = (x, tw, a, b) => 1 - fadeIn(x, tw, a, b);
 
 // ─── PARTE 1: CIELO + SOL ────────────────────────────────────────────────────
 
+const SUN_R = 72;
+const SUN_RAYS = Array.from({ length: 36 }, (_, i) => {
+  const angle = -174 + (i * 180) / 35;
+  const rad   = (angle * Math.PI) / 180;
+  const inner = SUN_R + 6;
+  const outer = SUN_R + 28 + (i % 3) * 8;
+  return {
+    cos: Math.cos(rad),
+    sin: Math.sin(rad),
+    inner,
+    outer,
+    op: i % 4 === 0 ? 0.65 : i % 3 === 0 ? 0.45 : i % 2 === 0 ? 0.30 : 0.20,
+    sw: i % 5 === 0 ? 2.8  : i % 3 === 0 ? 1.8  : 1.1,
+  };
+});
+
 export const CieloYSol = ({ totalW }) => {
-  const sunX = totalW * 0.10;
-  const sunY = 88;
-  // El sol se desvanece entre 15%→28% del canvas
-  const sunOp = fadeOut(sunX, totalW, 0.15, 0.28);
+  const sunX = totalW * 0.13;
+  const sunY = TRACK_H - 120 - SUN_R;
 
   return (
     <React.Fragment>
       <Defs>
-        {/* Cielo: amanecer dorado → tarde lavanda → noche índigo */}
         <LinearGradient id="skyH" x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop offset="0%"   stopColor="#fde8a0" />
-          <Stop offset="28%"  stopColor="#f9c46b" />
-          <Stop offset="50%"  stopColor="#e8b5d0" />
-          <Stop offset="72%"  stopColor="#b8c8e8" />
+          <Stop offset="0%"   stopColor="#ffe484" />
+          <Stop offset="22%"  stopColor="#ffcf5c" />
+          <Stop offset="45%"  stopColor="#f4a96a" />
+          <Stop offset="68%"  stopColor="#c9b8e8" />
           <Stop offset="100%" stopColor="#7080c0" />
         </LinearGradient>
-        {/* Degradado vertical para dar profundidad al cielo */}
         <LinearGradient id="skyV" x1="0%" y1="0%" x2="0%" y2="100%">
           <Stop offset="0%"   stopColor="rgba(255,255,255,0.0)" />
-          <Stop offset="60%"  stopColor="rgba(180,100,40,0.18)" />
-          <Stop offset="100%" stopColor="rgba(100,50,20,0.42)" />
+          <Stop offset="55%"  stopColor="rgba(255,180,60,0.12)" />
+          <Stop offset="100%" stopColor="rgba(180,90,20,0.30)" />
         </LinearGradient>
-        {/* Halo acuarela exterior — mancha dorada difusa */}
-        <RadialGradient id="sunHalo" cx="50%" cy="50%" r="50%">
-          <Stop offset="0%"   stopColor="rgba(255,240,150,0.65)" />
-          <Stop offset="38%"  stopColor="rgba(255,225,110,0.25)" />
-          <Stop offset="70%"  stopColor="rgba(255,210,90,0.07)" />
-          <Stop offset="100%" stopColor="rgba(255,200,70,0.00)" />
+        <RadialGradient id="glow1" cx="50%" cy="50%" r="50%">
+          <Stop offset="0%"   stopColor="rgba(255,255,220,0.00)" />
+          <Stop offset="40%"  stopColor="rgba(255,245,150,0.28)" />
+          <Stop offset="100%" stopColor="rgba(255,200,40,0.00)" />
         </RadialGradient>
-        {/* Disco acuarela — capas de pigmento húmedo */}
-        <RadialGradient id="sunDisc" cx="40%" cy="36%" r="60%">
-          <Stop offset="0%"   stopColor="#fffef5" />
-          <Stop offset="28%"  stopColor="#fff5b0" />
-          <Stop offset="62%"  stopColor="#ffe066" />
-          <Stop offset="100%" stopColor="#ffc93c" />
+        <RadialGradient id="glow2" cx="50%" cy="50%" r="50%">
+          <Stop offset="0%"   stopColor="rgba(255,250,180,0.00)" />
+          <Stop offset="45%"  stopColor="rgba(255,235,100,0.14)" />
+          <Stop offset="100%" stopColor="rgba(255,190,20,0.00)" />
         </RadialGradient>
-        {/* Capa acuarela secundaria — tono ligeramente distinto para dar profundidad */}
-        <RadialGradient id="sunLayer" cx="60%" cy="62%" r="55%">
-          <Stop offset="0%"   stopColor="rgba(255,230,120,0.00)" />
-          <Stop offset="50%"  stopColor="rgba(255,210,80,0.18)" />
-          <Stop offset="100%" stopColor="rgba(255,190,60,0.32)" />
+        <RadialGradient id="sunDisc" cx="45%" cy="38%" r="60%">
+          <Stop offset="0%"   stopColor="#ffffff" />
+          <Stop offset="35%"  stopColor="#fffbe0" />
+          <Stop offset="75%"  stopColor="#ffe566" />
+          <Stop offset="100%" stopColor="#ffd030" />
         </RadialGradient>
       </Defs>
 
@@ -62,38 +70,39 @@ export const CieloYSol = ({ totalW }) => {
       <Rect x={0} y={0} width={totalW} height={TRACK_H} fill="url(#skyH)" />
       <Rect x={0} y={0} width={totalW} height={TRACK_H} fill="url(#skyV)" />
 
-      {/* ── SOL acuarela ── capas difusas superpuestas */}
-      {sunOp > 0.01 && (
-        <React.Fragment>
-          {/* Aureola exterior muy difusa — luz en el cielo */}
-          <Circle cx={sunX}     cy={sunY}     r={52} fill="url(#sunHalo)"  opacity={sunOp * 0.92} />
-          {/* Mancha acuarela desplazada — da sensación de pigmento húmedo */}
-          <Circle cx={sunX + 4} cy={sunY + 3} r={20} fill="url(#sunLayer)" opacity={sunOp * 0.55} />
-          <Circle cx={sunX - 3} cy={sunY - 2} r={20} fill="url(#sunLayer)" opacity={sunOp * 0.40} />
-          {/* Disco principal */}
-          <Circle cx={sunX}     cy={sunY}     r={19} fill="url(#sunDisc)"  opacity={sunOp * 0.94} />
-          {/* Borde acuarela — anillo translúcido que simula el borde mojado */}
-          <Circle cx={sunX}     cy={sunY}     r={19} fill="none" stroke="rgba(255,200,60,0.22)" strokeWidth={4} opacity={sunOp} />
-          {/* Brillo acuarela — mancha clara irregular */}
-          <Ellipse cx={sunX - 5} cy={sunY - 5} rx={8} ry={6} fill="rgba(255,255,230,0.48)" opacity={sunOp} />
-          <Ellipse cx={sunX - 3} cy={sunY - 3} rx={4} ry={3} fill="rgba(255,255,250,0.65)" opacity={sunOp} />
-        </React.Fragment>
-      )}
+      {/* Resplandor difuso — 2 capas */}
+      <Circle cx={sunX} cy={sunY} r={SUN_R * 1.5} fill="url(#glow1)" opacity={0.90} />
+      <Circle cx={sunX} cy={sunY} r={SUN_R * 2.0} fill="url(#glow2)" opacity={0.80} />
 
-      {/* Partículas doradas — solo zona 1, se disuelven hacia zona 2 */}
+      {/* Destellos estáticos — semicírculo superior */}
+      {SUN_RAYS.map((r, i) => (
+        <Path
+          key={`ray-${i}`}
+          d={`M${sunX + r.cos * r.inner} ${sunY + r.sin * r.inner} L${sunX + r.cos * r.outer} ${sunY + r.sin * r.outer}`}
+          stroke={`rgba(255,240,110,${r.op})`}
+          strokeWidth={r.sw}
+          strokeLinecap="round"
+        />
+      ))}
+
+      {/* Disco principal */}
+      <Circle cx={sunX} cy={sunY} r={SUN_R} fill="url(#sunDisc)" opacity={0.98} />
+      <Circle cx={sunX} cy={sunY} r={SUN_R + 5} fill="none" stroke="rgba(255,245,120,0.22)" strokeWidth={5} />
+      <Ellipse cx={sunX - 12} cy={sunY - 14} rx={16} ry={11} fill="rgba(255,255,255,0.50)" />
+      <Ellipse cx={sunX - 6}  cy={sunY - 8}  rx={7}  ry={5}  fill="rgba(255,255,255,0.68)" />
+
+      {/* Partículas doradas */}
       {[
-        { ax: 0.02, y: 22,  r: 2.0 }, { ax: 0.04, y: 88,  r: 1.8 }, { ax: 0.06, y: 50,  r: 2.2 },
-        { ax: 0.08, y: 120, r: 1.7 }, { ax: 0.10, y: 34,  r: 2.1 }, { ax: 0.12, y: 105, r: 1.9 },
-        { ax: 0.14, y: 65,  r: 2.3 }, { ax: 0.16, y: 138, r: 1.8 }, { ax: 0.18, y: 26,  r: 2.0 },
-        { ax: 0.20, y: 82,  r: 2.2 }, { ax: 0.22, y: 46,  r: 1.9 }, { ax: 0.24, y: 115, r: 2.1 },
-        { ax: 0.26, y: 60,  r: 1.7 }, { ax: 0.28, y: 130, r: 2.0 }, { ax: 0.30, y: 18,  r: 2.3 },
-        { ax: 0.32, y: 98,  r: 1.8 }, { ax: 0.34, y: 40,  r: 2.1 }, { ax: 0.36, y: 75,  r: 1.9 },
+        { ax: 0.02, y: 22,  r: 2.0 }, { ax: 0.05, y: 68,  r: 1.8 }, { ax: 0.08, y: 40,  r: 2.2 },
+        { ax: 0.11, y: 110, r: 1.7 }, { ax: 0.14, y: 55,  r: 2.1 }, { ax: 0.17, y: 90,  r: 1.9 },
+        { ax: 0.20, y: 30,  r: 2.3 }, { ax: 0.23, y: 125, r: 1.8 }, { ax: 0.26, y: 18,  r: 2.0 },
+        { ax: 0.29, y: 75,  r: 2.2 }, { ax: 0.32, y: 48,  r: 1.9 }, { ax: 0.35, y: 105, r: 2.1 },
       ].map((p, i) => {
         const px = totalW * p.ax;
-        const baseOp = 0.38 + (i % 3) * 0.08;
-        const op = fadeOut(px, totalW, 0.22, 0.44) * baseOp;
+        const baseOp = 0.35 + (i % 3) * 0.08;
+        const op = fadeOut(px, totalW, 0.24, 0.44) * baseOp;
         if (op < 0.02) return null;
-        const cols = ['rgba(255,235,90,X)', 'rgba(255,210,60,X)', 'rgba(255,250,160,X)'];
+        const cols = ['rgba(255,235,90,X)', 'rgba(255,215,60,X)', 'rgba(255,250,160,X)'];
         const fill = cols[i % 3].replace('X', op.toFixed(2));
         return <Circle key={`p-${i}`} cx={px} cy={p.y} r={p.r} fill={fill} />;
       })}
@@ -111,7 +120,7 @@ const NubeAcuarela = ({ cx, cy, sc, col, op, variant }) => {
   // Cada variante es una forma de nube distinta
   if (variant === 0) return ( // Nube esponjosa clásica
     <React.Fragment>
-      <Ellipse cx={cx}        cy={cy + 4}  rx={58 * sc} ry={16 * sc} fill={col} opacity={op * 0.18} />
+      <Ellipse cx={cx}        cy={cy + 4}  rx={58 * sc} ry={16 * sc} fill={col} opacity={op * 0.22} />
       <Ellipse cx={cx - 2}    cy={cy + 2}  rx={52 * sc} ry={18 * sc} fill={col} opacity={op * 0.22} />
       <Ellipse cx={cx}        cy={cy}      rx={46 * sc} ry={20 * sc} fill={col} opacity={op * 0.28} />
       <Ellipse cx={cx - 16 * sc} cy={cy - 6 * sc} rx={26 * sc} ry={18 * sc} fill={col} opacity={op * 0.32} />
@@ -392,10 +401,10 @@ const Visual1 = ({ totalW }) => (
     style={[StyleSheet.absoluteFill, { zIndex: 1 }]}
     pointerEvents="none"
   >
-    <CieloYSol    totalW={totalW} />
-    <NubesAcuarela totalW={totalW} />
+    <CieloYSol       totalW={totalW} />
+    <NubesAcuarela   totalW={totalW} />
     <PajarosYEstrellas totalW={totalW} />
-    <Terreno      totalW={totalW} />
+    <Terreno         totalW={totalW} />
   </Svg>
 );
 

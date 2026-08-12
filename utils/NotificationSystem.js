@@ -52,9 +52,6 @@ class NotificationSystem {
       if (!isRegistered) {
         token = await PushyService.register();
         this.expoPushToken = token;
-        if (token) {
-          console.log('Token de Pushy obtenido:', token.substring(0, 20) + '...');
-        }
       }
 
       // Guardar token en Firebase si se generó uno nuevo
@@ -131,11 +128,8 @@ class NotificationSystem {
   // Enviar notificación push usando PushyService
   async sendPushNotification(pushyToken, title, body, data = {}) {
     try {
-      console.log('[NotificationSystem] sendPushNotification start', { token: pushyToken && pushyToken.substring ? pushyToken.substring(0,10)+'...' : pushyToken, title, data });
       const PushyService = require('./PushyService').default;
-      const res = await PushyService.sendCustomNotification([pushyToken], title, body, data);
-      console.log('[NotificationSystem] sendPushNotification result', { token: pushyToken && pushyToken.substring ? pushyToken.substring(0,10)+'...' : pushyToken, result: res });
-      return res;
+      return await PushyService.sendCustomNotification([pushyToken], title, body, data);
     } catch (error) {
       console.error('[NotificationSystem] sendPushNotification error', error);
       return { success: false, provider: 'pushy', error: error.message || error };
@@ -178,14 +172,19 @@ class NotificationSystem {
       const lastNotif = partnerData.lastEntradaNotif;
       if (lastNotif) {
         const lastMs = lastNotif.toMillis ? lastNotif.toMillis() : Number(lastNotif);
-        if (Date.now() - lastMs < THROTTLE_MS) {
-          console.log('[NotificationSystem] notifyPartnerUserEntered throttled, skipping');
-          return;
-        }
+        if (Date.now() - lastMs < THROTTLE_MS) return;
       }
 
       // Marcar timestamp ANTES de enviar para evitar race conditions
       await setDoc(partnerRef, { lastEntradaNotif: serverTimestamp() }, { merge: true });
+
+      // Registrar para misión "Haz que tu pareja se conecte" (una sola escritura por día)
+      const hoy = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
+      const flagKey = `pareja_entro_hoy_${partnerId}_${hoy}`;
+      if (!global[flagKey]) {
+        global[flagKey] = true;
+        setDoc(doc(db, 'misiones_diarias', hoy), { [userId]: { progreso: { pareja_entro_hoy: 1 } } }, { merge: true }).catch(() => {});
+      }
 
       const title = '💕 Tu amor está aquí';
       const body = 'Tu amor acaba de entrar a la app ❤️';

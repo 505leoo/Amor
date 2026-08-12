@@ -1,587 +1,643 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, ActivityIndicator, ScrollView, TextInput, Alert } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { Animated, View, StyleSheet, StatusBar, TouchableOpacity, Text, Modal } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
+import Svg, { Defs, LinearGradient, Stop, Path, Circle, Ellipse, G, Rect, Line, Text as SvgText } from 'react-native-svg';
+
+const GOLD  = '#f5c842';
+const GOLD2 = '#c8860a';
+const GOLD3 = '#ffe97a';
+
+function ChicleDorado({ titulo, texto, monedas, exp, size = 220 }) {
+  const R  = size / 2 - 20;
+  const cx = size / 2;
+  const textShadow = { textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 };
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Defs>
+          <LinearGradient id="rGrad" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0%"   stopColor={GOLD3} />
+            <Stop offset="50%"  stopColor={GOLD} />
+            <Stop offset="100%" stopColor={GOLD2} />
+          </LinearGradient>
+          <LinearGradient id="rGlow" x1="0.5" y1="0" x2="0.5" y2="1">
+            <Stop offset="0%"   stopColor="#fff8c0" stopOpacity="0.6" />
+            <Stop offset="100%" stopColor={GOLD3}   stopOpacity="0" />
+          </LinearGradient>
+        </Defs>
+        <Circle cx={cx} cy={cx} r={R + 18} fill="rgba(245,200,66,0.08)" />
+        <Circle cx={cx} cy={cx} r={R + 11} fill="rgba(245,200,66,0.15)" />
+        <Circle cx={cx} cy={cx} r={R + 5}  fill="rgba(245,200,66,0.26)" />
+        <Circle cx={cx} cy={cx} r={R} fill="url(#rGrad)" />
+        <Circle cx={cx} cy={cx} r={R} fill="url(#rGlow)" />
+        <Circle cx={cx} cy={cx} r={R} fill="none" stroke="rgba(255,255,255,0.55)" strokeWidth={2} />
+        <Circle cx={cx} cy={cx} r={R + 4} fill="none" stroke={GOLD} strokeWidth={1.2} opacity={0.45} strokeDasharray="5 3" />
+        <Ellipse cx={cx - R * 0.26} cy={cx - R * 0.26} rx={R * 0.4}  ry={R * 0.22} fill="rgba(255,255,255,0.42)" />
+        <Ellipse cx={cx - R * 0.08} cy={cx - R * 0.5}  rx={R * 0.14} ry={R * 0.08} fill="rgba(255,255,255,0.28)" />
+      </Svg>
+      {monedas != null ? (
+        <View style={{ alignItems: 'center', gap: 2 }}>
+          <Text style={{ fontSize: 36, lineHeight: 40 }}>🪙</Text>
+          <Text style={[{ fontFamily: 'Omori', fontSize: 22, color: '#c8860a', letterSpacing: 1 }, textShadow]}>{monedas}</Text>
+        </View>
+      ) : exp != null ? (
+        <View style={{ alignItems: 'center', gap: 2 }}>
+          <Text style={{ fontSize: 36, lineHeight: 40 }}>⏏️</Text>
+          <Text style={[{ fontFamily: 'Omori', fontSize: 22, color: '#c8860a', letterSpacing: 1 }, textShadow]}>{exp} exp</Text>
+        </View>
+      ) : (
+        <View style={{ alignItems: 'center', gap: 3 }}>
+          {titulo ? <Text style={[{ fontFamily: 'Omori', fontSize: 13, color: '#c8860a', letterSpacing: 0.5 }, textShadow]}>{titulo}</Text> : null}
+          {texto  ? <Text style={[{ fontFamily: 'Delius', fontSize: 10, color: '#c8860a' }, textShadow]}>{texto}</Text> : null}
+        </View>
+      )}
+    </View>
+  );
+}
 import TabButtons from '../../../components/TabButtons';
+import MisionesDiarias from '../../../components/MisionesDiarias';
 import RecompensaOverlay from '../../../components/RecompensaOverlay';
-import Svg, { Circle, Path, G, Image as SvgImage, AnimateTransform } from 'react-native-svg';
 import { db, auth } from '../../../firebaseConfig';
-import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { doc, updateDoc, increment, setDoc, onSnapshot } from 'firebase/firestore';
 
-// ── Helpers ──────────────────────────────────────────────────
-const getMesAnio = () => {
-  const ahora = new Date();
-  return `${ahora.toLocaleString('es-ES', { month: 'long' })}-${ahora.getFullYear()}`;
-// Simplified flow: no separate "SinCapsula"/"ElegirLlaves"/"EsperandoPareja" components
-// Capsule now uses coin-based unlocking; the final checkpoint accepts a pasted text
-// which is sent to the partner when the user taps "Enviar cápsula".
+// ── Dimensiones ───────────────────────────────────────────────────────────────
+const CW = 190;
+const CH = 330;
+
+// Puntos zigzag — margen generoso en todos los bordes
+const P = [
+  { x: CW * 0.50, y: CH * 0.91 }, // INICIO
+  { x: CW * 0.76, y: CH * 0.76 }, // CP 1
+  { x: CW * 0.24, y: CH * 0.62 }, // CP 2
+  { x: CW * 0.76, y: CH * 0.47 }, // CP 3
+  { x: CW * 0.24, y: CH * 0.33 }, // CP 4
+  { x: CW * 0.76, y: CH * 0.18 }, // CP 5
+  { x: CW * 0.50, y: CH * 0.10 }, // MEGA CP
+];
+
+// Zigzag con líneas rectas — pasos coinciden exactamente
+const ROAD = P.reduce((d, p, i) => i === 0 ? `M ${p.x} ${p.y}` : `${d} L ${p.x} ${p.y}`, '');
+
+const DOTS = P.slice(0, -1).flatMap((a, i) => {
+  const b = P[i + 1];
+  return [0.28, 0.5, 0.72].map(t => ({
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+  }));
+});
+
+// ── Colores ───────────────────────────────────────────────────────────────────
+const PINK  = '#ff8fa8';
+const ROSE  = '#e8607a';
+const CREAM = '#fdf0e0';
+const PURP  = '#c4a0f5';
+
+// ── Estrellita ────────────────────────────────────────────────────────────────
+const Star = ({ x, y, r = 2.5, op = 0.5 }) => (
+  <G opacity={op}>
+    <Line x1={x} y1={y - r} x2={x} y2={y + r} stroke={GOLD} strokeWidth={1} strokeLinecap="round" />
+    <Line x1={x - r} y1={y} x2={x + r} y2={y} stroke={GOLD} strokeWidth={1} strokeLinecap="round" />
+    <Line x1={x - r * .7} y1={y - r * .7} x2={x + r * .7} y2={y + r * .7} stroke={GOLD} strokeWidth={.7} strokeLinecap="round" />
+    <Line x1={x + r * .7} y1={y - r * .7} x2={x - r * .7} y2={y + r * .7} stroke={GOLD} strokeWidth={.7} strokeLinecap="round" />
+  </G>
+);
+
+// Cada segmento tiene 4 posiciones: 3 pasos + 1 checkpoint
+// posición global = seg * 4 + (0,1,2 = pasos, 3 = checkpoint)
+const totalPasos = 6 * 4; // 24
+const posCheckpoint = (seg) => seg * 4 + 4; // 4,8,12,16,20,24
+
+// ── Indicador posición actual ─────────────────────────────────────────────────
+const Indicador = ({ x, y, atCP }) => (
+  <G>
+    {atCP && <Circle cx={x} cy={y} r={14} fill="rgba(245,200,66,0.12)" />}
+    {atCP && <Circle cx={x} cy={y} r={10} fill="rgba(245,200,66,0.22)" />}
+    <Circle cx={x} cy={y} r={7}  fill={atCP ? 'rgba(245,200,66,0.35)' : 'rgba(255,255,255,0.12)'} />
+    <Circle cx={x} cy={y} r={4.5} fill={atCP ? GOLD : CREAM} opacity={0.95} />
+    <Circle cx={x} cy={y} r={4.5} fill="none" stroke={atCP ? GOLD2 : GOLD} strokeWidth={atCP ? 1.8 : 1} opacity={0.9} />
+    {atCP && <Circle cx={x} cy={y} r={7} fill="none" stroke={GOLD} strokeWidth={1} opacity={0.6} strokeDasharray="3 2" />}
+    <Ellipse cx={x - 1.2} cy={y - 1.5} rx={1.5} ry={0.9} fill="rgba(255,255,255,0.5)" />
+  </G>
+);
+
+// ── Checkpoint ───────────────────────────────────────────────────────────────
+const CP = ({ x, y, reached, reclamado }) => {
+  const solid = reclamado ? GOLD  : reached ? PINK : 'rgba(255,255,255,0.18)';
+  const halo  = reclamado ? 'rgba(245,200,66,0.28)' : reached ? 'rgba(255,143,168,0.28)' : 'rgba(255,255,255,0.08)';
+  const ring  = reclamado ? 'rgba(255,255,255,0.5)'  : 'rgba(255,255,255,0.38)';
   return (
-    <Svg width={size} height={size}>
-      <Path d={d} fill={color} opacity={0.9} />
-      <Path d={`M ${cx} ${cy + size*0.3} C ${cx - size*0.1} ${cy + size*0.1} ${cx - size*0.12} ${cy - size*0.05} ${cx} ${cy - size*0.1}`} stroke="rgba(255,255,255,0.3)" strokeWidth={1.5} fill="none" />
-    </Svg>
+    <G>
+      <Circle cx={x} cy={y} r={11} fill={halo} />
+      <Circle cx={x} cy={y} r={9}  fill={solid} />
+      <Circle cx={x} cy={y} r={9}  fill="none" stroke={ring} strokeWidth={1.2} />
+      <Ellipse cx={x - 2.5} cy={y - 3} rx={3} ry={1.8} fill="rgba(255,255,255,0.3)" />
+      {reached && !reclamado && (
+        <Circle cx={x} cy={y} r={12} fill="none" stroke={GOLD} strokeWidth={1.2} opacity={0.7} strokeDasharray="3 2" />
+      )}
+    </G>
   );
-}
+};
 
-async function subirFotoCapsula(uri, uid, capId) {
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  const ext = uri.split('.').pop() || 'jpg';
-  const ref = storageRef(storage, `capsulas/${capId}/${uid}_${Date.now()}.${ext}`);
-  const task = uploadBytesResumable(ref, blob);
-  return new Promise((resolve, reject) => {
-    task.on('state_changed', null, reject, async () => {
-      resolve(await getDownloadURL(task.snapshot.ref));
-    });
-  });
-}
-
-// ── Estado: Editar cápsula ───────────────────────────────────
-function CapsulaEditar({ llaves = [], llavesOtro = [], ediciones = {}, onSave, onCancel, capId, uid, dineroProp = 0 }) {
-  const todasLlaves = [...new Set([...llaves, ...llavesOtro])];
-  const [valores, setValores] = useState(() => {
-    const v = {};
-    todasLlaves.forEach(id => { v[id] = ediciones[id] || {}; });
-    return v;
-  });
-  const [uploading, setUploading] = useState(null);
-  const [enviado, setEnviado] = useState(ediciones.__enviado === true);
-  const [dineroRegalado, setDineroRegalado] = useState(
-    todasLlaves.includes('chancho') ? (ediciones['chancho']?.dinero ?? 0) : 0
-  );
-
-  const set = (id, v) => setValores(prev => ({ ...prev, [id]: v }));
-
-  const pickFoto = async (id) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') return;
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
-    if (result.canceled) return;
-    setUploading(id);
-    try {
-      const url = await subirFotoCapsula(result.assets[0].uri, uid, capId);
-      set(id, { ...valores[id], url });
-    } catch { Alert.alert('Error', 'No se pudo subir la foto.'); }
-    setUploading(null);
-  };
-
-  const guardar = async (enviar = false) => {
-    const nuevas = {};
-    todasLlaves.forEach(id => { nuevas[id] = valores[id] || {}; });
-    if (todasLlaves.includes('chancho')) nuevas['chancho'] = { dinero: dineroRegalado };
-    if (enviar) nuevas.__enviado = true;
-    await onSave(nuevas, enviar ? dineroRegalado : 0);
-    if (enviar) setEnviado(true);
-  };
-
+// ── Mega Checkpoint ─────────────────────────────────────────────────────
+const MegaCP = ({ x, y, reached, reclamado }) => {
+  const solid = reclamado ? GOLD : reached ? PINK : 'rgba(255,255,255,0.18)';
+  const halo1 = reclamado ? 'rgba(245,200,66,0.15)' : reached ? 'rgba(255,143,168,0.15)' : 'rgba(255,255,255,0.05)';
+  const halo2 = reclamado ? 'rgba(245,200,66,0.28)' : reached ? 'rgba(255,143,168,0.28)' : 'rgba(255,255,255,0.08)';
+  const ring  = reclamado ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.38)';
   return (
-    <View style={se.root}>
-      <View style={se.topBar}>
-        <TouchableOpacity onPress={onCancel} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
-          <Text style={se.topX}>x</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => guardar(false)} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
-          <Text style={se.topGuardar}>guardar</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => !enviado && guardar(true)} hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}>
-          <Text style={[se.topEnviar, enviado && se.topEnviado]}>{enviado ? 'enviada' : 'enviar'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={se.fila}>
-        {todasLlaves.map(id => {
-          const tipo = TIPO_LLAVE[id] || 'nota';
-          const val = valores[id] || {};
-          const llave = POOL_LLAVES.find(x => x.id === id);
-
-          if (tipo === 'foto') return (
-            <TouchableOpacity key={id} onPress={() => pickFoto(id)} activeOpacity={0.9}>
-              <View style={se.polaroid}>
-                {val.url
-                  ? <ExpoImage source={{ uri: val.url }} style={se.polaroidImg} contentFit="cover" cachePolicy="memory" />
-                  : <View style={se.polaroidVacio}>
-                      {uploading === id
-                        ? <ActivityIndicator color="#c9a87a" />
-                        : <Text style={se.polaroidVacioIcono}>+</Text>}
-                    </View>
-                }
-                <TextInput
-                  style={se.polaroidPie}
-                  value={val.nota || ''}
-                  onChangeText={t => set(id, { ...val, nota: t })}
-                  placeholder="nota..."
-                  placeholderTextColor="#c9a87a"
-                  maxLength={28}
-                  textAlign="center"
-                />
-              </View>
-            </TouchableOpacity>
-          );
-
-          if (tipo === 'flor') return (
-            <View key={id} style={se.florWrap}>
-              <TouchableOpacity onPress={() => set(id, { ...val, tipo: ((val.tipo ?? 0) + 1) % 3 })} activeOpacity={0.8}>
-                <FlorSvg tipo={val.tipo ?? 0} color={val.color || '#ff8fa8'} size={90} />
-              </TouchableOpacity>
-              <View style={se.colorRow}>
-                {COLORES_FLOR.map(c => (
-                  <TouchableOpacity key={c}
-                    style={[se.colorDot, { backgroundColor: c }, (val.color || '#ff8fa8') === c && se.colorDotSel]}
-                    onPress={() => set(id, { ...val, color: c })} />
-                ))}
-              </View>
-            </View>
-          );
-
-          if (tipo === 'chancho') return (
-            <View key={id} style={se.chanchoWrap}>
-              <Text style={se.chanchoEmoji}>🐷</Text>
-              <Text style={se.chanchoCantidad}>{dineroRegalado}</Text>
-              <Text style={se.chanchoMoneda}>🪙</Text>
-              <View style={se.chanchoControles}>
-                {[-10, -1, 1, 10].map(n => (
-                  <TouchableOpacity key={n} onPress={() => setDineroRegalado(d => Math.min(dineroProp, Math.max(0, d + n)))}>
-                    <Text style={[se.chanchoCtrl, n > 0 && se.chanchoCtrlPos]}>{n > 0 ? '+' + n : '' + n}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <Text style={se.chanchoSaldo}>{dineroProp} disp.</Text>
-            </View>
-          );
-
-          return (
-            <View key={id} style={se.notaWrap}>
-              <Text style={se.notaIcono}>{llave?.icono}</Text>
-              <TextInput
-                style={se.notaInput}
-                value={val.texto || ''}
-                onChangeText={t => set(id, { ...val, texto: t })}
-                placeholder="..."
-                placeholderTextColor="rgba(255,255,255,0.2)"
-                multiline
-                textAlignVertical="top"
-              />
-            </View>
-          );
-        })}
-      </ScrollView>
-    </View>
+    <G>
+      <Circle cx={x} cy={y} r={20} fill={halo1} />
+      <Circle cx={x} cy={y} r={16} fill={halo2} />
+      <Circle cx={x} cy={y} r={13} fill={solid} />
+      <Circle cx={x} cy={y} r={13} fill="none" stroke={ring} strokeWidth={1.5} />
+      <Circle cx={x} cy={y} r={17} fill="none" stroke={solid} strokeWidth={.8} opacity={.45} strokeDasharray="3 3" />
+      <Ellipse cx={x - 3.5} cy={y - 4} rx={4.5} ry={2.5} fill="rgba(255,255,255,0.3)" />
+      {reached && !reclamado && (
+        <Circle cx={x} cy={y} r={22} fill="none" stroke={GOLD} strokeWidth={1.2} opacity={0.7} strokeDasharray="4 3" />
+      )}
+    </G>
   );
-}
+};
 
-// ── Estado: Cápsula activa ────────────────────────────────────
-function CapsulaActiva({ capsula, uid, progreso, parejaProgress, ediciones, miAvatar, parejaAvatar, reclamados, onCheckpointPress, onEdit, onCloseCapsula, parejaCompletado }) {
-  const diasRestantes = capsula?.diasRestantes ?? 60;
-  const misionIdx = progreso?.checkpoints ?? 0;
-  const circulitos = progreso?.circulitos ?? 0;
+// posActual: mapea pasos (0-24) → coordenada {x,y}
+const getPosActual = (pasos) => {
+  if (pasos === 0) return P[0];
+  for (let seg = 0; seg < 6; seg++) {
+    if (pasos === posCheckpoint(seg)) return P[seg + 1];
+  }
+  const seg = Math.floor((pasos - 1) / 4);
+  const sub = (pasos - 1) % 4; // 0,1,2 = dots del segmento
+  return DOTS[seg * 3 + sub];
+};
 
-  const MISIONES = [
-    { titulo: 'El Primer Recuerdo',  texto: 'Escribí algo que te gusta de él/ella hoy.' },
-    { titulo: 'Nuestra Canción',     texto: 'Elijan una canción que los represente esta semana.' },
-    { titulo: 'Momento Favorito',    texto: 'Describan su mejor momento juntos hasta ahora.' },
-    { titulo: 'Una Foto Juntos',     texto: 'Tómense una foto juntos hoy y guárdenla.' },
-    { titulo: 'Carta Secreta',       texto: 'Escribile una carta corta que leerá al abrir la cápsula.' },
-    { titulo: 'El Cierre',           texto: '¿Qué desean para el próximo mes juntos?' },
-  ];
-
-  const mision = MISIONES[misionIdx] || null;
-  const pct = Math.round((misionIdx / 6) * 100);
-  const mesAnio = capsula?.id?.replace('-', ' de ') ?? '';
-
-  const completarMision = async () => {
-    const uid_ = auth.currentUser?.uid;
-    if (!uid_) return;
-    const capId = getMesAnio();
-    const segIdx = Math.min(misionIdx, CPS.length - 1);
-    const dotsEnSegmento = segIdx > 0
-      ? puntosEnCurva(CPS[segIdx - 1], CPS[segIdx], segIdx).length
-      : puntosEnCurva(CPS[0], CPS[1], 1).length;
-    const nuevosCirculitos = circulitos + 1;
-    const avanzaCheckpoint = nuevosCirculitos > dotsEnSegmento;
-    const nuevosCheckpoints = avanzaCheckpoint ? misionIdx + 1 : misionIdx;
-    const nuevosDias = avanzaCheckpoint ? Math.max(0, diasRestantes - 10) : diasRestantes;
-    await setDoc(doc(db, 'capsulas', capId), {
-      [`progreso_${uid_}`]: { circulitos: avanzaCheckpoint ? 0 : nuevosCirculitos, checkpoints: nuevosCheckpoints },
-      diasRestantes: nuevosDias,
-    }, { merge: true }).catch(() => {});
-  };
-
+// ── Camino SVG ────────────────────────────────────────────────────────────────
+const CaminoSvg = ({ pasos, reclamados }) => {
+  const posActual = getPosActual(pasos);
+  const enCP = (() => {
+    for (let seg = 0; seg < 6; seg++) {
+      if (pasos === posCheckpoint(seg) && !reclamados.includes(seg + 1)) return true;
+    }
+    return false;
+  })();
   return (
-    <View style={s.layout}>
-      {/* Info */}
-      <View style={[s.seccion, s.info]}>
-        <View style={s.infoWrap}>
-          <Text style={s.infoIcono}>⏳</Text>
-          <Text style={s.infoTitulo}>Cápsula</Text>
-          <Text style={s.infoSubtitulo}>{mesAnio}</Text>
-          <View style={s.infoSep} />
-          <Text style={s.infoProgLabel}>PROGRESO</Text>
-          <View style={s.infoBarBg}>
-            <View style={[s.infoBarFill, { width: `${pct}%` }]} />
-          </View>
-          <Text style={s.infoProgNum}>{misionIdx} / 6</Text>
-          <View style={s.infoSep} />
-          <Text style={s.infoAperturaLabel}>SE ABRE EN</Text>
-          <Text style={s.infoAperturaFecha}>{diasRestantes} días</Text>
-          <Text style={s.infoCandado}>{misionIdx >= 6 ? '🔓' : '🔒'}</Text>
-        </View>
-      </View>
+  <Svg width={CW} height={CH}>
+    <Defs>
+      <LinearGradient id="road" x1="0" y1="1" x2="0" y2="0">
+        <Stop offset="0%"   stopColor={PURP} stopOpacity=".9" />
+        <Stop offset="45%"  stopColor={PINK} stopOpacity=".9" />
+        <Stop offset="100%" stopColor={GOLD} stopOpacity=".95" />
+      </LinearGradient>
+    </Defs>
 
-      {/* Cap */}
-      <View style={[s.seccion, s.cap]}>
-        <View style={s.capWrap}>
-          <Text style={s.capTitulo}>✦ Misión Diaria</Text>
-          <View style={s.capSep} />
-          {mision ? (
-            <View style={s.capMisionCard}>
-              <Text style={s.capMisionSemana}>Semana {misionIdx + 1}</Text>
-              <Text style={s.capMisionTitulo}>{mision.titulo}</Text>
-              <Text style={s.capMisionTexto}>{mision.texto}</Text>
-              <Text style={s.capMisionStatus}>Avance compartido en el camino de la derecha.</Text>
-              <TouchableOpacity style={s.capBtn} onPress={completarMision} activeOpacity={0.8}>
-                <Text style={s.capBtnText}>Completar misión ✓</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.capBtn, s.capEditBtn]} onPress={onEdit} activeOpacity={0.8}>
-                <Text style={[s.capBtnText, s.capEditBtnText]}>Editar cápsula</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={s.capMisionCard}>
-              <Text style={s.capCompletadoIcon}>🎉</Text>
-              <Text style={s.capCompletadoText}>¡Cápsula completa!{'\n'}Esperando a tu pareja...</Text>
-            </View>
-          )}
-          <TouchableOpacity style={[s.capBtn, s.capCerrarBtn, s.capCerrarBtnBottom]} onPress={onCloseCapsula} activeOpacity={0.8}>
-            <Text style={s.capBtnText}>Cerrar cápsula</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
+    {/* Estrellas decorativas de fondo */}
+    {[[15,50],[168,75],[10,155],[172,185],[28,255],[158,275],[88,25],[105,305],[45,120],[148,130]].map(([x, y], i) => (
+      <Star key={i} x={x} y={y} r={1.8} op={.28} />
+    ))}
 
-      {/* Camino */}
-      <View style={[s.seccion, s.camino]}>
-        <CaminoSvg
-          miProgress={misionIdx}
-          miCirculitos={circulitos}
-          parejaProgress={parejaProgress?.checkpoints || 0}
-          parejaCirculitos={parejaProgress?.circulitos || 0}
-          miAvatar={miAvatar}
-          parejaAvatar={parejaAvatar}
-          miReclamados={reclamados}
-          onCheckpointPress={onCheckpointPress}
-        />
-      </View>
-    </View>
+    {/* Camino — sombra */}
+    <Path d={ROAD} stroke="rgba(0,0,0,0.32)" strokeWidth={10} fill="none"
+      strokeLinecap="round" strokeLinejoin="round" translateX={1.5} translateY={2} />
+    {/* Camino — base oscura */}
+    <Path d={ROAD} stroke="rgba(50,15,8,0.5)" strokeWidth={10} fill="none"
+      strokeLinecap="round" strokeLinejoin="round" />
+    {/* Camino — color gradiente */}
+    <Path d={ROAD} stroke="url(#road)" strokeWidth={7} fill="none"
+      strokeLinecap="round" strokeLinejoin="round" />
+    {/* Camino — brillo */}
+    <Path d={ROAD} stroke="rgba(255,255,255,0.18)" strokeWidth={2.5} fill="none"
+      strokeLinecap="round" strokeLinejoin="round" />
+
+    {/* Pasos intermedios */}
+    {DOTS.map((p, i) => {
+      const posGlobal = Math.floor(i / 3) * 4 + (i % 3) + 1; // 1,2,3, 5,6,7, 9,10,11...
+      return (
+        <G key={i}>
+          <Circle cx={p.x} cy={p.y} r={4.5}
+            fill={pasos >= posGlobal ? PINK : 'rgba(255,255,255,0.1)'} opacity={.9} />
+          <Circle cx={p.x} cy={p.y} r={2.8}
+            fill={pasos >= posGlobal ? ROSE : 'rgba(255,255,255,0.18)'} />
+          {pasos >= posGlobal &&
+            <Circle cx={p.x} cy={p.y} r={6.5} fill="none" stroke={PINK} strokeWidth={.8} opacity={.35} />}
+        </G>
+      );
+    })}
+
+    {/* Punto de inicio */}
+    <G>
+      <Ellipse cx={P[0].x} cy={P[0].y + 2} rx={9} ry={3} fill="rgba(0,0,0,0.2)" />
+      <Circle cx={P[0].x} cy={P[0].y} r={8} fill="rgba(196,160,245,0.28)" />
+      <Circle cx={P[0].x} cy={P[0].y} r={6} fill={PURP} />
+      <Circle cx={P[0].x} cy={P[0].y} r={6} fill="none" stroke="rgba(255,255,255,0.38)" strokeWidth={1.2} />
+      <Ellipse cx={P[0].x - 1.5} cy={P[0].y - 2} rx={2} ry={1.2} fill="rgba(255,255,255,0.28)" />
+      <Rect x={P[0].x - 12} y={P[0].y + 9} width={24} height={9} rx={4} fill="rgba(196,160,245,0.4)" />
+      <SvgText x={P[0].x} y={P[0].y + 15.5} fontSize={5} fontFamily="Omori" fill={CREAM} textAnchor="middle">INICIO</SvgText>
+    </G>
+
+    {/* Checkpoints 1–5 */}
+    {P.slice(1, 6).map((pt, i) => (
+      <CP key={i} x={pt.x} y={pt.y}
+        reached={pasos >= posCheckpoint(i)}
+        reclamado={reclamados.includes(i + 1)} />
+    ))}
+
+    {/* Mega CP */}
+    <MegaCP x={P[6].x} y={P[6].y}
+      reached={pasos >= posCheckpoint(5)}
+      reclamado={reclamados.includes(6)} />
+
+    {/* Indicador posición actual */}
+    <Indicador x={posActual.x} y={posActual.y} atCP={enCP} />
+  </Svg>
   );
-}
+};
 
-// ── Componente principal ──────────────────────────────────────
-export default function Capsula({ navigation }) {
-  const [estado, setEstado] = useState('cargando'); // cargando | sin_capsula | eligiendo | esperando | activa | editar
-  const [capsula, setCapsula] = useState(null);
-  const [llavesOtro, setLlavesOtro] = useState(null);
-  const [llavesPropia, setLlavesPropia] = useState(null);
-  const [progreso, setProgreso] = useState({ circulitos: 0, checkpoints: 0 });
-  const [parejaProgreso, setParejaProgreso] = useState({ circulitos: 0, checkpoints: 0 });
-  const [ediciones, setEdiciones] = useState({});
-  const [parejaEdiciones, setParejaEdiciones] = useState({});
-  const [parejaListo, setParejaListo] = useState(false);
-  const [showRewardOverlay, setShowRewardOverlay] = useState(false);
-  const [rewardTitulo, setRewardTitulo] = useState('');
-  const [rewardTexto, setRewardTexto] = useState('');
-  const [reclamados, setReclamados] = useState([]);
-  const [pendingReclamar, setPendingReclamar] = useState(null);
-  const uid = auth.currentUser?.uid;
-
-  useEffect(() => {
-    if (!uid) return;
-    const capId = getMesAnio();
-
-    const unsub = onSnapshot(doc(db, 'capsulas', capId), async (snap) => {
-      if (!snap.exists()) { setEstado('sin_capsula'); return; }
-      const data = snap.data();
-      setCapsula({ ...data, id: capId, dineroProp: 0 });
-
-      const miLlaves = data[`llaves_${uid}`];
-      const parejaUid = await getParejaUid(uid);
-      // cargar dinero del usuario
-      const userSnap = await getDoc(doc(db, 'usuarios', uid)).catch(() => null);
-      const dineroUsuario = userSnap?.data()?.dinero ?? 0;
-      setCapsula({ ...data, id: capId, dineroProp: dineroUsuario });
-      const llavesP = parejaUid ? data[`llaves_${parejaUid}`] : null;
-      const progresoPareja = parejaUid ? data[`progreso_${parejaUid}`] : { circulitos: 0, checkpoints: 0 };
-      const misEdiciones = data[`ediciones_${uid}`] || {};
-      const edicionesPareja = parejaUid ? data[`ediciones_${parejaUid}`] || {} : {};
-
-      setLlavesOtro(llavesP || null);
-      setLlavesPropia(miLlaves || null);
-      const progresoMio = data[`progreso_${uid}`] || { circulitos: 0, checkpoints: 0 };
-      setProgreso(progresoMio);
-      setReclamados(data[`reclamados_${uid}`] || []);
-      setParejaProgreso(progresoPareja);
-      setEdiciones(misEdiciones);
-      setParejaEdiciones(edicionesPareja);
-      setParejaListo(!!llavesP);
-
-      if (!miLlaves) { setEstado('eligiendo'); return; }
-      if (!llavesP)  { setEstado('esperando'); return; }
-      setEstado('activa');
-    });
-    return () => unsub();
-  }, [uid]);
-
-  const getParejaUid = async (uid) => {
-    try {
-      const snap = await getDoc(doc(db, 'usuarios', uid));
-      return snap.data()?.pareja || null;
-    } catch { return null; }
-  };
-
-  const handleCrear = async () => {
-    const capId = getMesAnio();
-    await setDoc(doc(db, 'capsulas', capId), {
-      creadaPor: uid,
-      diasRestantes: 60,
-      creadaEn: new Date(),
-      [`progreso_${uid}`]: { circulitos: 0, checkpoints: 1 },
-    }, { merge: true }).catch(() => {});
-    setEstado('eligiendo');
-  };
-
-  const handleConfirmarLlaves = async (llaves) => {
-    const capId = getMesAnio();
-    await setDoc(doc(db, 'capsulas', capId), {
-      [`llaves_${uid}`]: llaves,
-    }, { merge: true }).catch(() => {});
-  };
-
-  const handleCheckpointPress = (checkpointIndex) => {
-    const alcanzado = checkpointIndex === 0 || progreso?.checkpoints > checkpointIndex;
-    const yaReclamado = reclamados.includes(checkpointIndex);
-
-    if (!alcanzado) {
-      const partnerClaimed = parejaProgreso?.checkpoints > checkpointIndex;
-      setRewardTitulo(`Checkpoint ${checkpointIndex + 1}`);
-      setRewardTexto(partnerClaimed
-        ? 'Tu pareja ya alcanzó este checkpoint. Sigue avanzando para reclamarlo tú también.'
-        : 'Aún no has alcanzado este checkpoint. Completa tu siguiente misión para desbloquearlo.');
-      setPendingReclamar(null);
-      setShowRewardOverlay(true);
+// ── Botón VAMOS ───────────────────────────────────────────────────────────────
+function BtnVamos({ onPress, disabled, sinChicles }) {
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const handlePress = () => {
+    if (sinChicles) {
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue:  8, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -8, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue:  6, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -6, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue:  0, duration: 50, useNativeDriver: true }),
+      ]).start();
       return;
     }
-
-    const todasLlaves = [...(llavesPropia || []), ...(llavesOtro || [])];
-    const llaveId = todasLlaves[checkpointIndex] || null;
-    const llave = llaveId ? POOL_LLAVES.find(x => x.id === llaveId) : null;
-    setRewardTitulo(llave ? `${llave.icono} ${llave.nombre}` : `Checkpoint ${checkpointIndex + 1}`);
-    setRewardTexto(llave ? llave.desc : 'Recompensa desbloqueada.');
-    setPendingReclamar(yaReclamado ? null : checkpointIndex);
-    setShowRewardOverlay(true);
+    onPress();
   };
+  return (
+  <Animated.View style={{ transform: [{ translateX: shakeAnim }] }}>
+  <TouchableOpacity onPress={handlePress} disabled={disabled && !sinChicles} activeOpacity={0.82} style={[sv.boton, disabled && sv.botonOff]}>
+    <Svg width={20} height={20}>
+      <Defs>
+        <LinearGradient id="chicleGrad" x1="0" y1="0" x2="1" y2="1">
+          <Stop offset="0%"  stopColor="#c4a0f5" />
+          <Stop offset="100%" stopColor="#ff8fa8" />
+        </LinearGradient>
+      </Defs>
+      <Circle cx={10} cy={10} r={8} fill="rgba(255,255,255,0.15)" />
+      <Circle cx={10} cy={10} r={6} fill="url(#chicleGrad)" />
+      <Circle cx={10} cy={10} r={6} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={1} />
+      <Ellipse cx={7.5} cy={7.5} rx={2} ry={1.2} fill="rgba(255,255,255,0.3)" />
+    </Svg>
+    <Text style={sv.num}>1</Text>
+    <Text style={sv.texto}>VAMOS</Text>
+  </TouchableOpacity>
+  </Animated.View>
+  );
+}
 
-  const handleCerrarCapsula = async () => {
-    const capId = getMesAnio();
-    await deleteDoc(doc(db, 'capsulas', capId)).catch(() => {});
-    setEstado('sin_capsula');
-    setCapsula(null);
-    setLlavesPropia(null);
-    setLlavesOtro(null);
-    setProgreso({ circulitos: 0, checkpoints: 0 });
-    setParejaProgreso({ circulitos: 0, checkpoints: 0 });
-    setEdiciones({});
-    setParejaEdiciones({});
-    setParejaListo(false);
+// ── Modal Checkpoint ──────────────────────────────────────────────────────────
+const CP_LABELS = ['', '', '', '', '', '', '¡META!'];
+const CP_REWARDS = ['', '🪙 250 monedas', '⏏️ 25 exp', '🌸 Sorpresa', '💕 Momento especial', '✨ Recuerdo', '🏆 Premio mayor'];
+
+function ModalCP({ cp, reclamado, reached, onClose }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(anim, { toValue: 1, useNativeDriver: true, bounciness: 10 }).start();
+  }, []);
+  const handleClose = () => {
+    Animated.timing(anim, { toValue: 0, duration: 160, useNativeDriver: true }).start(onClose);
   };
+  const scale  = anim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
+  const isMega = cp === 6;
+  const R      = isMega ? 118 : 98;
+  const SIZE   = (R + 22) * 2;
+  const cx     = SIZE / 2;
+  const fill   = reclamado ? GOLD : PINK;
+  const halo1  = reclamado ? 'rgba(245,200,66,0.13)' : 'rgba(255,143,168,0.13)';
+  const halo2  = reclamado ? 'rgba(245,200,66,0.22)' : 'rgba(255,143,168,0.22)';
+  const ring   = reclamado ? 'rgba(255,255,255,0.5)'  : 'rgba(255,255,255,0.42)';
 
-  const handleSaveEdiciones = async (nuevasEdiciones, dineroRegalado = 0) => {
-    const capId = getMesAnio();
-    const updates = { [`ediciones_${uid}`]: nuevasEdiciones };
-    if (dineroRegalado > 0) {
-      // descontar dinero al usuario y guardar en la capsula
-      const userSnap = await getDoc(doc(db, 'usuarios', uid)).catch(() => null);
-      const dineroActual = userSnap?.data()?.dinero ?? 0;
-      const nuevosDinero = Math.max(0, dineroActual - dineroRegalado);
-      await setDoc(doc(db, 'usuarios', uid), { dinero: nuevosDinero }, { merge: true }).catch(() => {});
-      updates[`dineroRegalado_${uid}`] = dineroRegalado;
+  const labelColor  = reclamado ? GOLD2 : reached ? ROSE  : PINK;
+  const rewardColor = reclamado ? GOLD  : reached ? '#fdf0e0' : PINK;
+  const statusText  = CP_REWARDS[cp];
+  const statusLabel = reclamado ? '¡Ya reclamado!' : reached ? '¡Toca para reclamar!' : '¡Sigue avanzando!';
+
+  return (
+    <Modal transparent animationType="none" onRequestClose={handleClose}>
+      <TouchableOpacity style={sm.backdrop} activeOpacity={1} onPress={handleClose}>
+        <Animated.View style={{ opacity: anim, transform: [{ scale }], alignItems: 'center', justifyContent: 'center' }}
+          onStartShouldSetResponder={() => true}
+          onTouchEnd={e => e.stopPropagation()}>
+          <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}>
+            <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
+              <Defs>
+                <LinearGradient id="chicleModalGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%"   stopColor={reclamado ? '#ffe97a' : '#ffb8cc'} />
+                  <Stop offset="100%" stopColor={reclamado ? GOLD2     : ROSE} />
+                </LinearGradient>
+              </Defs>
+              <Circle cx={cx} cy={cx} r={R + 18} fill={halo1} />
+              <Circle cx={cx} cy={cx} r={R + 10} fill={halo2} />
+              <Circle cx={cx} cy={cx} r={R} fill="url(#chicleModalGrad)" />
+              <Circle cx={cx} cy={cx} r={R} fill="none" stroke={ring} strokeWidth={2} />
+              <Circle cx={cx} cy={cx} r={R + 5} fill="none" stroke={fill} strokeWidth={1} opacity={0.4} strokeDasharray="5 4" />
+              <Ellipse cx={cx - R * 0.27} cy={cx - R * 0.27} rx={R * 0.38} ry={R * 0.21} fill="rgba(255,255,255,0.35)" />
+              <Ellipse cx={cx - R * 0.1}  cy={cx - R * 0.48} rx={R * 0.13} ry={R * 0.07} fill="rgba(255,255,255,0.22)" />
+            </Svg>
+            <View style={{ alignItems: 'center', gap: 5 }}>
+              <Text style={{ fontFamily: 'Omori', fontSize: 11, color: labelColor, letterSpacing: 1, opacity: 0.85, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }}>
+                {statusLabel}
+              </Text>
+              <Text style={{ fontFamily: 'Omori', fontSize: isMega ? 15 : 13, color: rewardColor, letterSpacing: 0.5, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }}>
+                {statusText}
+              </Text>
+            </View>
+          </View>
+          <TouchableOpacity style={sm.xBtn} onPress={handleClose}
+            hitSlop={{ top:12, bottom:12, left:12, right:12 }}>
+            <Text style={sm.xText}>✕</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ── Modal Recompensa Final ────────────────────────────────────────────────────
+function ModalRecompensaFinal({ onClose }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(anim, { toValue: 1, useNativeDriver: true, bounciness: 12 }).start();
+  }, []);
+  const handleClose = () => {
+    Animated.timing(anim, { toValue: 0, duration: 160, useNativeDriver: true }).start(onClose);
+  };
+  const scale = anim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] });
+  const R    = 130;
+  const SIZE = (R + 22) * 2;
+  const cx   = SIZE / 2;
+  return (
+    <Modal transparent animationType="none" onRequestClose={handleClose}>
+      <TouchableOpacity style={sm.backdrop} activeOpacity={1} onPress={handleClose}>
+        <Animated.View style={{ opacity: anim, transform: [{ scale }], alignItems: 'center', justifyContent: 'center' }}
+          onStartShouldSetResponder={() => true}
+          onTouchEnd={e => e.stopPropagation()}>
+          <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center' }}>
+            <Svg width={SIZE} height={SIZE} style={StyleSheet.absoluteFill}>
+              <Defs>
+                <LinearGradient id="chicleFinGrad" x1="0" y1="0" x2="1" y2="1">
+                  <Stop offset="0%"   stopColor="#ffe97a" />
+                  <Stop offset="100%" stopColor={GOLD2} />
+                </LinearGradient>
+              </Defs>
+              <Circle cx={cx} cy={cx} r={R + 18} fill="rgba(245,200,66,0.10)" />
+              <Circle cx={cx} cy={cx} r={R + 10} fill="rgba(245,200,66,0.18)" />
+              <Circle cx={cx} cy={cx} r={R} fill="url(#chicleFinGrad)" />
+              <Circle cx={cx} cy={cx} r={R} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+              <Circle cx={cx} cy={cx} r={R + 5} fill="none" stroke={GOLD} strokeWidth={1} opacity={0.4} strokeDasharray="5 4" />
+              <Ellipse cx={cx - R * 0.27} cy={cx - R * 0.27} rx={R * 0.38} ry={R * 0.21} fill="rgba(255,255,255,0.32)" />
+              <Ellipse cx={cx - R * 0.1}  cy={cx - R * 0.48} rx={R * 0.13} ry={R * 0.07} fill="rgba(255,255,255,0.20)" />
+            </Svg>
+            {/* Polaroid */}
+            <View style={smf.polaroid}>
+              <ExpoImage
+                source={require('../../../assets/temporadas/libro/Temporada1/Historia/historia1.png')}
+                style={smf.polaroidImg}
+                contentFit="cover"
+                cachePolicy="memory"
+              />
+              <Text style={smf.polaroidTexto}>El día que todo comenzó...</Text>
+            </View>
+          </View>
+          <Text style={{ fontFamily: 'Omori', fontSize: 12, color: GOLD3, marginTop: 8, letterSpacing: 0.5,
+            textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }}>
+            ¡Imagen desbloqueada! 🎉
+          </Text>
+          <TouchableOpacity style={sm.xBtn} onPress={handleClose}
+            hitSlop={{ top:12, bottom:12, left:12, right:12 }}>
+            <Text style={sm.xText}>✕</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      </TouchableOpacity>
+    </Modal>
+  );
+}
+
+// ── Pantalla principal ────────────────────────────────────────────────────────
+export default function Capsula({ navigation }) {
+  const [pasos,      setPasos]      = useState(0);
+  const [reclamados, setReclamados] = useState([]);
+  const [reward,     setReward]     = useState(null);
+  const [chicles,    setChicles]    = useState(0);
+  const [dinero,     setDinero]     = useState(0);
+  const [recompensaReclamada, setRecompensaReclamada] = useState(false);
+  const [modalRecompensaFinal, setModalRecompensaFinal] = useState(false);
+
+  const [cpModal, setCpModal] = useState(null);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const hoy = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
+
+    const ref = doc(db, 'usuarios', uid);
+    const unsub = onSnapshot(ref, snap => {
+      const data = snap.data() || {};
+      if (data.chicles == null) {
+        setDoc(ref, { chicles: 1 }, { merge: true });
+        setChicles(1);
+      } else {
+        setChicles(data.chicles);
+      }
+      setDinero(data.dinero ?? 0);
+      setRecompensaReclamada(!!data.recompensaCapsula1);
+    });
+    return () => { unsub(); };
+  }, []);
+
+  const cpPendiente = (() => {
+    for (let i = 1; i <= 6; i++) {
+      if (pasos >= posCheckpoint(i - 1) && !reclamados.includes(i)) return i;
     }
-    await setDoc(doc(db, 'capsulas', capId), updates, { merge: true }).catch(() => {});
-    setEdiciones(nuevasEdiciones);
-    setEstado('activa');
+    return null;
+  })();
+
+  const handleVamos = () => {
+    if (cpPendiente !== null || pasos >= totalPasos || chicles <= 0) return;
+    const uid = auth.currentUser?.uid;
+    if (uid) updateDoc(doc(db, 'usuarios', uid), { chicles: increment(-1) }).catch(() => {});
+    setChicles(v => v - 1);
+    setPasos(v => v + 1);
   };
 
-  const handleEdit = () => {
-    setEstado('editar');
-  };
-
-  const handleCloseReward = async () => {
-    setShowRewardOverlay(false);
-    if (pendingReclamar !== null) {
-      const nuevosReclamados = [...reclamados, pendingReclamar];
-      setReclamados(nuevosReclamados);
-      setPendingReclamar(null);
-      const capId = getMesAnio();
-      await setDoc(doc(db, 'capsulas', capId), {
-        [`reclamados_${uid}`]: nuevosReclamados,
-      }, { merge: true }).catch(() => {});
+  const handleCheckpoint = async (idx) => {
+    const reached  = pasos >= posCheckpoint(idx - 1);
+    const yaReclam = reclamados.includes(idx);
+    if (reached && !yaReclam) {
+      setReclamados(v => [...v, idx]);
+      if (idx === 1) {
+        const uid = auth.currentUser?.uid;
+        if (uid) await updateDoc(doc(db, 'usuarios', uid), { dinero: increment(250) }).catch(() => {});
+      }
+      if (idx === 2) {
+        const uid = auth.currentUser?.uid;
+        if (uid) await updateDoc(doc(db, 'usuarios', uid), { exp: increment(25) }).catch(() => {});
+      }
+      setReward({ titulo: idx === 6 ? '¡META! 🏆' : null, monedas: idx === 1 ? 250 : null, exp: idx === 2 ? 25 : null, texto: (idx === 1 || idx === 2) ? null : '¡Recompensa desbloqueada! 🎁' });
+    } else {
+      setCpModal({ idx, reclamado: yaReclam, reached });
     }
   };
+
+  const megaReclamado = reclamados.includes(6);
+
+  const handleRecompensaFinal = async () => {
+    if (!megaReclamado || recompensaReclamada) return;
+    const uid = auth.currentUser?.uid;
+    if (uid) await setDoc(doc(db, 'usuarios', uid), { recompensaCapsula1: true }, { merge: true }).catch(() => {});
+    setRecompensaReclamada(true);
+    setModalRecompensaFinal(true);
+  };
+
+  const bloqueado = cpPendiente !== null || pasos >= totalPasos;
 
   return (
     <View style={s.container}>
       <StatusBar hidden />
       <ExpoImage
         source={require('../../../assets/temporadas/libro/Temporada1/fondo1.png')}
-        style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+        style={StyleSheet.absoluteFill}
         contentFit="cover" cachePolicy="memory"
       />
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.35)' }]} />
-      <TabButtons onExit={() => navigation?.navigate?.('temporada1')} customAddButton={<View />} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.38)' }]} />
+      <TabButtons onExit={() => navigation?.navigate?.('temporada1')} customAddButton={<View />} chicles={chicles} userMoney={dinero} />
 
-      {estado === 'cargando'    && <View style={s.centrado}><ActivityIndicator color="#fff" /></View>}
-      {estado === 'sin_capsula' && <SinCapsula onCrear={handleCrear} />}
-      {estado === 'eligiendo'   && <ElegirLlaves onConfirmar={handleConfirmarLlaves} llavesOtro={llavesOtro} />}
-      {estado === 'esperando'   && <EsperandoPareja llavesPropia={llavesPropia} parejaListo={parejaListo} />}
-      {estado === 'activa' && <CapsulaActiva capsula={capsula} uid={uid} progreso={progreso} parejaProgress={parejaProgreso} ediciones={ediciones} miAvatar={auth.currentUser?.photoURL} parejaAvatar={capsula?.parejaAvatar || null} reclamados={reclamados} onCheckpointPress={handleCheckpointPress} onEdit={handleEdit} onCloseCapsula={handleCerrarCapsula} parejaCompletado={progreso.checkpoints >= 6 && parejaProgreso.checkpoints >= 6} />}
-      {estado === 'editar' && <CapsulaEditar llaves={llavesPropia || []} llavesOtro={llavesOtro || []} ediciones={ediciones} onSave={handleSaveEdiciones} onCancel={() => setEstado('activa')} capId={getMesAnio()} uid={uid} dineroProp={capsula?.dineroProp ?? 0} />}
-      <RecompensaOverlay visible={showRewardOverlay} titulo={rewardTitulo} texto={rewardTexto} onClose={handleCloseReward} />
+      <View style={s.caminoWrap}>
+        <CaminoSvg pasos={pasos} reclamados={reclamados} />
+        {/* TouchableOpacity nativos encima de cada checkpoint */}
+        {P.slice(1, 7).map((pt, i) => {
+          const idx    = i + 1;
+          const hitR   = idx === 6 ? 28 : 22;
+          const scaleX = CW; const scaleY = CH;
+          return (
+            <TouchableOpacity
+              key={idx}
+              onPress={() => handleCheckpoint(idx)}
+              activeOpacity={0.7}
+              style={[
+                s.cpHit,
+                {
+                  width:  hitR * 2,
+                  height: hitR * 2,
+                  borderRadius: hitR,
+                  left: pt.x - hitR,
+                  top:  pt.y - hitR,
+                },
+              ]}
+            />
+          );
+        })}
+      </View>
+
+      <View style={s.vamosWrap}>
+        <BtnVamos onPress={handleVamos} disabled={bloqueado} sinChicles={chicles <= 0} />
+      </View>
+
+      <View style={s.misionesWrap}>
+        <MisionesDiarias />
+      </View>
+
+      <View style={s.recompensaFinalWrap}>
+        <ExpoImage
+          source={require('../../../assets/temporadas/libro/Temporada1/Historia/historia1.png')}
+          style={s.recompensaFinalImg}
+          contentFit="cover"
+          cachePolicy="memory"
+        />
+        <View style={[
+          s.recompensaFinalOverlay,
+          { opacity: recompensaReclamada ? 0.35 : megaReclamado ? 0.55 : 0.82 },
+        ]} />
+        <View style={s.recompensaFinalContent}>
+          <Text style={s.recompensaFinalEmoji}>
+            {recompensaReclamada ? '🔓' : '🔒'}
+          </Text>
+          <Text style={s.recompensaFinalTexto}>
+            {recompensaReclamada ? '¡Ya es tuya!' : megaReclamado ? '¡Toca para reclamar!' : 'Llega a la meta'}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          onPress={handleRecompensaFinal}
+          activeOpacity={megaReclamado && !recompensaReclamada ? 0.75 : 1}
+        />
+      </View>
+
+      {cpModal && (
+        <ModalCP
+          cp={cpModal.idx}
+          reclamado={cpModal.reclamado}
+          reached={cpModal.reached}
+          onClose={() => setCpModal(null)}
+        />
+      )}
+
+      <RecompensaOverlay visible={!!reward} onClose={() => setReward(null)}>
+        <ChicleDorado titulo={reward?.titulo} texto={reward?.texto} monedas={reward?.monedas} exp={reward?.exp} />
+      </RecompensaOverlay>
+
+      {modalRecompensaFinal && (
+        <ModalRecompensaFinal onClose={() => setModalRecompensaFinal(false)} />
+      )}
     </View>
   );
 }
 
-// ── Estilos ───────────────────────────────────────────────────
-const PINK  = '#ff8fa8';
-const CREAM = '#f5e6c0';
-const DIM   = 'rgba(255,255,255,0.45)';
-
 const s = StyleSheet.create({
-  container: { flex: 1 },
-  centrado: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30, gap: 12 },
-
-  // Sin cápsula
-  capsulaIcono: { fontSize: 48, marginBottom: 4 },
-  sinCapTitulo: { fontFamily: 'Omori', fontSize: 18, color: CREAM, textAlign: 'center' },
-  sinCapSub:    { fontFamily: 'Delius', fontSize: 11, color: DIM, textAlign: 'center', lineHeight: 18 },
-  btnCrear: {
-    marginTop: 8, backgroundColor: 'rgba(255,143,168,0.2)', borderRadius: 12,
-    borderWidth: 1, borderColor: PINK, paddingVertical: 10, paddingHorizontal: 28,
+  container:    { flex: 1 },
+  caminoWrap:   { position: 'absolute', right: 10, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
+  cpHit:        { position: 'absolute' },
+  vamosWrap:    { position: 'absolute', right: 125, bottom: 40 },
+  misionesWrap: { position: 'absolute', bottom: 32, left: 120 },
+  recompensaFinalWrap: {
+    position: 'absolute', bottom: 118, left: 120,
+    width: 120, height: 120,
+    borderRadius: 10,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.5, shadowRadius: 6, elevation: 8,
+    overflow: 'hidden',
   },
-  btnCrearText: { fontFamily: 'Delius', fontSize: 12, color: PINK, fontWeight: '700' },
-  btnDisabled:  { opacity: 0.4 },
-
-  // Elegir llaves
-  elegirTitulo:   { fontFamily: 'Omori', fontSize: 16, color: CREAM },
-  elegirSub:      { fontFamily: 'Delius', fontSize: 10, color: DIM, textAlign: 'center', lineHeight: 16 },
-  elegirContador: { fontFamily: 'Delius', fontSize: 10, color: PINK },
-  llavesGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginVertical: 8 },
-  llaveCard: {
-    width: 100, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', padding: 10, alignItems: 'center', gap: 4,
-  },
-  llaveCardSel:  { borderColor: PINK, backgroundColor: 'rgba(255,143,168,0.15)' },
-  llaveIcono:    { fontSize: 22 },
-  llaveNombre:   { fontFamily: 'Omori', fontSize: 10, color: CREAM },
-  llaveDesc:     { fontFamily: 'Delius', fontSize: 8, color: DIM, textAlign: 'center' },
-  llaveCheck:    { position: 'absolute', top: 4, right: 6 },
-  llaveCheckText:{ color: PINK, fontSize: 12, fontWeight: '700' },
-
-  // Esperando
-  llavesResumen:    { flexDirection: 'row', gap: 14, marginTop: 8 },
-  llaveResumenItem: { alignItems: 'center', gap: 4 },
-
-  // Layout activa
-  layout: { position: 'absolute', top: 48, left: 0, right: 0, bottom: 0 },
-  seccion: { position: 'absolute', top: 0, bottom: 0, borderWidth: 0, justifyContent: 'center', alignItems: 'center' },
-  info:   { left: '5%',  right: '65%', top: '12%', bottom: '8%', borderColor: 'transparent' },
-  cap:    { left: '35%', right: '33%', borderColor: 'transparent' },
-  camino: { left: '67%', right: '2%',  top: '-12%', borderColor: 'transparent' },
-
-  // Info
-  infoWrap:         { alignItems: 'center', paddingHorizontal: 8, gap: 4 },
-  infoIcono:        { fontSize: 28, marginBottom: 2 },
-  infoTitulo:       { fontFamily: 'Omori', fontSize: 13, color: CREAM, letterSpacing: 1 },
-  infoSubtitulo:    { fontFamily: 'Delius', fontSize: 9, color: DIM, letterSpacing: 1, textTransform: 'capitalize' },
-  infoSep:          { width: '70%', height: 1, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: 6 },
-  infoProgLabel:    { fontFamily: 'Delius', fontSize: 7, color: DIM, letterSpacing: 2 },
-  infoBarBg:        { width: '80%', height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden', marginTop: 4 },
-  infoBarFill:      { height: '100%', backgroundColor: PINK, borderRadius: 2 },
-  infoProgNum:      { fontFamily: 'Delius', fontSize: 9, color: PINK, marginTop: 3 },
-  infoAperturaLabel:{ fontFamily: 'Delius', fontSize: 7, color: DIM, letterSpacing: 2 },
-  infoAperturaFecha:{ fontFamily: 'Omori', fontSize: 14, color: CREAM, marginTop: 2 },
-  infoCandado:      { fontSize: 20, marginTop: 6 },
-
-  // Cap
-  capWrap:           { paddingHorizontal: 14, paddingVertical: 10, width: '100%' },
-  capTitulo:         { fontFamily: 'Omori', fontSize: 11, color: CREAM, textAlign: 'center', letterSpacing: 1 },
-  capSep:            { height: 1, backgroundColor: 'rgba(255,255,255,0.12)', marginVertical: 8 },
-  capMisionCard:     { backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,143,168,0.25)', padding: 12, alignItems: 'center' },
-  capMisionSemana:   { fontFamily: 'Delius', fontSize: 8, color: PINK, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 },
-  capMisionTitulo:   { fontFamily: 'Omori', fontSize: 13, color: CREAM, textAlign: 'center', marginBottom: 6 },
-  capMisionTexto:    { fontFamily: 'Delius', fontSize: 10, color: DIM, textAlign: 'center', lineHeight: 15 },
-  capProgWrap:       { flexDirection: 'row', gap: 5, marginVertical: 10 },
-  capProgDot:        { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.15)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)' },
-  capProgDotFill:    { backgroundColor: PINK, borderColor: PINK },
-  capMisionStatus:   { fontFamily: 'Delius', fontSize: 9, color: 'rgba(255,255,255,0.7)', textAlign: 'center', marginVertical: 10 },
-  capBtn:            { marginTop: 6, backgroundColor: 'rgba(255,143,168,0.2)', borderRadius: 8, borderWidth: 1, borderColor: PINK, paddingVertical: 6, paddingHorizontal: 18 },
-  capEditBtn:        { backgroundColor: 'rgba(142,240,184,0.22)', borderColor: '#8ef0b8', borderWidth: 1 },
-  capBtnText:        { fontFamily: 'Delius', fontSize: 10, color: PINK, fontWeight: '700' },
-  capEditBtnText:    { color: '#8ef0b8' },
-  capCompletadoIcon: { fontSize: 28, marginBottom: 6 },
-  capCompletadoText: { fontFamily: 'Delius', fontSize: 11, color: CREAM, textAlign: 'center', lineHeight: 17 },
-  elegirNota:        { fontFamily: 'Delius', fontSize: 9, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginTop: 8 },
-  capCerrarBtn:     { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: '#f7b2c7' },
-  capCerrarBtnBottom:{ marginTop: 12 },
-  checkpointButton:  { marginTop: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' },
-  checkpointButtonText: { fontFamily: 'Delius', fontSize: 9, color: CREAM, letterSpacing: 0.5 },
+  recompensaFinalImg:     { position: 'absolute', top: 0, left: 0, width: 120, height: 120 },
+  recompensaFinalOverlay: { position: 'absolute', top: 0, left: 0, width: 120, height: 120, backgroundColor: '#000' },
+  recompensaFinalContent: { position: 'absolute', top: 0, left: 0, width: 120, height: 120, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 10, gap: 3 },
+  recompensaFinalEmoji:   { fontSize: 26 },
+  recompensaFinalTexto:   { fontFamily: 'Omori', fontSize: 9, color: '#fff', textAlign: 'center', letterSpacing: 0.3, paddingHorizontal: 8, lineHeight: 14 },
 });
 
-// ── Estilos editor cápsula ──────────────────────────────────────────
-const se = StyleSheet.create({
-  root:    { flex: 1, paddingTop: 52 },
-  topBar:  { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 16, paddingHorizontal: 20, marginBottom: 8 },
-  topX:       { fontFamily: 'Delius', fontSize: 18, color: 'rgba(255,255,255,0.35)' },
-  topGuardar: { fontFamily: 'Delius', fontSize: 10, color: 'rgba(255,255,255,0.45)', letterSpacing: 1 },
-  topEnviar:  { fontFamily: 'Delius', fontSize: 10, color: PINK, letterSpacing: 1 },
-  topEnviado: { color: '#6bcb77' },
+const sm = StyleSheet.create({
+  backdrop:  { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(6,0,10,0.93)' },
+  xBtn:      { position: 'absolute', top: 8, right: 8 },
+  xText:     { fontSize: 15, color: 'rgba(255,200,220,0.75)', fontWeight: '700' },
+});
 
-  fila: { alignItems: 'center', paddingHorizontal: 24, gap: 32, paddingVertical: 16 },
-
-  // Polaroid
+const smf = StyleSheet.create({
   polaroid: {
-    backgroundColor: '#fff8ee',
-    padding: 8, paddingBottom: 36,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35, shadowRadius: 12, elevation: 10,
-    width: 160,
+    width: 110, height: 130,
+    backgroundColor: '#fff',
+    padding: 6,
+    paddingBottom: 22,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 10,
+    transform: [{ rotate: '-3deg' }],
   },
-  polaroidImg:       { width: 144, height: 144 },
-  polaroidVacio:     { width: 144, height: 144, backgroundColor: '#ede0c8', justifyContent: 'center', alignItems: 'center' },
-  polaroidVacioIcono:{ fontSize: 40, color: '#c9a87a' },
-  polaroidPie: {
-    position: 'absolute', bottom: 6, left: 8, right: 8,
-    fontFamily: 'Delius', fontSize: 11, color: '#8a6a4a', textAlign: 'center',
-    backgroundColor: 'transparent',
+  polaroidImg:   { width: '100%', flex: 1 },
+  polaroidTexto: { position: 'absolute', bottom: 5, left: 0, right: 0, textAlign: 'center', fontFamily: 'Delius', fontSize: 8, color: '#555' },
+});
+
+const sv = StyleSheet.create({
+  boton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#3a1a2e',
+    borderRadius: 6,
+    paddingVertical: 6, paddingHorizontal: 12,
+    borderLeftWidth: 3, borderLeftColor: '#c4a0f5',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35, shadowRadius: 4, elevation: 5,
   },
-
-  // Flor
-  florWrap:   { alignItems: 'center', gap: 12 },
-  colorRow:   { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
-  colorDot:   { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: 'transparent' },
-  colorDotSel:{ borderColor: CREAM },
-
-  // Chancho
-  chanchoWrap:     { alignItems: 'center', gap: 4 },
-  chanchoEmoji:    { fontSize: 56 },
-  chanchoCantidad: { fontFamily: 'Omori', fontSize: 38, color: CREAM, lineHeight: 44 },
-  chanchoMoneda:   { fontSize: 22 },
-  chanchoControles:{ flexDirection: 'row', gap: 14, marginTop: 6 },
-  chanchoCtrl:     { fontFamily: 'Delius', fontSize: 13, color: 'rgba(255,100,100,0.8)' },
-  chanchoCtrlPos:  { color: 'rgba(107,203,119,0.9)' },
-  chanchoSaldo:    { fontFamily: 'Delius', fontSize: 9, color: DIM, marginTop: 2 },
-
-  // Nota
-  notaWrap:  { alignItems: 'center', gap: 8 },
-  notaIcono: { fontSize: 36 },
-  notaInput: {
-    color: CREAM, fontFamily: 'Delius', fontSize: 12,
-    borderBottomWidth: 1, borderBottomColor: 'rgba(255,143,168,0.3)',
-    width: 160, minHeight: 80, textAlignVertical: 'top', paddingVertical: 4,
-  },
+  botonOff: { opacity: 0.45 },
+  num:   { fontFamily: 'Omori', fontSize: 9, color: '#c4a0f5', marginLeft: -2 },
+  texto: { fontFamily: 'Omori', fontSize: 10, color: '#fdf0e0', letterSpacing: 1 },
 });

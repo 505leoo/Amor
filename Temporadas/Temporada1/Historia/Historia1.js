@@ -41,6 +41,10 @@ export default function Historia1({ navigation }) {
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
+    // Registrar visita para misión explorar_t1 (una sola escritura por día)
+    const hoy = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
+    const visitaKey = `explorar_t1_historia1_${hoy}`;
+    if (!global[visitaKey]) { global[visitaKey] = true; setDoc(doc(db, 'misiones_diarias', hoy), { [uid]: { progreso: { explorar_t1_historia1: true } } }, { merge: true }).catch(() => {}); }
     getDoc(doc(db, 'Historias', uid)).then(snap => {
       if (!snap.exists()) return;
       const t1 = snap.data().temporada1 || {};

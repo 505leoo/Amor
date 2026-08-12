@@ -3,13 +3,31 @@ import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import Svg, { Polygon } from 'react-native-svg';
+import Svg, { Polygon, Circle, Ellipse, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import { db, auth } from '../firebaseConfig';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const STRIP_H = 29;
-const STRIP_W = 92;
+const STRIP_W = 96;
 const TIP = 13;
 
-const MoneyStrip = ({ userMoney }) => (
+const ChicleSvg = () => (
+  <Svg width={16} height={16}>
+    <Defs>
+      <SvgLinearGradient id="cg" x1="0" y1="0" x2="1" y2="1">
+        <Stop offset="0%" stopColor="#ffb8cc" />
+        <Stop offset="100%" stopColor="#e8607a" />
+      </SvgLinearGradient>
+    </Defs>
+    <Circle cx={8} cy={8} r={6} fill="url(#cg)" />
+    <Circle cx={8} cy={8} r={6} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={1} />
+    <Ellipse cx={5.5} cy={5.5} rx={2} ry={1.1} fill="rgba(255,255,255,0.35)" />
+  </Svg>
+);
+
+const fmt = (n) => Number(n || 0).toLocaleString('es-MX');
+
+const MoneyStrip = ({ userMoney, chicles }) => (
   <View style={styles.moneyStripWrap}>
     <Svg width={STRIP_W + TIP} height={STRIP_H} style={StyleSheet.absoluteFill}>
       <Polygon
@@ -17,14 +35,35 @@ const MoneyStrip = ({ userMoney }) => (
         fill="#c084a0"
       />
     </Svg>
-    <MaterialIcons name="diamond" size={11} color="#fff" style={{ marginLeft: 10 }} />
-    <Text style={styles.moneyStripText}>{userMoney}</Text>
+    <Text style={[styles.moneyStripText, { marginLeft: 10 }]}>🪙</Text>
+    <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(userMoney)}</Text>
+    {chicles != null && (
+      <>
+        <ChicleSvg />
+        <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(chicles)}</Text>
+      </>
+    )}
   </View>
 );
 
-const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton }) => {
+const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles }) => {
   const [open, setOpen] = useState(false);
   const slideAnim = useRef(new Animated.Value(-130)).current;
+  const [dineroInterno, setDineroInterno] = useState(null);
+
+  // Leer dinero desde Firestore si no se pasa como prop
+  useEffect(() => {
+    if (userMoney !== undefined) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
+      if (!snap.exists()) return;
+      setDineroInterno(snap.data().dinero ?? 0);
+    });
+    return () => unsub();
+  }, []);
+
+  const moneyFinal = userMoney !== undefined ? userMoney : dineroInterno;
 
   useEffect(() => {
     AsyncStorage.getItem('tabButtons_open').then(val => {
@@ -62,7 +101,7 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
               <Text style={styles.exitText}>Salir</Text>
             </LinearGradient>
           </TouchableOpacity>
-          <MoneyStrip userMoney={userMoney} />
+          <MoneyStrip userMoney={moneyFinal} chicles={chicles} />
         </Animated.View>
 
         {/* Pestaña visible siempre */}
@@ -168,13 +207,14 @@ const styles = StyleSheet.create({
     width: STRIP_W + TIP,
     height: STRIP_H,
     marginTop: 10,
-    gap: 5,
+    gap: 3,
   },
   moneyStripText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+    flexShrink: 1,
   },
   titleContainer: {
     position: 'absolute',

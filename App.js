@@ -10,6 +10,7 @@ import { Image as ExpoImage } from 'expo-image';
 import NotificationSystem from './utils/NotificationSystem';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
+import { MisionesProvider } from './MisionesContext';
 import Loading from './components/Loading';
 import Toast from './components/Toast';
 import Intro from './Intro';
@@ -28,6 +29,8 @@ import Temporada1 from './Temporadas/Temporada1/temporada1';
 import Historia1 from './Temporadas/Temporada1/Historia/Historia1';
 import LibroTemp1 from './Temporadas/Temporada1/librotemp1';
 import Capsula1 from './Temporadas/Temporada1/Eventos/capsula';
+import Temporada2 from './Temporadas/Temporada2/temporada2';
+import Kitty from './Temporadas/Temporada2/Kitty';
 import Animalitos from './Animalitos';
 import Canjear from './menus/Canjear';
 import AdminCodigos from './menus/AdminCodigos';
@@ -52,6 +55,7 @@ export default function App() {
     'temporada1|historia1', 'historia1|temporada1',
     'temporada1|capsula1', 'capsula1|temporada1',
     'temporada1|librotemp1', 'librotemp1|temporada1',
+    'temporadas|temporada2', 'temporada2|temporadas',
     'main|animalitos', 'animalitos|main',
   ]);
 
@@ -153,6 +157,7 @@ export default function App() {
   return (
     <View style={styles.container}>
       <TrofeosProvider>
+        <MisionesProvider>
         <MusicProvider>
           <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
 
@@ -181,6 +186,8 @@ export default function App() {
           {currentScreen === 'pistas'          && <Pistas           navigation={navigation} />}
           {currentScreen === 'temporadas'      && <Temporadas       navigation={navigation} />}
           {currentScreen === 'temporada1'      && <Temporada1       navigation={navigation} />}
+          {currentScreen === 'temporada2'      && <Temporada2       navigation={navigation} />}
+          {currentScreen === 'kitty'             && <Kitty            navigation={navigation} />}
           {currentScreen === 'historia1'       && <Historia1        navigation={navigation} />}
           {currentScreen === 'capsula1'        && <Capsula1         navigation={navigation} />}
           {currentScreen === 'librotemp1'      && <LibroTemp1       navigation={navigation} />}
@@ -193,6 +200,7 @@ export default function App() {
           <Toast ref={toastRef} />
 
         </MusicProvider>
+        </MisionesProvider>
       </TrofeosProvider>
     </View>
   );

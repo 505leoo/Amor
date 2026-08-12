@@ -9,7 +9,7 @@ const NODE_W = 96;
 const NODE_H = 96;
 const COL_W = 172;
 const TRACK_H = 360;
-const PATH_Y = TRACK_H - 118;
+const PATH_Y = TRACK_H - 128;
 const getX = (i) => 90 + i * COL_W;
 const getY = () => PATH_Y;
 
@@ -65,7 +65,6 @@ const Nodo = ({ milestone, index, completado, bloqueado }) => {
       <View style={n.label}>
         <Text style={n.labelText} numberOfLines={1}>{milestone.count} trofeos</Text>
         <Text style={n.rewardText}>+{milestone.reward} 💎</Text>
-        <Text style={n.subLabel}>{milestone.label}</Text>
       </View>
     </View>
   );
@@ -107,7 +106,7 @@ const n = StyleSheet.create({
   },
   labelText: { fontSize: 8.8, color: '#fff', fontWeight: '800', textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   rewardText: { fontSize: 7.2, color: '#ffe27a', fontWeight: '700', marginTop: 1 },
-  subLabel: { fontSize: 7, color: 'rgba(255,255,255,0.74)', marginTop: 1 },
+
 });
 
 const Pase = ({ navigation }) => {
