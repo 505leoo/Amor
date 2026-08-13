@@ -6,6 +6,12 @@ import { Feather } from '@expo/vector-icons';
 const TOAST_W = 210;
 
 const THEMES = {
+  info: {
+    grad:    ['#93c5fd', '#60a5fa'],
+    barGrad: ['#3b82f6', '#1d4ed8'],
+    icon:    'upload',
+    shadow:  '#60a5fa',
+  },
   success: {
     grad:    ['#f9a8d4', '#e879f9'],
     barGrad: ['#f472b6', '#c026d3'],
@@ -28,32 +34,52 @@ const Toast = forwardRef((_, ref) => {
   const seqRef    = useRef(null);
 
   useImperativeHandle(ref, () => ({
-    show({ text1, text2, type = 'success', duration = 2500 }) {
+    show({ text1, text2, message, type = 'success', duration = 2500 }) {
+      const t1 = text1 || message || '';
+      const persistent = duration >= 99999;
+
       if (seqRef.current) seqRef.current.stop();
       barWidth.setValue(0);
-      opacity.setValue(0);
-      translateY.setValue(-70);
 
-      setConfig({ text1, text2, type, duration });
+      // Si ya está visible y es persistent, solo actualizar texto
+      const alreadyVisible = config && persistent;
+      if (!alreadyVisible) {
+        opacity.setValue(0);
+        translateY.setValue(-70);
+      }
 
-      seqRef.current = Animated.sequence([
-        // entrada
-        Animated.parallel([
+      setConfig({ text1: t1, text2, type, duration, persistent });
+
+      if (persistent) {
+        // Solo entrada, sin barra ni salida automática
+        seqRef.current = Animated.parallel([
           Animated.timing(opacity,    { toValue: 1, duration: 300, useNativeDriver: true }),
           Animated.spring(translateY, { toValue: 0, speed: 7, bounciness: 4, useNativeDriver: true }),
-        ]),
-        // barra cargando
-        Animated.timing(barWidth, { toValue: TOAST_W, duration, useNativeDriver: false }),
-        // salida — espera a que la barra termine
-        Animated.parallel([
-          Animated.timing(opacity,    { toValue: 0, duration: 320, useNativeDriver: true }),
-          Animated.timing(translateY, { toValue: -70, duration: 320, useNativeDriver: true }),
-        ]),
-      ]);
-
-      seqRef.current.start(({ finished }) => {
-        if (finished) setConfig(null);
-      });
+        ]);
+        seqRef.current.start();
+      } else {
+        seqRef.current = Animated.sequence([
+          Animated.parallel([
+            Animated.timing(opacity,    { toValue: 1, duration: 300, useNativeDriver: true }),
+            Animated.spring(translateY, { toValue: 0, speed: 7, bounciness: 4, useNativeDriver: true }),
+          ]),
+          Animated.timing(barWidth, { toValue: TOAST_W, duration, useNativeDriver: false }),
+          Animated.parallel([
+            Animated.timing(opacity,    { toValue: 0, duration: 320, useNativeDriver: true }),
+            Animated.timing(translateY, { toValue: -70, duration: 320, useNativeDriver: true }),
+          ]),
+        ]);
+        seqRef.current.start(({ finished }) => {
+          if (finished) setConfig(null);
+        });
+      }
+    },
+    hide() {
+      if (seqRef.current) seqRef.current.stop();
+      Animated.parallel([
+        Animated.timing(opacity,    { toValue: 0, duration: 320, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: -70, duration: 320, useNativeDriver: true }),
+      ]).start(() => setConfig(null));
     },
   }));
 

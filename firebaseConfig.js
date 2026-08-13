@@ -14,7 +14,7 @@ const firebaseConfig = {
   appId: '1:580063862777:android:dc7c47da3566b574fe2728',
 };
 
-LogBox.ignoreLogs(['@firebase/firestore']);
+LogBox.ignoreLogs(['@firebase/firestore', 'Cannot record touch end without a touch start']);
 
 let app;
 let db;

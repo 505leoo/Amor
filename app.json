@@ -41,6 +41,7 @@
         "arm64-v8a"
       ]
     },
+    "scheme": "amor",
     "ios": {
       "requireFullScreen": true,
       "bundleIdentifier": "com.leitof7.amor",
