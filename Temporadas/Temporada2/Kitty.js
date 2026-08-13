@@ -280,16 +280,36 @@ export default function Kitty({ navigation }) {
   };
 
   const handleUpload = useCallback(async () => {
+    console.log('[handleUpload] botón presionado');
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    console.log('[handleUpload] permiso:', JSON.stringify(perm));
+    if (!perm.granted) {
+      console.log('[handleUpload] permiso denegado');
+      return;
+    }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], allowsEditing: false, quality: 1 });
-    if (result.canceled || !result.assets?.[0]?.uri) return;
+    console.log('[handleUpload] picker result:', JSON.stringify(result));
+    if (result.canceled || !result.assets?.[0]?.uri) {
+      console.log('[handleUpload] cancelado o sin uri');
+      return;
+    }
     const srcUri = result.assets[0].uri;
+    console.log('[handleUpload] srcUri:', srcUri);
     const ext = srcUri.split('.').pop()?.split('?')[0] || 'mp4';
     const localUri = FileSystem.cacheDirectory + `pending_video_${Date.now()}.${ext}`;
     try {
       await FileSystem.copyAsync({ from: srcUri, to: localUri });
-      requestAnimationFrame(() => requestAnimationFrame(() => setPendingUri(localUri)));
-    } catch (_) {
-      requestAnimationFrame(() => requestAnimationFrame(() => setPendingUri(srcUri)));
+      console.log('[handleUpload] copiado a:', localUri);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        console.log('[handleUpload] setPendingUri localUri');
+        setPendingUri(localUri);
+      }));
+    } catch (e) {
+      console.log('[handleUpload] error al copiar:', e?.message);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        console.log('[handleUpload] setPendingUri srcUri (fallback)');
+        setPendingUri(srcUri);
+      }));
     }
   }, []);
 
@@ -336,7 +356,7 @@ export default function Kitty({ navigation }) {
         onExit={() => navigation?.navigate?.('temporada2')}
         customAddButton={
           isAdmin ? (
-            <View style={[styles.topBtns, { pointerEvents: 'auto' }]}>
+            <View style={styles.topBtns} pointerEvents="auto">
               <TouchableOpacity onPress={toggleGestion} activeOpacity={0.7} style={[styles.manageBtn, gestion && styles.btnActivo]}>
                 <MaterialIcons name="list" size={20} color="#fff" />
               </TouchableOpacity>

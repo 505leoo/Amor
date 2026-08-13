@@ -112,7 +112,7 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
         </TouchableOpacity>
       </View>
 
-      <View style={styles.rightButtons}>
+      <View style={styles.rightButtons} pointerEvents="auto">
         {customAddButton ? customAddButton : (
           <TouchableOpacity onPress={onAddSticker} activeOpacity={0.7} style={styles.touchable}>
             <LinearGradient colors={['#4CAF50', '#45a049']} style={styles.addButton}>

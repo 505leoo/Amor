@@ -73,7 +73,13 @@
       "expo-image",
       "expo-status-bar",
       "expo-splash-screen",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Necesitamos acceso a tu galería para subir videos."
+        }
+      ]
     ],
     "runtimeVersion": "0.1",
     "extra": {
