@@ -45,7 +45,8 @@
     "react-native": "^0.86.2",
     "react-native-game-engine": "^1.2.0",
     "react-native-svg": "15.15.4",
-    "react-native-toast-message": "^2.4.0"
+    "react-native-toast-message": "^2.4.0",
+    "react-native-view-shot": "5.1.0"
   },
   "devDependencies": {
     "@react-native-community/cli": "latest"

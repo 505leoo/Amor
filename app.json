@@ -74,6 +74,7 @@
       "expo-status-bar",
       "expo-splash-screen",
       "expo-video",
+      "react-native-view-shot",
       [
         "expo-image-picker",
         {

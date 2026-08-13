@@ -5,6 +5,7 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import ViewShot from 'react-native-view-shot';
 import { ref, deleteObject } from 'firebase/storage';
 import { collection, addDoc, getDocs, deleteDoc, query, orderBy, doc } from 'firebase/firestore';
 import { auth, db, storage } from '../../firebaseConfig';
@@ -35,6 +36,7 @@ const ThumbPickerModal = ({ uri, onConfirm, onCancel }) => {
   const player = useVideoPlayer(uri, p => { p.pause(); p.currentTime = 0; });
   const isPlayingRef = useRef(false);
   const intervalRef = useRef(null);
+  const viewShotRef = useRef(null);
 
   useEffect(() => {
     const sub1 = player.addListener('statusChange', ({ status }) => {
@@ -61,13 +63,17 @@ const ThumbPickerModal = ({ uri, onConfirm, onCancel }) => {
   };
 
   const handleCapture = async () => {
-    if (!ready) return;
+    if (!ready) { console.log('[capture] not ready'); return; }
     setGenerating(true);
     try {
-      const secs = Math.max(0.1, parseSeconds(timeStr));
-      const { uri: tUri } = await VideoThumbnails.getThumbnailAsync(uri, { time: Math.round(secs * 1000), quality: 1 });
-      setThumbUri(tUri);
-    } catch (e) { console.error('thumb error:', e?.message); }
+      player.pause();
+      await new Promise(r => setTimeout(r, 100));
+      const uri = await viewShotRef.current.capture();
+      console.log('[capture] viewshot uri:', uri);
+      setThumbUri(uri);
+    } catch (e) {
+      console.log('[capture] ERROR:', e?.message);
+    }
     setGenerating(false);
   };
 
@@ -76,7 +82,7 @@ const ThumbPickerModal = ({ uri, onConfirm, onCancel }) => {
       <View style={styles.tpOverlay}>
         <View style={styles.tpBox}>
           <Text style={styles.tpTitle}>Elegir miniatura</Text>
-          <View style={styles.tpVideoWrap}>
+          <ViewShot ref={viewShotRef} style={styles.tpVideoWrap} options={{ format: 'jpg', quality: 1 }}>
             <VideoView player={player} style={styles.tpVideo} contentFit="cover" nativeControls={false} />
             {thumbUri && (
               <View style={StyleSheet.absoluteFill}>
@@ -86,7 +92,7 @@ const ThumbPickerModal = ({ uri, onConfirm, onCancel }) => {
                 </TouchableOpacity>
               </View>
             )}
-          </View>
+          </ViewShot>
           <View style={styles.tpRow}>
             <TouchableOpacity style={styles.tpSeekBtn} onPress={() => seek(-1)} activeOpacity={0.8}>
               <MaterialIcons name="replay" size={20} color="#fff" />
@@ -271,6 +277,8 @@ export default function Kitty({ navigation }) {
   const [pendingUri, setPendingUri] = useState(null);
   const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
 
+  console.log('[render] pendingUri:', pendingUri);
+
   useEffect(() => { loadingRef.current?.fadeOut(); }, []);
   useEffect(() => { fetchVideos(); }, []);
 
@@ -300,20 +308,22 @@ export default function Kitty({ navigation }) {
     try {
       await FileSystem.copyAsync({ from: srcUri, to: localUri });
       console.log('[handleUpload] copiado a:', localUri);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
+      setTimeout(() => {
         console.log('[handleUpload] setPendingUri localUri');
+        console.log('[handleUpload] pendingUri antes:', pendingUri);
         setPendingUri(localUri);
-      }));
+      }, 300);
     } catch (e) {
       console.log('[handleUpload] error al copiar:', e?.message);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
+      setTimeout(() => {
         console.log('[handleUpload] setPendingUri srcUri (fallback)');
         setPendingUri(srcUri);
-      }));
+      }, 300);
     }
   }, []);
 
   const handleThumbConfirm = useCallback((thumbLocalUri) => {
+    console.log('[handleThumbConfirm] thumbLocalUri:', thumbLocalUri);
     const uri = pendingUri;
     setPendingUri(null);
     const titulo = `kitty-video${videos.length + 1}`;
