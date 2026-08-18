@@ -12,8 +12,6 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
   const brandSlide = useRef(new Animated.Value(20)).current;
   const progressWidth = useRef(new Animated.Value(0)).current;
   const progressAnimRef = useRef(null);
-  const appFade = useRef(new Animated.Value(0)).current;
-  const appSlide = useRef(new Animated.Value(30)).current;
   const containerFade = useRef(new Animated.Value(0)).current;
   const [showContent, setShowContent] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('');
@@ -25,14 +23,14 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
       require('./assets/temporadas/libro/libro1.png'),
       require('./assets/temporadas/libro/libro2.png'),
       require('./assets/temporadas/libro/Temporada1/logo1.png'),
+      require('./assets/inicio/inicio.png'),
     ]);
   };
 
   const preloadFirebaseData = async () => {
     try {
       const preloadPromises = [
-        getDoc(doc(db, 'season', 'current')).catch(() => null),
-        getDocs(query(collection(db, 'stickers'), limit(10))).catch(() => null),
+        getDocs(query(collection(db, 'stickers'), limit(5))).catch(() => null),
         isAuthenticated && auth.currentUser ? 
           getDoc(doc(db, 'usuarios', auth.currentUser.uid)).catch(() => null) : 
           Promise.resolve(null)
@@ -43,7 +41,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
       const imageUrls = [];
       results.forEach(result => {
         if (result.status === 'fulfilled' && result.value && result.value.docs) {
-          result.value.docs.slice(0, 5).forEach(doc => {
+          result.value.docs.forEach(doc => {
             const data = doc.data();
             if (data.imageUrl) imageUrls.push(data.imageUrl);
           });
@@ -51,15 +49,12 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
       });
       
       if (imageUrls.length > 0) {
-        const imagePreloadPromises = imageUrls.slice(0, 5).map(url => 
+        const imagePreloadPromises = imageUrls.slice(0, 3).map(url => 
           Image.prefetch(url).catch(() => {})
         );
         await Promise.allSettled(imagePreloadPromises);
       }
-      
-    } catch (error) {
-      
-    }
+    } catch (error) {}
   };
 
   useEffect(() => {
@@ -68,45 +63,30 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
       
       setShowContent(true);
       
-      Animated.sequence([
-        // Pantalla negra inicial 0.5s
-        Animated.delay(500),
-        
-        // Fade in suave y trabajado
-        Animated.timing(containerFade, {
-          toValue: 0.3,
-          duration: 400,
-          useNativeDriver: true,
-        }),
+      // Animaciones suaves con useNativeDriver: true
+      Animated.parallel([
         Animated.timing(containerFade, {
           toValue: 1,
-          duration: 800,
+          duration: 1200,
           useNativeDriver: true,
         }),
-        // Entrada de marca
-        Animated.parallel([
-          Animated.timing(brandFade, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(brandSlide, {
-            toValue: 0,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-        ]),
-        
-        // Pausa
-        Animated.delay(400),
+        Animated.timing(brandFade, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(brandSlide, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
       ]).start();
       
-      // Verificar conexión con Firebase solo si estamos autenticados.
       if (isAuthenticated) {
         try {
           await Promise.race([
             getDocs(query(collection(db, 'usuarios'), limit(1))),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 4000)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500)),
           ]);
         } catch (error) {
           if (!isConnected) setLoadingStatus('Sin conexión a Internet');
@@ -115,40 +95,30 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
       
       setLoadingStatus('Cargando datos...');
       
-      // Iniciar animación de la barra
-      progressAnimRef.current = Animated.timing(progressWidth, {
-        toValue: 1,
-        duration: 3500,
-        useNativeDriver: false,
-      }).start();
-      
-      const preloadPromise = Promise.race([
-        Promise.all([preloadLocalAssets(), isAuthenticated ? preloadFirebaseData() : Promise.resolve()]),
-        new Promise(resolve => setTimeout(resolve, 5000)),
-      ]);
-      
-      // Esperar mínimo 2s para ver la barra
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      await preloadPromise;
-      
-      setLoadingStatus('Preparando interfaz...');
-
-      // Completar la barra rápidamente si no está al 100%
-      progressAnimRef.current?.stop();
-      await new Promise(resolve => {
+      // Iniciar animación de progress bar (5 segundos garantizados)
+      const progressPromise = new Promise(resolve => {
         Animated.timing(progressWidth, {
           toValue: 1,
-          duration: 300,
+          duration: 5000,
           useNativeDriver: false,
-        }).start(resolve);
+        }).start(() => resolve());
       });
       
+      // Preload en paralelo (no bloquea la animación)
+      const preloadPromise = Promise.race([
+        Promise.all([preloadLocalAssets(), isAuthenticated ? preloadFirebaseData() : Promise.resolve()]),
+        new Promise(resolve => setTimeout(resolve, 4500)),
+      ]);
+      
+      await Promise.all([progressPromise, preloadPromise]);
+      
+      setLoadingStatus('Preparando interfaz...');
+      await new Promise(resolve => setTimeout(resolve, 300));
       onComplete();
     };
 
     startSequence();
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isConnected]);
 
   return (
     <Animated.View style={[styles.container, { opacity: containerFade }]}>
@@ -171,17 +141,6 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
               ]}
             >
             </Animated.View>
-            
-            <Animated.View 
-              style={[
-                styles.appContainer,
-                {
-                  opacity: appFade,
-                  transform: [{ translateY: appSlide }]
-                }
-              ]}
-            >
-            </Animated.View>
           </View>
         )}
         
@@ -194,12 +153,6 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
         <Animated.View 
           style={[
             styles.progressBarGray,
-            { transform: [{ scaleX: progressWidth }], transformOrigin: '0 0' }
-          ]} 
-        />
-        <Animated.View 
-          style={[
-            styles.progressBarDark,
             { transform: [{ scaleX: progressWidth }], transformOrigin: '0 0' }
           ]} 
         />

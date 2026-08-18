@@ -7,6 +7,7 @@ import NetInfo from '@react-native-community/netinfo';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as ImagePicker from 'expo-image-picker';
 import { Image as ExpoImage } from 'expo-image';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationSystem from './utils/NotificationSystem';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
@@ -31,16 +32,22 @@ import LibroTemp1 from './Temporadas/Temporada1/librotemp1';
 import Capsula1 from './Temporadas/Temporada1/Eventos/capsula';
 import Temporada2 from './Temporadas/Temporada2/temporada2';
 import Kitty from './Temporadas/Temporada2/Kitty';
+import Paleta from './Temporadas/Temporada2/Eventos/paleta';
 import Animalitos from './Animalitos';
 import Canjear from './menus/Canjear';
 import AdminCodigos from './menus/AdminCodigos';
 import Iconos from './menus/Iconos';
 import Pase from './menus/Pase';
+import Juegos from './Juegos/Juegos';
+import TortitasGame from './Juegos/Tortitas/TortitasGame';
+import ConexionesGame from './Juegos/Conexiones/ConexionesGame';
+import Comerciante from './Comerciante';
 
 export default function App() {
   const [loading, setLoading]           = useState(true);
   const [authChecked, setAuthChecked]   = useState(false);
   const [currentScreen, setCurrentScreen] = useState('intro');
+  const [screenParams, setScreenParams]   = useState({});
   const [isConnected, setIsConnected]   = useState(true);
   const [inicioReady, setInicioReady]   = useState(false);
   const toastRef = useRef(null);
@@ -68,6 +75,7 @@ export default function App() {
     const doNavigate = () => {
       currentScreenRef.current = screenName;
       setCurrentScreen(screenName);
+      setScreenParams(params ?? {});
     };
 
     if (ANIMATED_TRANSITIONS.has(key) && loadingRef.current) {
@@ -84,15 +92,30 @@ export default function App() {
   const navigation = useRef({ navigate: navigateToScreen }).current;
   useEffect(() => { navigation.navigate = navigateToScreen; }, [navigateToScreen]);
 
-  // Precargar imágenes después de que Firestore esté listo
+  // Precargar imágenes después de que Firestore esté listo — con throttle
   const preloadImages = useCallback(async () => {
     try {
-      ExpoImage.prefetch(require('./assets/temporadas/libro/panel1.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
-      const snap = await getDocs(collection(db, 'stickers'));
-      const urls = snap.docs.map(d => d.data().imageUrl).filter(Boolean);
-      await Promise.all(
-        urls.map(url => ExpoImage.prefetch(url, { cachePolicy: 'memory-disk', priority: 'high' }))
-      );
+      // Precargar solo la más importante
+      await ExpoImage.prefetch(require('./assets/temporadas/libro/panel1.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/pareja.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/jugar.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      // Precargar las skins del Halcón para que el selector no muestre imágenes tarde.
+      [
+        require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
+        require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png'),
+        require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png'),
+      ].forEach(source => ExpoImage.prefetch(source, { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {}));
+      
+      // Cargar stickers en background sin bloquear
+      getDocs(collection(db, 'stickers')).then(snap => {
+        const urls = snap.docs.map(d => d.data().imageUrl).filter(Boolean);
+        // Precargar máximo 3 en paralelo, no todos
+        urls.slice(0, 3).forEach(url => {
+          setTimeout(() => {
+            ExpoImage.prefetch(url, { cachePolicy: 'memory-disk', priority: 'low' }).catch(() => {});
+          }, Math.random() * 2000); // Distribuir en 2 segundos
+        });
+      }).catch(() => {});
     } catch {}
   }, []);
 
@@ -103,16 +126,22 @@ export default function App() {
       if (currentUser) {
         userRef.current = currentUser;
 
-        Promise.all([
-          NotificationSystem.registerForPushNotifications(),
-          NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName),
-        ]).catch(() => {});
+        // Ejecutar en background sin bloquear
+        setImmediate(() => {
+          NotificationSystem.registerForPushNotifications().catch(() => {});
+          NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName).catch(() => {});
+          NotificationSystem.setupNotificationListeners();
+        });
 
-        NotificationSystem.setupNotificationListeners();
-
+        // Inicializar usuario una sola vez
         getDoc(doc(db, 'usuarios', currentUser.uid)).then(snap => {
           if (snap.exists()) {
             const data = snap.data();
+            if (data.pareja) {
+              getDoc(doc(db, 'usuarios', data.pareja)).then(partnerSnap => {
+                if (partnerSnap.exists()) AsyncStorage.setItem(`pareja_cache_${currentUser.uid}`, JSON.stringify({ id: partnerSnap.id, ...partnerSnap.data() })).catch(() => {});
+              }).catch(() => {});
+            }
             const updates = {};
             if (data.dinero        === undefined) updates.dinero        = 0;
             if (data.nivel         === undefined) updates.nivel         = 1;
@@ -130,9 +159,9 @@ export default function App() {
               fechaUltimaRacha: new Date().toISOString(),
             }).catch(() => {});
           }
+          
+          preloadImages();
         }).catch(() => {});
-
-        preloadImages();
       } else {
         userRef.current = null;
       }
@@ -175,11 +204,10 @@ export default function App() {
 
           {currentScreen === 'login'    && <Login    navigation={navigation} />}
           {currentScreen === 'register' && <Register navigation={navigation} />}
-
-          <Inicio style={{ display: currentScreen === 'main' ? 'flex' : 'none' }} navigation={navigation} onReady={() => setInicioReady(true)} />
+          {currentScreen === 'main'     && <Inicio   navigation={navigation} onReady={() => setInicioReady(true)} />}
           {currentScreen === 'coleccion'       && <Coleccion        navigation={navigation} />}
           {currentScreen === 'tienda'          && <Tienda           navigation={navigation} />}
-          {currentScreen === 'perfil'          && <Perfil           navigation={navigation} />}
+          {currentScreen === 'perfil'          && <Perfil           navigation={navigation} route={{ params: screenParams }} />}
           {currentScreen === 'buzon'           && <Buzon            navigation={navigation} />}
           {currentScreen === 'trofeos'         && <Trofeos          navigation={navigation} />}
           {currentScreen === 'menu'            && <Menu             navigation={navigation} />}
@@ -188,14 +216,19 @@ export default function App() {
           {currentScreen === 'temporada1'      && <Temporada1       navigation={navigation} />}
           {currentScreen === 'temporada2'      && <Temporada2       navigation={navigation} />}
           {currentScreen === 'kitty'             && <Kitty            navigation={navigation} />}
+          {currentScreen === 'paleta'            && <Paleta           navigation={navigation} />}
           {currentScreen === 'historia1'       && <Historia1        navigation={navigation} />}
           {currentScreen === 'capsula1'        && <Capsula1         navigation={navigation} />}
           {currentScreen === 'librotemp1'      && <LibroTemp1       navigation={navigation} />}
-          {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} />}
+          {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} mode={screenParams?.mode} />}
           {currentScreen === 'canjear'          && <Canjear          navigation={navigation} />}
+          {currentScreen === 'comerciante'      && <Comerciante      navigation={navigation} />}
           {currentScreen === 'adminCodigos'      && <AdminCodigos     navigation={navigation} />}
           {currentScreen === 'iconos'             && <Iconos           navigation={navigation} />}
           {currentScreen === 'pase'               && <Pase             navigation={navigation} />}
+          {currentScreen === 'juegos'             && <Juegos           navigation={navigation} />}
+          {currentScreen === 'tortitas'           && <TortitasGame     navigation={navigation} />}
+          {currentScreen === 'conexiones'         && <ConexionesGame   navigation={navigation} />}
           <Loading ref={loadingRef} />
           <Toast ref={toastRef} />
 

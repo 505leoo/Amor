@@ -27,7 +27,7 @@ const ChicleSvg = () => (
 
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX');
 
-const MoneyStrip = ({ userMoney, chicles }) => (
+const MoneyStrip = ({ userMoney, chicles, chicleIcono }) => (
   <View style={styles.moneyStripWrap}>
     <Svg width={STRIP_W + TIP} height={STRIP_H} style={StyleSheet.absoluteFill}>
       <Polygon
@@ -39,14 +39,17 @@ const MoneyStrip = ({ userMoney, chicles }) => (
     <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(userMoney)}</Text>
     {chicles != null && (
       <>
-        <ChicleSvg />
+        {chicleIcono
+          ? <View style={{ marginLeft: 2 }}>{chicleIcono}</View>
+          : <Text style={[styles.moneyStripText, { fontSize: 12 }]}>🎈</Text>
+        }
         <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(chicles)}</Text>
       </>
     )}
   </View>
 );
 
-const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles }) => {
+const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles, chicleIcono }) => {
   const [open, setOpen] = useState(false);
   const slideAnim = useRef(new Animated.Value(-130)).current;
   const [dineroInterno, setDineroInterno] = useState(null);
@@ -101,7 +104,7 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
               <Text style={styles.exitText}>Salir</Text>
             </LinearGradient>
           </TouchableOpacity>
-          <MoneyStrip userMoney={moneyFinal} chicles={chicles} />
+          <MoneyStrip userMoney={moneyFinal} chicles={chicles} chicleIcono={chicleIcono} />
         </Animated.View>
 
         {/* Pestaña visible siempre */}

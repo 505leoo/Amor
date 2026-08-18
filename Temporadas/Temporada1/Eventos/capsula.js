@@ -60,6 +60,22 @@ import RecompensaOverlay from '../../../components/RecompensaOverlay';
 import { db, auth } from '../../../firebaseConfig';
 import { doc, updateDoc, increment, setDoc, onSnapshot } from 'firebase/firestore';
 
+// ── Icono chicle SVG reutilizable ─────────────────────────────────────────────
+const ChicleSvgIcono = (
+  <Svg width={16} height={16}>
+    <Defs>
+      <LinearGradient id="chicleTabGrad" x1="0" y1="0" x2="1" y2="1">
+        <Stop offset="0%"  stopColor="#c4a0f5" />
+        <Stop offset="100%" stopColor="#ff8fa8" />
+      </LinearGradient>
+    </Defs>
+    <Circle cx={8} cy={8} r={7} fill="rgba(255,255,255,0.12)" />
+    <Circle cx={8} cy={8} r={5.5} fill="url(#chicleTabGrad)" />
+    <Circle cx={8} cy={8} r={5.5} fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth={0.8} />
+    <Ellipse cx={5.8} cy={5.8} rx={1.8} ry={1} fill="rgba(255,255,255,0.32)" />
+  </Svg>
+);
+
 // ── Dimensiones ───────────────────────────────────────────────────────────────
 const CW = 190;
 const CH = 330;
@@ -417,6 +433,11 @@ function ModalRecompensaFinal({ onClose }) {
   );
 }
 
+// ── Misiones diarias del evento Cápsula ──────────────────────────────────────
+// Usa el contexto global — las misiones son externas al juego (login, mensajes,
+// minutos jugados, etc.) y la recompensa son chicles para poder seguir jugando.
+// No se pasa misionesEvento ni eventoKey — MisionesDiarias usa useMisiones() global.
+
 // ── Pantalla principal ────────────────────────────────────────────────────────
 export default function Capsula({ navigation }) {
   const [pasos,      setPasos]      = useState(0);
@@ -459,7 +480,14 @@ export default function Capsula({ navigation }) {
   const handleVamos = () => {
     if (cpPendiente !== null || pasos >= totalPasos || chicles <= 0) return;
     const uid = auth.currentUser?.uid;
-    if (uid) updateDoc(doc(db, 'usuarios', uid), { chicles: increment(-1) }).catch(() => {});
+    if (uid) {
+      updateDoc(doc(db, 'usuarios', uid), { chicles: increment(-1) }).catch(() => {});
+      // Progreso misión: pasos
+      const diaKey = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
+      setDoc(doc(db, 'misiones_diarias', diaKey), {
+        [`${uid}_capsula`]: { progreso: { capsula_pasos_hoy: increment(1) } }
+      }, { merge: true }).catch(() => {});
+    }
     setChicles(v => v - 1);
     setPasos(v => v + 1);
   };
@@ -469,13 +497,15 @@ export default function Capsula({ navigation }) {
     const yaReclam = reclamados.includes(idx);
     if (reached && !yaReclam) {
       setReclamados(v => [...v, idx]);
-      if (idx === 1) {
-        const uid = auth.currentUser?.uid;
-        if (uid) await updateDoc(doc(db, 'usuarios', uid), { dinero: increment(250) }).catch(() => {});
-      }
-      if (idx === 2) {
-        const uid = auth.currentUser?.uid;
-        if (uid) await updateDoc(doc(db, 'usuarios', uid), { exp: increment(25) }).catch(() => {});
+      const uid = auth.currentUser?.uid;
+      if (idx === 1 && uid) await updateDoc(doc(db, 'usuarios', uid), { dinero: increment(250) }).catch(() => {});
+      if (idx === 2 && uid) await updateDoc(doc(db, 'usuarios', uid), { exp: increment(25) }).catch(() => {});
+      // Progreso misión: checkpoints
+      if (uid) {
+        const diaKey = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
+        setDoc(doc(db, 'misiones_diarias', diaKey), {
+          [`${uid}_capsula`]: { progreso: { capsula_checkpoints_hoy: increment(1) } }
+        }, { merge: true }).catch(() => {});
       }
       setReward({ titulo: idx === 6 ? '¡META! 🏆' : null, monedas: idx === 1 ? 250 : null, exp: idx === 2 ? 25 : null, texto: (idx === 1 || idx === 2) ? null : '¡Recompensa desbloqueada! 🎁' });
     } else {
@@ -504,7 +534,7 @@ export default function Capsula({ navigation }) {
         contentFit="cover" cachePolicy="memory"
       />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.38)' }]} />
-      <TabButtons onExit={() => navigation?.navigate?.('temporada1')} customAddButton={<View />} chicles={chicles} userMoney={dinero} />
+      <TabButtons onExit={() => navigation?.navigate?.('temporada1')} customAddButton={<View />} chicles={chicles} userMoney={dinero} chicleIcono={ChicleSvgIcono} />
 
       <View style={s.caminoWrap}>
         <CaminoSvg pasos={pasos} reclamados={reclamados} />
@@ -538,7 +568,7 @@ export default function Capsula({ navigation }) {
       </View>
 
       <View style={s.misionesWrap}>
-        <MisionesDiarias />
+        <MisionesDiarias icono={ChicleSvgIcono} />
       </View>
 
       <View style={s.recompensaFinalWrap}>

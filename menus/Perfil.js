@@ -4,9 +4,10 @@ import { Image as ExpoImage } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
-import { Svg, Ellipse, Circle, Rect, Path, Line } from 'react-native-svg';
+import { Svg, Ellipse, Circle, Path } from 'react-native-svg';
 import TabButtons from '../components/TabButtons';
 import TrophyIcon, { getTrophyRank, getTrophyColors } from '../components/TrophyIcon';
+import Player, { SinAnimal } from '../Player';
 
 const generoCorto = (g) => {
   if (g === 'masculino') return 'M';
@@ -17,7 +18,6 @@ const generoCorto = (g) => {
 
 const Torta = () => (
   <View style={tk.wrap}>
-    {/* Velas encima de la torta */}
     <View style={tk.velasRow}>
       {[0,1,2].map(i => (
         <View key={i} style={tk.velaWrap}>
@@ -26,19 +26,16 @@ const Torta = () => (
         </View>
       ))}
     </View>
-    {/* Crema top */}
     <View style={tk.cremaTop}>
       {[0,1,2,3].map(i => (
         <View key={i} style={[tk.cremaPico, { left: i * 5 }]} />
       ))}
     </View>
-    {/* Capa 1 */}
     <View style={tk.capa1}>
       <View style={tk.capa1Deco} />
       <View style={[tk.capa1Deco, { left: 8 }]} />
       <View style={[tk.capa1Deco, { left: 16 }]} />
     </View>
-    {/* Plato */}
     <View style={tk.plato} />
   </View>
 );
@@ -54,20 +51,14 @@ const tk = StyleSheet.create({
     shadowOpacity: 1, shadowRadius: 2, elevation: 3,
   },
   vela: { width: 2.5, height: 6, borderRadius: 1 },
-  cremaTop: {
-    width: 24, height: 4,
-    flexDirection: 'row', overflow: 'hidden',
-  },
+  cremaTop: { width: 24, height: 4, flexDirection: 'row', overflow: 'hidden' },
   cremaPico: {
-    position: 'absolute',
-    width: 6, height: 4, borderRadius: 3,
-    backgroundColor: '#fff8f0',
-    bottom: 0,
+    position: 'absolute', width: 6, height: 4, borderRadius: 3,
+    backgroundColor: '#fff8f0', bottom: 0,
   },
   capa1: {
     width: 26, height: 12, borderRadius: 2,
-    backgroundColor: '#f9a8c9',
-    justifyContent: 'center', overflow: 'hidden',
+    backgroundColor: '#f9a8c9', justifyContent: 'center', overflow: 'hidden',
     borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)',
   },
   capa1Deco: {
@@ -75,21 +66,16 @@ const tk = StyleSheet.create({
     width: 4, height: 4, borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.4)',
   },
-  plato: {
-    width: 30, height: 2.5, borderRadius: 2,
-    backgroundColor: '#e8d5c4',
-  },
+  plato: { width: 30, height: 2.5, borderRadius: 2, backgroundColor: '#e8d5c4' },
 });
 
 const Luna = () => (
   <View style={ln.wrap}>
-    {/* Estrellitas */}
     <View style={[ln.star, { top: 0, right: 2, width: 3, height: 3, borderRadius: 1.5 }]} />
     <View style={[ln.star, { top: 7, right: 0, width: 2, height: 2, borderRadius: 1 }]} />
     <View style={[ln.star, { bottom: 2, right: 1, width: 2.5, height: 2.5, borderRadius: 1.5 }]} />
     <View style={[ln.star, { top: 0, left: 4, width: 2, height: 2, borderRadius: 1 }]} />
     <View style={[ln.star, { bottom: 5, left: 0, width: 1.5, height: 1.5, borderRadius: 1 }]} />
-    {/* Luna llena */}
     <View style={ln.luna}>
       <View style={ln.anillo} />
       <View style={ln.brillo1} />
@@ -105,66 +91,38 @@ const Luna = () => (
 const ln = StyleSheet.create({
   wrap: { width: 28, height: 28, justifyContent: 'center', alignItems: 'center' },
   star: {
-    position: 'absolute',
-    backgroundColor: '#e8e8f8',
-    shadowColor: '#fff', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1, shadowRadius: 3, elevation: 2,
+    position: 'absolute', backgroundColor: '#e8e8f8',
+    shadowColor: '#fff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 3, elevation: 2,
   },
   luna: {
-    width: 22, height: 22, borderRadius: 11,
-    backgroundColor: '#e8edf8',
+    width: 22, height: 22, borderRadius: 11, backgroundColor: '#e8edf8',
     borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.8)',
-    shadowColor: '#a0b4d4', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9, shadowRadius: 7, elevation: 6,
+    shadowColor: '#a0b4d4', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 7, elevation: 6,
     overflow: 'hidden',
   },
   anillo: {
-    position: 'absolute', top: 1, left: 1,
-    width: 18, height: 18, borderRadius: 9,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    backgroundColor: 'transparent',
+    position: 'absolute', top: 1, left: 1, width: 18, height: 18, borderRadius: 9,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'transparent',
   },
-  brillo1: {
-    position: 'absolute', top: 2, left: 3,
-    width: 7, height: 3.5, borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.6)',
-  },
-  brillo2: {
-    position: 'absolute', top: 6, left: 2,
-    width: 3, height: 2, borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  brillo3: {
-    position: 'absolute', top: 3, right: 4,
-    width: 2, height: 2, borderRadius: 1,
-    backgroundColor: 'rgba(255,255,255,0.3)',
-  },
+  brillo1: { position: 'absolute', top: 2, left: 3, width: 7, height: 3.5, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.6)' },
+  brillo2: { position: 'absolute', top: 6, left: 2, width: 3, height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.4)' },
+  brillo3: { position: 'absolute', top: 3, right: 4, width: 2, height: 2, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.3)' },
   crater1: {
-    position: 'absolute', bottom: 4, left: 4,
-    width: 5, height: 5, borderRadius: 2.5,
-    backgroundColor: 'rgba(150,168,200,0.35)',
-    borderWidth: 0.5, borderColor: 'rgba(130,150,185,0.3)',
+    position: 'absolute', bottom: 4, left: 4, width: 5, height: 5, borderRadius: 2.5,
+    backgroundColor: 'rgba(150,168,200,0.35)', borderWidth: 0.5, borderColor: 'rgba(130,150,185,0.3)',
   },
   crater2: {
-    position: 'absolute', bottom: 7, right: 3,
-    width: 3.5, height: 3.5, borderRadius: 2,
-    backgroundColor: 'rgba(150,168,200,0.3)',
-    borderWidth: 0.5, borderColor: 'rgba(130,150,185,0.25)',
+    position: 'absolute', bottom: 7, right: 3, width: 3.5, height: 3.5, borderRadius: 2,
+    backgroundColor: 'rgba(150,168,200,0.3)', borderWidth: 0.5, borderColor: 'rgba(130,150,185,0.25)',
   },
-  crater3: {
-    position: 'absolute', top: 9, right: 3,
-    width: 2.5, height: 2.5, borderRadius: 1.5,
-    backgroundColor: 'rgba(150,168,200,0.25)',
-  },
+  crater3: { position: 'absolute', top: 9, right: 3, width: 2.5, height: 2.5, borderRadius: 1.5, backgroundColor: 'rgba(150,168,200,0.25)' },
 });
 
 const Flor = () => (
   <View style={fl.wrap}>
-    {/* Pétalos */}
     {[0,45,90,135,180,225,270,315].map(deg => (
       <View key={deg} style={[fl.petalo, { transform: [{ rotate: `${deg}deg` }, { translateY: -7 }] }]} />
     ))}
-    {/* Centro */}
     <View style={fl.centro}>
       <View style={fl.centroBrello} />
     </View>
@@ -174,66 +132,36 @@ const Flor = () => (
 const fl = StyleSheet.create({
   wrap: { width: 26, height: 26, justifyContent: 'center', alignItems: 'center' },
   petalo: {
-    position: 'absolute',
-    width: 7, height: 9, borderRadius: 4,
+    position: 'absolute', width: 7, height: 9, borderRadius: 4,
     backgroundColor: '#ffb7d5',
-    shadowColor: '#FF69B4', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.4, shadowRadius: 2, elevation: 1,
+    shadowColor: '#FF69B4', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 2, elevation: 1,
   },
   centro: {
-    width: 10, height: 10, borderRadius: 5,
-    backgroundColor: '#fdd835',
+    width: 10, height: 10, borderRadius: 5, backgroundColor: '#fdd835',
     borderWidth: 1, borderColor: 'rgba(255,200,50,0.6)',
-    shadowColor: '#f5a623', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8, shadowRadius: 3, elevation: 3,
+    shadowColor: '#f5a623', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 3, elevation: 3,
     justifyContent: 'center', alignItems: 'center',
   },
-  centroBrello: {
-    width: 3, height: 3, borderRadius: 1.5,
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    position: 'absolute', top: 2, left: 2,
-  },
+  centroBrello: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,255,0.7)', position: 'absolute', top: 2, left: 2 },
 });
 
 const HelloKitty = () => (
   <Svg width={36} height={28} viewBox="0 0 36 28">
-    {/* Sombra/base del moño */}
     <Ellipse cx="18" cy="15" rx="16" ry="7" fill="rgba(120,0,20,0.12)" />
-
-    {/* Ala izquierda — capa trasera más oscura */}
-    <Path d="M18 14 C15 8 8 6 5 9 C3 11 5 16 10 17 C13 18 16 16 18 14 Z"
-      fill="#b0001e" stroke="#800015" strokeWidth="0.4" />
-    {/* Ala derecha — capa trasera */}
-    <Path d="M18 14 C21 8 28 6 31 9 C33 11 31 16 26 17 C23 18 20 16 18 14 Z"
-      fill="#b0001e" stroke="#800015" strokeWidth="0.4" />
-
-    {/* Ala izquierda — capa principal */}
-    <Path d="M18 13.5 C15 7 7 5 4 8.5 C2 11 4 16.5 10 17.5 C14 18.5 17 16 18 13.5 Z"
-      fill="#e8002a" stroke="#a00020" strokeWidth="0.5" />
-    {/* Ala derecha — capa principal */}
-    <Path d="M18 13.5 C21 7 29 5 32 8.5 C34 11 32 16.5 26 17.5 C22 18.5 19 16 18 13.5 Z"
-      fill="#e8002a" stroke="#a00020" strokeWidth="0.5" />
-
-    {/* Pliegues ala izquierda */}
+    <Path d="M18 14 C15 8 8 6 5 9 C3 11 5 16 10 17 C13 18 16 16 18 14 Z" fill="#b0001e" stroke="#800015" strokeWidth="0.4" />
+    <Path d="M18 14 C21 8 28 6 31 9 C33 11 31 16 26 17 C23 18 20 16 18 14 Z" fill="#b0001e" stroke="#800015" strokeWidth="0.4" />
+    <Path d="M18 13.5 C15 7 7 5 4 8.5 C2 11 4 16.5 10 17.5 C14 18.5 17 16 18 13.5 Z" fill="#e8002a" stroke="#a00020" strokeWidth="0.5" />
+    <Path d="M18 13.5 C21 7 29 5 32 8.5 C34 11 32 16.5 26 17.5 C22 18.5 19 16 18 13.5 Z" fill="#e8002a" stroke="#a00020" strokeWidth="0.5" />
     <Path d="M7 7.5 C9 10 12 12.5 18 13.5" stroke="#c0001f" strokeWidth="0.6" fill="none" strokeLinecap="round" />
     <Path d="M5 11 C7 12.5 11 13.5 16 13.8" stroke="#c0001f" strokeWidth="0.4" fill="none" strokeLinecap="round" />
-    {/* Pliegues ala derecha */}
     <Path d="M29 7.5 C27 10 24 12.5 18 13.5" stroke="#c0001f" strokeWidth="0.6" fill="none" strokeLinecap="round" />
     <Path d="M31 11 C29 12.5 25 13.5 20 13.8" stroke="#c0001f" strokeWidth="0.4" fill="none" strokeLinecap="round" />
-
-    {/* Brillo ala izquierda */}
     <Path d="M7 8 C9 9 11 10 14 11" stroke="rgba(255,180,180,0.5)" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-    {/* Brillo ala derecha */}
     <Path d="M29 8 C27 9 25 10 22 11" stroke="rgba(255,180,180,0.5)" strokeWidth="1.2" fill="none" strokeLinecap="round" />
-
-    {/* Nudo central — capa trasera */}
     <Ellipse cx="18" cy="13.5" rx="3.8" ry="3" fill="#a00020" stroke="#800015" strokeWidth="0.4" />
-    {/* Nudo central — capa principal */}
     <Ellipse cx="18" cy="13" rx="3.2" ry="2.5" fill="#d40028" stroke="#a00020" strokeWidth="0.5" />
-    {/* Pliegue nudo */}
     <Path d="M15.5 12 C16.5 13 17 14 15.5 15" stroke="#a00020" strokeWidth="0.5" fill="none" strokeLinecap="round" />
     <Path d="M20.5 12 C19.5 13 19 14 20.5 15" stroke="#a00020" strokeWidth="0.5" fill="none" strokeLinecap="round" />
-    {/* Brillo nudo */}
     <Ellipse cx="17" cy="11.8" rx="1.2" ry="0.7" fill="rgba(255,200,200,0.55)" />
     <Circle cx="17.2" cy="11.5" r="0.4" fill="rgba(255,255,255,0.4)" />
   </Svg>
@@ -258,35 +186,13 @@ const Sol = () => {
 const sol = StyleSheet.create({
   wrap: { width: 26, height: 26, justifyContent: 'center', alignItems: 'center' },
   rayosWrap: { position: 'absolute', width: 26, height: 26, justifyContent: 'center', alignItems: 'center' },
-  rayo: {
-    position: 'absolute',
-    width: 2,
-    height: 5,
-    borderRadius: 1,
-    backgroundColor: '#f5a623',
-  },
+  rayo: { position: 'absolute', width: 2, height: 5, borderRadius: 1, backgroundColor: '#f5a623' },
   circulo: {
-    width: 13,
-    height: 13,
-    borderRadius: 6.5,
-    backgroundColor: '#fdd835',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#f5a623',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 4,
-    elevation: 4,
+    width: 13, height: 13, borderRadius: 6.5, backgroundColor: '#fdd835',
+    justifyContent: 'center', alignItems: 'center',
+    shadowColor: '#f5a623', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 4, elevation: 4,
   },
-  brillo: {
-    width: 3,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.55)',
-    position: 'absolute',
-    top: 2,
-    left: 2,
-  },
+  brillo: { width: 3, height: 3, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.55)', position: 'absolute', top: 2, left: 2 },
 });
 
 const Row = ({ label, value }) => (
@@ -310,23 +216,28 @@ const Stat = ({ label, value }) => (
   </View>
 );
 
-const Perfil = ({ navigation }) => {
+const Perfil = ({ navigation, route }) => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Si se pasa un uid externo, es modo "ver perfil ajeno" (solo lectura)
+  const externalUid = route?.params?.uid ?? null;
+  const soloLectura = !!externalUid;
+
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user) { setLoading(false); return; }
+    const targetUid = externalUid ?? user?.uid;
+    if (!targetUid) { setLoading(false); return; }
 
     const unsub = onSnapshot(
-      doc(db, 'usuarios', user.uid),
+      doc(db, 'usuarios', targetUid),
       (snap) => {
         if (snap.exists()) {
           const d = snap.data();
           setUserData({
-            nombre: d.datosCompletos?.nombre || d.nombre || user.displayName || 'Usuario',
+            nombre: d.datosCompletos?.nombre || d.nombre || (soloLectura ? 'Usuario' : user?.displayName || 'Usuario'),
             dni: typeof d.dni === 'string' ? d.dni.trim() : null,
-            correo: d.correo || user.email || '—',
+            correo: d.correo || (!soloLectura ? user?.email : null) || '—',
             edad: d.edad ?? null,
             fechaNacimiento: d.fechaNacimiento || null,
             genero: d.genero ?? null,
@@ -337,14 +248,14 @@ const Perfil = ({ navigation }) => {
             exp: typeof d.exp === 'number' ? d.exp : 0,
             racha: typeof d.racha === 'number' ? d.racha : 0,
             estado: d.estado || 'activo',
-            uid: user.uid,
+            uid: targetUid,
           });
         } else {
           setUserData({
-            nombre: user.displayName || 'Usuario',
-            dni: null, correo: user.email || '—',
+            nombre: soloLectura ? 'Usuario' : (user?.displayName || 'Usuario'),
+            dni: null, correo: soloLectura ? '—' : (user?.email || '—'),
             edad: null, fechaNacimiento: null, genero: null,
-            photoURL: null, dinero: 0, nivel: 1, exp: 0, racha: 0, estado: '—', uid: user.uid,
+            photoURL: null, dinero: 0, nivel: 1, exp: 0, racha: 0, estado: '—', uid: targetUid,
             iconoUrl: null,
           });
         }
@@ -353,7 +264,7 @@ const Perfil = ({ navigation }) => {
       () => setLoading(false),
     );
     return () => unsub();
-  }, []);
+  }, [externalUid]);
 
   const d = userData;
   const nivel = d?.nivel ?? 1;
@@ -370,9 +281,9 @@ const Perfil = ({ navigation }) => {
         cachePolicy="memory-disk"
       />
       <TabButtons
-        onExit={() => navigation?.navigate('main')}
-        userMoney={userData?.dinero ?? 0}
-        onAddSticker={() => navigation?.navigate?.('coleccion')}
+        onExit={() => navigation?.navigate(soloLectura ? 'main' : 'main')}
+        userMoney={soloLectura ? undefined : (userData?.dinero ?? 0)}
+        onAddSticker={soloLectura ? undefined : () => navigation?.navigate?.('coleccion')}
       />
 
       <View style={s.center}>
@@ -390,7 +301,11 @@ const Perfil = ({ navigation }) => {
 
               {/* Columna izquierda: avatar + trofeo */}
               <View style={s.leftCol}>
-                <TouchableOpacity style={s.photoShell} onPress={() => navigation?.navigate('iconos')} activeOpacity={0.8}>
+                <TouchableOpacity
+                  style={s.photoShell}
+                  onPress={() => !soloLectura && navigation?.navigate('iconos')}
+                  activeOpacity={soloLectura ? 1 : 0.8}
+                >
                   {d.iconoUrl
                     ? <ExpoImage source={{ uri: d.iconoUrl }} style={s.photoImg} contentFit="cover" cachePolicy="memory-disk" />
                     : d.photoURL
@@ -440,9 +355,16 @@ const Perfil = ({ navigation }) => {
 
               <View style={s.dividerV} />
 
-              {/* Columna extra */}
+              {/* Columna animal */}
               <View style={s.extraCol}>
-                <Text style={s.extraText}>Chau</Text>
+                <View style={s.animalWrap}>
+                  <Player
+                    uid={d.uid}
+                    containerStyle={s.animalContainer}
+                    imageStyle={s.animalImage}
+                    placeholder={<SinAnimal />}
+                  />
+                </View>
                 <View style={s.extraDivider} />
                 <View style={[s.extraBottom, { marginLeft: -10 }]}>
                   <View style={s.iconItem}>
@@ -514,17 +436,17 @@ const s = StyleSheet.create({
   photoShell: {
     width: 88,
     height: 88,
-    borderRadius: 44,
+    borderRadius: 4,
     overflow: 'hidden',
-    borderWidth: 2,
+    borderWidth: 3,
     top: -7,
-    borderColor: '#c9748f',
-    backgroundColor: 'transparent',
+    borderColor: '#333',
+    backgroundColor: '#0a0a0a',
     justifyContent: 'center',
     alignItems: 'center',
   },
   photoImg: { width: '100%', height: '100%' },
-  photoFallback: { width: 88, height: 88, borderRadius: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(201,116,143,0.2)' },
+  photoFallback: { width: 88, height: 88, borderRadius: 4, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0a0a' },
   photoLetter: { fontSize: 32, fontWeight: '800', color: '#c9748f' },
 
   trophyBlock: { alignItems: 'center', marginTop: 8 },
@@ -565,12 +487,15 @@ const s = StyleSheet.create({
   statLabel: { fontSize: 6, fontWeight: '700', color: '#c9748f', letterSpacing: 1, marginTop: 1 },
   statDiv: { width: 1, height: 22, backgroundColor: 'rgba(90,42,58,0.15)' },
 
-  extraCol: { width: 80, justifyContent: 'center', alignItems: 'flex-start', paddingLeft: 0 },
+  extraCol: { width: 80, justifyContent: 'flex-start', alignItems: 'flex-start', paddingLeft: 0, marginTop: -24 },
   extraText: { fontSize: 10, color: '#5a2a3a', fontWeight: '600' },
-  extraDivider: { height: 1, backgroundColor: 'rgba(90,42,58,0.15)', marginVertical: 8, width: '160%', marginLeft: '-9%' },
+  extraDivider: { height: 1, backgroundColor: 'rgba(90,42,58,0.15)', marginVertical: 0, marginTop: -12, width: '160%', marginLeft: '-9%' },
   holaX: { fontSize: 7, color: '#F44336', fontWeight: '800', marginTop: 2 },
-  extraBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginLeft: -15 },
+  extraBottom: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, marginLeft: -15, marginTop: 6 },
   iconItem: { alignItems: 'center' },
+  animalWrap: { width: '100%', height: 72, marginBottom: 4 },
+  animalContainer: { width: 80, height: 80, position: 'absolute', top: -8, left: 18 },
+  animalImage: { width: '100%', height: '100%', top: 0, left: 0 },
 });
 
 export default Perfil;

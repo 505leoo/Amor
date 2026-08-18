@@ -83,10 +83,8 @@ class PushyService {
   static manageNotificationQueue(token, title, body, collapseKey) {
     if (!token) return false;
     this._cleanupQueue();
-    console.log('[PUSHY][QUEUE] manageNotificationQueue start', { token: token && token.substring ? token.substring(0,10)+'...' : token, collapseKey, queueLength: this.notificationQueue.length });
     const existingIndex = this.notificationQueue.findIndex(entry => entry.token === token && entry.collapseKey && collapseKey && entry.collapseKey === collapseKey);
     if (existingIndex !== -1) {
-      console.log('[PUSHY][QUEUE] merged into existing pending entry', { token: token && token.substring ? token.substring(0,10)+'...' : token, collapseKey, existingIndex });
       this.notificationQueue[existingIndex].timestamp = Date.now();
       this.notificationQueue[existingIndex].title = title;
       this.notificationQueue[existingIndex].body = body;
@@ -94,7 +92,6 @@ class PushyService {
     }
 
     if (collapseKey && this._isRecentSend(token, collapseKey)) {
-      console.log('[PUSHY][QUEUE] skipped_recently', { token: token && token.substring ? token.substring(0,10)+'...' : token, collapseKey });
       return 'skipped_recently';
     }
 
@@ -128,18 +125,15 @@ class PushyService {
       }
 
       if (replaceIndex !== -1) {
-        console.log('[PUSHY][QUEUE] replacing oldest pending notification', { token: token && token.substring ? token.substring(0,10)+'...' : token, replaceIndex });
         this.notificationQueue[replaceIndex] = { token, title, body, collapseKey, timestamp: Date.now() };
         this._addRecentSend(token, collapseKey);
         return 'replaced';
       }
-      console.log('[PUSHY][QUEUE] skipped_max_reached', { token: token && token.substring ? token.substring(0,10)+'...' : token });
       return false;
     }
 
     this.notificationQueue.push({ token, title, body, collapseKey, timestamp: Date.now() });
     this._addRecentSend(token, collapseKey);
-    console.log('[PUSHY][QUEUE] enqueued', { token: token && token.substring ? token.substring(0,10)+'...' : token, collapseKey, queueLength: this.notificationQueue.length });
     return 'queued';
   }
 
@@ -179,7 +173,6 @@ class PushyService {
 static async sendCustomNotification(tokens, title, body, data = {}, imageUrl = null, sound = true) {
     try {
       if (!this._canSendDedupe(title, body)) {
-        console.log('[PUSHY] Notificación duplicada omitida (mismo title+body en 10 min)');
         return { success: true, sent: 0, dedupe: true };
       }
 
@@ -200,7 +193,6 @@ static async sendCustomNotification(tokens, title, body, data = {}, imageUrl = n
       const sendNotification = httpsCallable(functions, 'sendPushyNotification');
       const payloadData = { ...data, title, message: body };
 
-      console.log('[PUSHY] sending notifications', { tokensToSend, collapseKey, payloadData });
       const results = await Promise.allSettled(
         tokensToSend.map(token => sendNotification({ token, title, body, data: payloadData, collapseKey }).then(res => {
           return res;
@@ -209,7 +201,6 @@ static async sendCustomNotification(tokens, title, body, data = {}, imageUrl = n
           return { error: err.message || err, token };
         }))
       );
-      console.log('[PUSHY] send results', { tokensToSend, rawResults: results });
       
       const successfulResults = results.map((r, i) => ({ result: r, token: tokensToSend[i] }));
       const successful = successfulResults.filter(r => r.result && r.result.status === 'fulfilled' && r.result.value && !r.result.value.error).length;

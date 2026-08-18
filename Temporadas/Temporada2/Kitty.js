@@ -1,183 +1,242 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, StatusBar, TouchableOpacity, Text, Modal, Alert, ScrollView, Animated } from 'react-native';
+import {
+  View, StyleSheet, StatusBar, TouchableOpacity, Modal,
+  ScrollView, Animated, Text, ActivityIndicator, Alert,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as DocumentPicker from 'expo-document-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
-import ViewShot from 'react-native-view-shot';
-import { ref, deleteObject } from 'firebase/storage';
-import { collection, addDoc, getDocs, deleteDoc, query, orderBy, doc } from 'firebase/firestore';
-import { auth, db, storage } from '../../firebaseConfig';
+import { collection, getDocs, query, orderBy, addDoc, serverTimestamp, where, deleteDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { db, storage, auth } from '../../firebaseConfig';
+
+const STORAGE_BUCKET = 'amor-9df0d.firebasestorage.app';
+
+const uploadSvgRest = async (svgString, path) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('Not authenticated');
+  const token = await user.getIdToken();
+  const fullPath = path;
+  const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodeURIComponent(fullPath)}?uploadType=media`;
+  const res = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'image/svg+xml', Authorization: `Bearer ${token}` },
+    body: svgString,
+  });
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  return `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o/${encodeURIComponent(fullPath)}?alt=media`;
+};
 import TabButtons from '../../components/TabButtons';
 import Loading from '../../components/Loading';
 import { MaterialIcons } from '@expo/vector-icons';
 
-const BUCKET = 'amor-9df0d.firebasestorage.app';
-const ADMIN_EMAIL = 'admin@gmail.com';
+const THUMB_COUNT = 5;
 
-const parseSeconds = (str) => {
-  const parts = str.split(':');
-  if (parts.length === 2) return (parseInt(parts[0]) || 0) * 60 + (parseInt(parts[1]) || 0);
-  return parseInt(str) || 0;
-};
+// Type selector modal (SuperCute / Clasica)
+const TypeModal = ({ visible, onCancel, onSelect }) => (
+  <Modal visible={visible} transparent animationType="slide" statusBarTranslucent onRequestClose={onCancel}>
+    <View style={styles.uploadOverlay}>
+      <View style={[styles.uploadSheet, { alignItems: 'center', paddingVertical: 14 }] }>
+        <Text style={[styles.uploadTitle, { marginBottom: 10 }]}>Elegir tipo de miniatura</Text>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <TouchableOpacity style={[styles.smallBtn, { minWidth: 140 }]} onPress={() => onSelect('SuperCute')}>
+            <Text style={styles.smallBtnText}>SuperCute</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.smallBtn, { minWidth: 140 }]} onPress={() => onSelect('Clasica')}>
+            <Text style={styles.smallBtnText}>Clasica</Text>
+          </TouchableOpacity>
+        </View>
+        <TouchableOpacity onPress={onCancel} style={[styles.headerBtn, { marginTop: 12 }]}><Text style={styles.headerBtnText}>Cancelar</Text></TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+);
 
-const formatTime = (secs) => {
-  const m = Math.floor(secs / 60).toString().padStart(2, '0');
-  const s = Math.floor(secs % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
-};
-
-const ThumbPickerModal = ({ uri, onConfirm, onCancel }) => {
-  const [timeStr, setTimeStr] = useState('00:00');
-  const [thumbUri, setThumbUri] = useState(null);
+// ─── Upload / Pick modal ─────────────────────────────────────────────────────
+const UploadModal = ({ asset, visible, onCancel, onConfirm }) => {
+  const player = useVideoPlayer(asset?.uri, p => { p.pause(); });
+  
+  const [thumbLocal, setThumbLocal] = useState(null);
+  const [localThumbs, setLocalThumbs] = useState([]);
+  const [selectedThumbIdx, setSelectedThumbIdx] = useState(0);
   const [generating, setGenerating] = useState(false);
-  const [ready, setReady] = useState(false);
-  const player = useVideoPlayer(uri, p => { p.pause(); p.currentTime = 0; });
-  const isPlayingRef = useRef(false);
-  const intervalRef = useRef(null);
-  const viewShotRef = useRef(null);
+  const [selectedTime, setSelectedTime] = useState(0); // seconds
 
   useEffect(() => {
-    const sub1 = player.addListener('statusChange', ({ status }) => {
-      if (status === 'readyToPlay') setReady(true);
-    });
-    const sub2 = player.addListener('playingChange', ({ isPlaying }) => {
-      isPlayingRef.current = isPlaying;
-    });
-    intervalRef.current = setInterval(() => {
-      if (isPlayingRef.current) setTimeStr(formatTime(player.currentTime));
-    }, 250);
-    return () => {
-      sub1.remove();
-      sub2.remove();
-      clearInterval(intervalRef.current);
-      try { player.pause(); } catch (_) {}
-    };
-  }, []);
+    if (!visible) return;
+    player.pause();
+    setThumbLocal(null);
+    setSelectedTime(0);
+  }, [visible]);
 
-  const seek = (delta) => {
-    const next = Math.max(0, player.currentTime + delta);
-    player.currentTime = next;
-    setTimeStr(formatTime(next));
+  
+
+  const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+  const getStableCurrentTime = async (attempts = 6, delay = 120) => {
+    let last = (player.currentTime != null) ? player.currentTime : 0;
+    for (let i = 0; i < attempts; i++) {
+      await new Promise(r => setTimeout(r, delay));
+      const now = (player.currentTime != null) ? player.currentTime : last;
+      if (Math.abs(now - last) < 0.06) return now;
+      last = now;
+    }
+    return last;
   };
 
-  const handleCapture = async () => {
-    if (!ready) { console.log('[capture] not ready'); return; }
+  const generatePreviewFromTime = async (timeSeconds) => {
     setGenerating(true);
     try {
-      player.pause();
-      await new Promise(r => setTimeout(r, 100));
-      const uri = await viewShotRef.current.capture();
-      console.log('[capture] viewshot uri:', uri);
-      setThumbUri(uri);
+      const timeMs = Math.round(timeSeconds * 1000);
+      const { uri } = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: timeMs, quality: 0.85 });
+      setThumbLocal(uri);
     } catch (e) {
-      console.log('[capture] ERROR:', e?.message);
+      // ignore preview errors
+    }
+    setGenerating(false);
+  };
+
+  const nudgeTime = async (deltaSeconds) => {
+    try {
+      const dur = player.duration ? (player.duration > 1000 ? player.duration / 1000 : player.duration) : 0;
+      const raw = (player.currentTime != null) ? ((player.currentTime > 1000) ? player.currentTime / 1000 : player.currentTime) : selectedTime;
+      let next = raw + deltaSeconds;
+      if (dur > 0) next = clamp(next, 0, dur);
+      setSelectedTime(next);
+      try { player.currentTime = next; } catch (_) {}
+      await new Promise(r => setTimeout(r, 220));
+      await generatePreviewFromTime(next);
+    } catch (_) {}
+  };
+
+  const captureFrame = async () => {
+    setGenerating(true);
+    try {
+      // Ensure paused and use selectedTime (set via pause or nudges)
+      try { player.pause(); } catch (_) {}
+      // If selectedTime is not set, poll player.currentTime until stable
+      let seconds = selectedTime;
+      if (!seconds && seconds !== 0) {
+        const raw = await getStableCurrentTime();
+        seconds = raw > 1000 ? raw / 1000 : raw;
+      } else {
+        // ensure player seeks to selectedTime
+        try { player.currentTime = seconds; } catch (_) {}
+        await new Promise(r => setTimeout(r, 260));
+        const raw = await getStableCurrentTime();
+        seconds = raw > 1000 ? raw / 1000 : raw;
+      }
+      seconds = Math.max(0, seconds || 0);
+
+      const timeMs = Math.round(seconds * 1000);
+      const offset = 80; // ms around target to try
+      const times = [Math.max(0, timeMs - offset), timeMs, timeMs + offset];
+      const generated = [];
+      for (const t of times) {
+        try {
+          const { uri } = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: t, quality: 0.95 });
+          generated.push(uri);
+        } catch (_) {
+          generated.push(null);
+        }
+      }
+      const firstValid = generated.findIndex(u => !!u);
+      const sel = firstValid >= 0 ? firstValid : 1;
+      setLocalThumbs(generated);
+      setSelectedThumbIdx(sel);
+      setThumbLocal(generated[sel]);
+      setSelectedTime(seconds);
+    } catch (e) {
+      Alert.alert('Error', e.message || String(e));
     }
     setGenerating(false);
   };
 
   return (
-    <Modal visible animationType="slide" statusBarTranslucent transparent>
-      <View style={styles.tpOverlay}>
-        <View style={styles.tpBox}>
-          <Text style={styles.tpTitle}>Elegir miniatura</Text>
-          <ViewShot ref={viewShotRef} style={styles.tpVideoWrap} options={{ format: 'jpg', quality: 1 }}>
-            <VideoView player={player} style={styles.tpVideo} contentFit="cover" nativeControls={false} />
-            {thumbUri && (
-              <View style={StyleSheet.absoluteFill}>
-                <Image source={{ uri: thumbUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
-                <TouchableOpacity style={styles.tpThumbRemove} onPress={() => setThumbUri(null)} activeOpacity={0.8}>
-                  <MaterialIcons name="close" size={20} color="#fff" />
+    <Modal visible={visible} animationType="slide" statusBarTranslucent onRequestClose={onCancel}>
+      <View style={styles.uploadOverlay}>
+        <View style={styles.uploadSheet}>
+          <View style={styles.uploadHeader}>
+            <TouchableOpacity onPress={onCancel} style={styles.headerBtn}><Text style={styles.headerBtnText}>Cancelar</Text></TouchableOpacity>
+            <Text style={[styles.uploadTitle, { flex: 1, textAlign: 'center' }]}>Preview y miniatura</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {!thumbLocal ? (
+                <TouchableOpacity onPress={() => onConfirm({ asset, thumbLocal })} disabled={!thumbLocal} style={styles.headerBtn}>
+                  <Text style={[styles.headerBtnText, { color: thumbLocal ? '#fff' : '#666' }]}>Usar y subir</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity onPress={() => { setThumbLocal(null); setLocalThumbs([]); setSelectedThumbIdx(0); setSelectedTime(0); }} style={styles.headerBtn}>
+                    <Text style={styles.headerBtnText}>Reintentar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => onConfirm({ asset, thumbLocal })} style={[styles.headerBtn, { backgroundColor: '#e91e8c' }] }>
+                    <Text style={[styles.headerBtnText, { color: '#fff' }]}>Subir</Text>
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          </View>
+
+          <View style={[styles.previewWrap, styles.previewLarge, thumbLocal ? { height: 360 } : {}]}>
+            {thumbLocal ? (
+              <Image source={{ uri: thumbLocal }} style={styles.preview} contentFit="cover" />
+            ) : (
+              <VideoView player={player} style={styles.preview} contentFit="cover" nativeControls={true} />
+            )}
+            {generating && (
+              <View style={styles.thumbLoadingOverlay}><ActivityIndicator size="large" color="#fff" /></View>
+            )}
+          </View>
+
+          {localThumbs && localThumbs.length > 0 && (
+            <View style={styles.thumbSelectorRow}>
+              {localThumbs.map((uri, i) => (
+                <TouchableOpacity key={i} onPress={() => { if (uri) { setSelectedThumbIdx(i); setThumbLocal(uri); } }} style={[styles.selectorThumbWrap, selectedThumbIdx === i && styles.selectorThumbActive]}>
+                  {uri ? <Image source={{ uri }} style={styles.selectorThumb} contentFit="cover" /> : <View style={styles.selectorThumbPlaceholder}><Text style={{color:'#777'}}>—</Text></View>}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          {!thumbLocal && (
+            <>
+              <View style={[styles.controlsRow, { justifyContent: 'center' }]}>
+                <TouchableOpacity style={[styles.smallBtn, styles.captureBtn, { minWidth: 120 }]} onPress={captureFrame} disabled={generating}>
+                  {generating ? <ActivityIndicator color="#fff" /> : <Text style={[styles.smallBtnText, { color: '#fff' }]}>Capturar</Text>}
                 </TouchableOpacity>
               </View>
-            )}
-          </ViewShot>
-          <View style={styles.tpRow}>
-            <TouchableOpacity style={styles.tpSeekBtn} onPress={() => seek(-1)} activeOpacity={0.8}>
-              <MaterialIcons name="replay" size={20} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.tpPlayBtn} onPress={() => player.playing ? player.pause() : player.play()} activeOpacity={0.8}>
-              <MaterialIcons name={player.playing ? 'pause' : 'play-arrow'} size={26} color="#fff" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.tpSeekBtn} onPress={() => seek(1)} activeOpacity={0.8}>
-              <MaterialIcons name="forward" size={20} color="#fff" />
-            </TouchableOpacity>
-            <Text style={styles.tpTime}>{timeStr}</Text>
-            <TouchableOpacity style={[styles.tpGenBtn, !ready && styles.tpBtnDisabled]} onPress={handleCapture} activeOpacity={0.8} disabled={!ready}>
-              <Text style={styles.tpGenTxt}>{generating ? '...' : !ready ? 'Cargando' : 'Capturar'}</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.tpActions}>
-            <TouchableOpacity style={styles.tpCancelBtn} onPress={onCancel} activeOpacity={0.8}>
-              <Text style={styles.tpCancelTxt}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tpConfirmBtn, !thumbUri && styles.tpBtnDisabled]}
-              onPress={() => thumbUri && onConfirm(thumbUri)}
-              activeOpacity={0.8}
-              disabled={!thumbUri}
-            >
-              <Text style={styles.tpConfirmTxt}>Subir</Text>
-            </TouchableOpacity>
-          </View>
+
+              <View style={styles.controlsRow}>
+                <View style={styles.nudgeContainer}>
+                  <TouchableOpacity style={styles.smallBtn} onPress={() => nudgeTime(-1)}>
+                    <Text style={styles.smallBtnText}>-1s</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.smallBtn} onPress={() => nudgeTime(-0.1)}>
+                    <Text style={styles.smallBtnText}>-0.1s</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.smallBtn} onPress={() => nudgeTime(0.1)}>
+                    <Text style={styles.smallBtnText}>+0.1s</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.smallBtn} onPress={() => nudgeTime(1)}>
+                    <Text style={styles.smallBtnText}>+1s</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={{ justifyContent: 'center' }}>
+                  <Text style={styles.timeBadge}>{(selectedTime || 0).toFixed(2)}s</Text>
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* header contains Cancel / Reintentar / Subir or Usar y subir */}
         </View>
       </View>
     </Modal>
   );
 };
 
-const uploadVideo = async (uri, titulo, thumbLocalUri, onDone) => {
-  const token = await auth.currentUser.getIdToken();
-  const ext = uri.split('.').pop()?.toLowerCase() || 'mp4';
-  const mime = ext === 'mov' ? 'video/quicktime' : 'video/mp4';
-  const fullPath = `kitty_videos/${titulo}`;
-  const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(fullPath)}?uploadType=media`;
-  global.showToast?.({ text1: 'Subiendo video', text2: '0%', type: 'info', duration: 99999 });
-  try {
-    const task = FileSystem.createUploadTask(
-      uploadUrl, uri,
-      {
-        httpMethod: 'POST',
-        headers: { 'Content-Type': mime, Authorization: `Bearer ${token}` },
-        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      },
-      ({ totalBytesSent, totalBytesExpectedToSend }) => {
-        if (totalBytesExpectedToSend > 0) {
-          const pct = Math.round((totalBytesSent / totalBytesExpectedToSend) * 100);
-          global.showToast?.({ text1: 'Subiendo video', text2: `${pct}%`, type: 'info', duration: 99999 });
-        }
-      }
-    );
-    const res = await task.uploadAsync();
-    if (!res || res.status < 200 || res.status >= 300) throw new Error(`Upload failed: ${res?.status}`);
-    const url = `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(fullPath)}?alt=media`;
-
-    let thumbUrl = null;
-    if (thumbLocalUri) {
-      try {
-        const thumbPath = `kitty_thumbs/${titulo}.jpg`;
-        const thumbUploadUrl = `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(thumbPath)}?uploadType=media`;
-        const thumbTask = FileSystem.createUploadTask(
-          thumbUploadUrl, thumbLocalUri,
-          { httpMethod: 'POST', headers: { 'Content-Type': 'image/jpeg', Authorization: `Bearer ${token}` }, uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT }
-        );
-        const thumbRes = await thumbTask.uploadAsync();
-        if (thumbRes?.status >= 200 && thumbRes?.status < 300) {
-          thumbUrl = `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(thumbPath)}?alt=media`;
-        }
-      } catch (_) {}
-    }
-
-    await addDoc(collection(db, 'kitty_videos'), { titulo, url, thumbUrl, createdAt: Date.now() });
-    global.showToast?.({ text1: 'Video subido', text2: '¡Listo! 🎉', type: 'success' });
-    onDone?.();
-  } catch (e) {
-    console.error(e);
-    global.showToast?.({ text1: 'Error al subir', text2: 'Intenta de nuevo', type: 'error' });
-  }
-};
-
+// ─── Fullscreen Player ────────────────────────────────────────────────────────
 const FullscreenPlayer = ({ item, onClose }) => {
   const player = useVideoPlayer(item.url, p => { p.loop = true; p.play(); });
   return (
@@ -192,9 +251,8 @@ const FullscreenPlayer = ({ item, onClose }) => {
   );
 };
 
-const THUMB_COUNT = 5;
-
-const VideoItem = ({ item, gestion, activo, onPress, onEliminar }) => {
+// ─── Video card sin thumbUrl guardada ────────────────────────────────────────
+const VideoItemWithPlayer = ({ item, gestion, activoId, setActivoId, onEliminar }) => {
   const player = useVideoPlayer(item.url, p => { p.pause(); p.currentTime = 0; });
   const [fullscreen, setFullscreen] = useState(false);
   const [thumbs, setThumbs] = useState([]);
@@ -202,7 +260,6 @@ const VideoItem = ({ item, gestion, activo, onPress, onEliminar }) => {
   const thumbOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (item.thumbUrl) return;
     const sub = player.addListener('statusChange', async ({ status }) => {
       if (status === 'readyToPlay') {
         player.pause();
@@ -211,8 +268,14 @@ const VideoItem = ({ item, gestion, activo, onPress, onEliminar }) => {
           const dur = player.duration;
           if (dur > 0) {
             const times = Array.from({ length: THUMB_COUNT }, (_, i) => (dur / (THUMB_COUNT + 1)) * (i + 1));
-            const generated = await player.generateThumbnailsAsync(times, { maxWidth: 400, maxHeight: 400 });
-            setThumbs(generated);
+            try {
+              const generated = await Promise.all(times.map(async t => {
+                const timeMs = t > 1000 ? Math.round(t) : Math.round(t * 1000);
+                const r = await VideoThumbnails.getThumbnailAsync(item.url, { time: timeMs, quality: 0.6 });
+                return r.uri || r;
+              }));
+              setThumbs(generated);
+            } catch (_) {}
           }
         } catch (_) {}
       }
@@ -233,125 +296,184 @@ const VideoItem = ({ item, gestion, activo, onPress, onEliminar }) => {
   }, [thumbs]);
 
   return (
-    <View style={styles.itemWrap}>
-      {gestion && activo && (
-        <View style={styles.acciones}>
-          <TouchableOpacity onPress={onEliminar} style={styles.accionBtn}>
-            <Text style={styles.accionEmoji}>🗑️</Text>
+    <View style={styles.videoCard}>
+      {thumbs.length > 0 ? (
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: thumbOpacity }]}>
+          <Image source={thumbs[thumbIdx]} style={styles.video} contentFit="cover" />
+        </Animated.View>
+      ) : (
+        <View style={[styles.video, { backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' }] }>
+          <MaterialIcons name="play-circle-outline" size={36} color="#888" />
+        </View>
+      )}
+      <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => {
+        if (gestion) { onEliminar(item); return; }
+        setFullscreen(true);
+      }} activeOpacity={0.8}>
+        <View style={styles.videoOverlay}>
+          <MaterialIcons name="play-circle-filled" size={36} color="rgba(255,255,255,0.9)" />
+        </View>
+      </TouchableOpacity>
+      {gestion && (
+        <View style={styles.gestionActions} pointerEvents="box-none">
+          <TouchableOpacity onPress={() => onEliminar(item)} style={styles.gestionBtn}>
+            <MaterialIcons name="delete" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
       )}
-      <View style={styles.videoCard}>
-        {item.thumbUrl ? (
-          <Image source={{ uri: item.thumbUrl }} style={styles.video} contentFit="cover" />
-        ) : thumbs.length > 0 ? (
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: thumbOpacity }]}>
-            <Image source={thumbs[thumbIdx]} style={styles.video} contentFit="cover" />
-          </Animated.View>
-        ) : (
-          <VideoView player={player} style={styles.video} contentFit="cover" nativeControls={false} />
-        )}
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          onPress={() => gestion ? onPress() : setFullscreen(true)}
-          activeOpacity={0.8}
-        >
-          {!gestion && (
-            <View style={styles.videoOverlay}>
-              <MaterialIcons name="play-circle-filled" size={36} color="rgba(255,255,255,0.9)" />
-            </View>
-          )}
-          {gestion && activo && <View style={styles.videoOverlayActivo} />}
-        </TouchableOpacity>
-      </View>
       {fullscreen && <FullscreenPlayer item={item} onClose={() => setFullscreen(false)} />}
     </View>
   );
 };
 
+// ─── Video card con thumbUrl ──────────────────────────────────────────────────
+const VideoItem = ({ item, gestion, activoId, setActivoId, onEliminar }) => {
+  const [fullscreen, setFullscreen] = useState(false);
+  const shouldHideLegacyThumb = !!item.thumbUrl && /EP\d|EP[A-Z]/i.test(item.thumbUrl);
+  if (!item.thumbUrl || shouldHideLegacyThumb) return <VideoItemWithPlayer item={item} gestion={gestion} activoId={activoId} setActivoId={setActivoId} onEliminar={onEliminar} />;
+  return (
+    <View style={styles.videoCard}>
+      <View style={[styles.video, { backgroundColor: '#fff', justifyContent: 'flex-end', alignItems: 'flex-start', paddingBottom: 8, paddingLeft: 8 }] }>
+          <Image source={{ uri: item.thumbUrl }} style={styles.video} contentFit="cover" cachePolicy="memory-disk" />
+        </View>
+      <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => {
+        if (gestion) { onEliminar(item); return; }
+        setFullscreen(true);
+      }} activeOpacity={0.8}>
+        <View style={styles.videoOverlay}>
+          <MaterialIcons name="play-circle-filled" size={36} color="rgba(255,255,255,0.9)" />
+        </View>
+      </TouchableOpacity>
+      {gestion && activoId === item.id && (
+        <View style={styles.gestionActions}>
+          <TouchableOpacity onPress={() => onEliminar(item)} style={styles.gestionBtn}>
+            <Text style={{ color: '#fff' }}>🗑️</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+      {fullscreen && <FullscreenPlayer item={item} onClose={() => setFullscreen(false)} />}
+    </View>
+  );
+};
+
+// ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function Kitty({ navigation }) {
   const loadingRef = useRef(null);
   const [videos, setVideos] = useState([]);
-  const [gestion, setGestion] = useState(false);
-  const [activoId, setActivoId] = useState(null);
-  const [pendingUri, setPendingUri] = useState(null);
-  const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
-
-  console.log('[render] pendingUri:', pendingUri);
 
   useEffect(() => { loadingRef.current?.fadeOut(); }, []);
-  useEffect(() => { fetchVideos(); }, []);
 
-  const fetchVideos = async () => {
-    const snap = await getDocs(query(collection(db, 'kitty_videos'), orderBy('createdAt', 'asc')));
-    setVideos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-  };
-
-  const handleUpload = useCallback(async () => {
-    console.log('[handleUpload] botón presionado');
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    console.log('[handleUpload] permiso:', JSON.stringify(perm));
-    if (!perm.granted) {
-      console.log('[handleUpload] permiso denegado');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['videos'], allowsEditing: false, quality: 1 });
-    console.log('[handleUpload] picker result:', JSON.stringify(result));
-    if (result.canceled || !result.assets?.[0]?.uri) {
-      console.log('[handleUpload] cancelado o sin uri');
-      return;
-    }
-    const srcUri = result.assets[0].uri;
-    console.log('[handleUpload] srcUri:', srcUri);
-    const ext = srcUri.split('.').pop()?.split('?')[0] || 'mp4';
-    const localUri = FileSystem.cacheDirectory + `pending_video_${Date.now()}.${ext}`;
-    try {
-      await FileSystem.copyAsync({ from: srcUri, to: localUri });
-      console.log('[handleUpload] copiado a:', localUri);
-      setTimeout(() => {
-        console.log('[handleUpload] setPendingUri localUri');
-        console.log('[handleUpload] pendingUri antes:', pendingUri);
-        setPendingUri(localUri);
-      }, 300);
-    } catch (e) {
-      console.log('[handleUpload] error al copiar:', e?.message);
-      setTimeout(() => {
-        console.log('[handleUpload] setPendingUri srcUri (fallback)');
-        setPendingUri(srcUri);
-      }, 300);
-    }
+  useEffect(() => {
+    getDocs(query(collection(db, 'kitty_videos'), orderBy('createdAt', 'asc')))
+      .then(snap => setVideos(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
   }, []);
 
-  const handleThumbConfirm = useCallback((thumbLocalUri) => {
-    console.log('[handleThumbConfirm] thumbLocalUri:', thumbLocalUri);
-    const uri = pendingUri;
-    setPendingUri(null);
-    const titulo = `kitty-video${videos.length + 1}`;
-    uploadVideo(uri, titulo, thumbLocalUri, fetchVideos);
-  }, [pendingUri, videos.length]);
+  const [pickedAsset, setPickedAsset] = useState(null);
+  const [typeModalVisible, setTypeModalVisible] = useState(false);
+  const [gestion, setGestion] = useState(false);
+  const [activoId, setActivoId] = useState(null);
+
+  const ADMIN_EMAIL = 'admin@gmail.com';
+
+  const uploadFile = useCallback(async (localUri, path) => {
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    const storageRef = ref(storage, path);
+    return new Promise((resolve, reject) => {
+      const task = uploadBytesResumable(storageRef, blob);
+      task.on('state_changed',
+        () => {},
+        reject,
+        async () => resolve(await getDownloadURL(task.snapshot.ref))
+      );
+    });
+  }, []);
+
+  const uploadBlob = useCallback(async (blob, path) => {
+    const storageRef = ref(storage, path);
+    return new Promise((resolve, reject) => {
+      const task = uploadBytesResumable(storageRef, blob);
+      task.on('state_changed', () => {}, reject, async () => resolve(await getDownloadURL(task.snapshot.ref)));
+    });
+  }, []);
+
+  const kittyLogoUrlRef = useRef(null);
+
+  const ensureKittyLogoUrl = useCallback(async () => {
+    if (kittyLogoUrlRef.current) return kittyLogoUrlRef.current;
+
+    const source = Image.resolveAssetSource(require('../../assets/temporadas/libro/Temporada2/logokitty.png'));
+    const response = await fetch(source.uri);
+    const blob = await response.blob();
+    kittyLogoUrlRef.current = await uploadBlob(blob, 'kitty_brand/logokitty.png');
+    return kittyLogoUrlRef.current;
+  }, [uploadBlob]);
+
+  const handleAddVideo = useCallback(async () => {
+    const result = await DocumentPicker.getDocumentAsync({ type: 'video/*', copyToCacheDirectory: true });
+    if (result.canceled) return;
+    const asset = result.assets[0];
+    setPickedAsset(asset);
+    setTypeModalVisible(true);
+  }, []);
+
+  const toggleGestion = () => {
+    setGestion(prev => !prev);
+    setActivoId(null);
+  };
 
   const handleEliminar = (video) => {
-    Alert.alert('Eliminar', `¿Eliminar "${video.titulo}"?`, [
+    Alert.alert('Eliminar', `¿Eliminar episodio ${video.episode || ''}?`, [
       { text: 'Cancelar', style: 'cancel' },
-      {
-        text: 'Eliminar', style: 'destructive',
-        onPress: async () => {
-          try {
-            await deleteDoc(doc(db, 'kitty_videos', video.id));
-            try { await deleteObject(ref(storage, `kitty_videos/${video.titulo}`)); } catch (_) {}
-            try { await deleteObject(ref(storage, `kitty_thumbs/${video.titulo}.jpg`)); } catch (_) {}
-            setVideos(prev => prev.filter(v => v.id !== video.id));
-            setActivoId(null);
-          } catch (e) { console.error(e); }
-        },
-      },
+      { text: 'Eliminar', style: 'destructive', onPress: async () => {
+        try {
+          await deleteDoc(doc(db, 'kitty_videos', video.id));
+          setVideos(prev => prev.filter(v => v.id !== video.id));
+          setActivoId(null);
+        } catch (e) { console.error('Error eliminando video:', e); }
+      } },
     ]);
   };
 
-  const toggleGestion = () => { setGestion(prev => !prev); setActivoId(null); };
+  const handleTypeSelect = useCallback(async (type) => {
+    setTypeModalVisible(false);
+    if (!pickedAsset) return;
+    const asset = pickedAsset;
+    try {
+      // count existing episodes for this type
+      const q = query(collection(db, 'kitty_videos'), where('type', '==', type));
+      const snap = await getDocs(q);
+      const episode = snap.size + 1;
 
+      // use the Kitty logo directly as the default thumbnail so it definitely renders in the list
+      const logoUrl = await ensureKittyLogoUrl();
+      const thumbUrl = logoUrl;
+
+      const ts = Date.now();
+      const videoUrl = await uploadFile(asset.uri, `kitty_videos/${ts}.mp4`);
+      const doc = await addDoc(collection(db, 'kitty_videos'), {
+        url: videoUrl,
+        thumbUrl,
+        type,
+        episode,
+        createdAt: serverTimestamp(),
+      });
+      setVideos(prev => [...prev, { id: doc.id, url: videoUrl, thumbUrl, type, episode }]);
+    } catch (e) {
+      Alert.alert('Error', e.message || String(e));
+    } finally {
+      setPickedAsset(null);
+    }
+  }, [pickedAsset, uploadBlob, uploadFile]);
+ 
+
+  const handleUploaded = useCallback((newVideo) => {
+    setVideos(prev => [...prev, newVideo]);
+  }, []);
+
+  const superCuteVideos = videos.filter(item => item.type === 'SuperCute');
   const filas = [];
-  for (let i = 0; i < videos.length; i += 5) filas.push(videos.slice(i, i + 5));
+  for (let i = 0; i < superCuteVideos.length; i += 5) filas.push(superCuteVideos.slice(i, i + 5));
 
   return (
     <View style={styles.container}>
@@ -364,46 +486,59 @@ export default function Kitty({ navigation }) {
       />
       <TabButtons
         onExit={() => navigation?.navigate?.('temporada2')}
-        customAddButton={
-          isAdmin ? (
-            <View style={styles.topBtns} pointerEvents="auto">
-              <TouchableOpacity onPress={toggleGestion} activeOpacity={0.7} style={[styles.manageBtn, gestion && styles.btnActivo]}>
-                <MaterialIcons name="list" size={20} color="#fff" />
+        customAddButton={(
+          <View style={{ flexDirection: 'row' }}>
+            {auth.currentUser?.email === ADMIN_EMAIL && (
+              <TouchableOpacity onPress={toggleGestion} activeOpacity={0.7} style={{ marginRight: 8 }}>
+                <View style={[{ width: 52, height: 52, backgroundColor: gestion ? '#e91e8c' : '#8a5a6a', justifyContent: 'center', alignItems: 'center', borderRadius: 6 }]}>
+                  <MaterialIcons name={gestion ? 'close' : 'list'} size={20} color="#fff" />
+                </View>
               </TouchableOpacity>
-              <TouchableOpacity onPress={handleUpload} activeOpacity={0.7} style={styles.addBtn}>
+            )}
+            <TouchableOpacity onPress={handleAddVideo} activeOpacity={0.7}>
+              <View style={[{ width: 52, height: 52, backgroundColor: '#f39c12', justifyContent: 'center', alignItems: 'center' }]}>
                 <MaterialIcons name="add" size={20} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          ) : <View />
-        }
+              </View>
+            </TouchableOpacity>
+          </View>
+        )}
       />
 
-      {videos.length > 0 && (
-        <View style={styles.listWrap}>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {filas.map((fila, fi) => (
-              <View key={fi} style={styles.row}>
-                {fila.map(item => (
-                  <VideoItem
-                    key={item.id}
-                    item={item}
-                    gestion={gestion}
-                    activo={activoId === item.id}
-                    onPress={() => setActivoId(activoId === item.id ? null : item.id)}
-                    onEliminar={() => handleEliminar(item)}
-                  />
-                ))}
-              </View>
-            ))}
-          </ScrollView>
-        </View>
+      {superCuteVideos.length > 0 && (
+        <>
+          <View style={styles.logoHeader}>
+            <Image
+              source={require('../../assets/temporadas/libro/Temporada2/logokitty.png')}
+              style={styles.logoImage}
+              contentFit="contain"
+            />
+          </View>
+          <View style={styles.listWrap}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {filas.map((fila, fi) => (
+                <View key={fi} style={styles.row}>
+                  {fila.map(item => (
+                    <VideoItem
+                      key={item.id}
+                      item={item}
+                      gestion={gestion}
+                      activoId={activoId}
+                      setActivoId={setActivoId}
+                      onEliminar={handleEliminar}
+                    />
+                  ))}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </>
       )}
 
-      {pendingUri && (
-        <ThumbPickerModal
-          uri={pendingUri}
-          onConfirm={handleThumbConfirm}
-          onCancel={() => setPendingUri(null)}
+      {pickedAsset && (
+        <TypeModal
+          visible={typeModalVisible}
+          onCancel={() => { setTypeModalVisible(false); setPickedAsset(null); }}
+          onSelect={handleTypeSelect}
         />
       )}
 
@@ -414,38 +549,73 @@ export default function Kitty({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  topBtns: { flexDirection: 'row' },
-  manageBtn: { width: 44, height: 44, backgroundColor: '#8a5a6a', justifyContent: 'center', alignItems: 'center' },
-  addBtn: { width: 44, height: 44, backgroundColor: '#4CAF50', borderBottomLeftRadius: 25, justifyContent: 'center', alignItems: 'center' },
-  btnActivo: { backgroundColor: '#5a2a3a' },
-  listWrap: { position: 'absolute', top: 80, left: 125, maxHeight: '80%' },
+  listWrap: { position: 'absolute', top: 120, left: 125, maxHeight: '80%' },
+  logoHeader: {
+    position: 'absolute',
+    top: 52,
+    left: 132,
+    width: 180,
+    height: 58,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  logoImage: { width: 180, height: 58 },
   row: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  itemWrap: { alignItems: 'center' },
-  acciones: { flexDirection: 'row', gap: 2, marginBottom: 2 },
-  accionBtn: { padding: 1 },
-  accionEmoji: { fontSize: 14 },
   videoCard: { width: 100, height: 100, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' },
   video: { width: '100%', height: '100%' },
   videoOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
-  videoOverlayActivo: { flex: 1, backgroundColor: 'rgba(201,116,143,0.35)' },
-  tpOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  tpBox: { backgroundColor: '#1a1a2e', borderRadius: 16, padding: 16, width: '100%', maxWidth: 380, gap: 12 },
-  tpTitle: { color: '#fff', fontSize: 16, fontWeight: '600', textAlign: 'center' },
-  tpVideoWrap: { width: '100%', height: 180, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' },
-  tpVideo: { width: '100%', height: 180 },
-  tpThumbRemove: { position: 'absolute', top: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 14, padding: 3 },
-  tpRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  tpSeekBtn: { backgroundColor: '#2a2a3e', borderRadius: 8, padding: 8 },
-  tpPlayBtn: { backgroundColor: '#8a5a6a', borderRadius: 8, padding: 8 },
-  tpTime: { flex: 1, color: '#fff', fontSize: 16, letterSpacing: 2, textAlign: 'center' },
-  tpGenBtn: { backgroundColor: '#8a5a6a', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
-  tpGenTxt: { color: '#fff', fontWeight: '600' },
-  tpActions: { flexDirection: 'row', gap: 8 },
-  tpCancelBtn: { flex: 1, backgroundColor: '#333', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  tpCancelTxt: { color: '#aaa', fontWeight: '600' },
-  tpConfirmBtn: { flex: 1, backgroundColor: '#4CAF50', borderRadius: 8, paddingVertical: 12, alignItems: 'center' },
-  tpConfirmTxt: { color: '#fff', fontWeight: '600' },
-  tpBtnDisabled: { backgroundColor: '#555' },
   fsContainer: { flex: 1, backgroundColor: '#000' },
   fsClose: { position: 'absolute', top: 40, right: 16, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: 4, zIndex: 10 },
+
+  // FAB
+  uploadFab: {
+    position: 'absolute', bottom: 24, right: 24,
+    width: 52, height: 52, borderRadius: 26,
+    backgroundColor: '#f39c12',
+    justifyContent: 'center', alignItems: 'center',
+    elevation: 6,
+  },
+
+  // Upload modal
+  uploadOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'flex-end' },
+  uploadSheet: { backgroundColor: '#1a1a2e', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36 },
+  uploadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  uploadTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+
+  pickBtn: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40, gap: 12 },
+  pickText: { color: '#aaa', fontSize: 15 },
+
+  previewWrap: { width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', backgroundColor: '#111', marginBottom: 12, justifyContent: 'center', alignSelf: 'center', marginVertical: 8 },
+  preview: { width: '100%', height: '100%' },
+  previewPlaceholder: { flex: 1, backgroundColor: '#1d1d1d', justifyContent: 'center', alignItems: 'center' },
+  thumbLoadingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+
+  progressWrap: { height: 20, backgroundColor: '#333', borderRadius: 10, overflow: 'hidden', marginBottom: 12, justifyContent: 'center' },
+  progressBar: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: '#e91e8c', borderRadius: 10 },
+  progressText: { color: '#fff', fontSize: 11, textAlign: 'center' },
+
+  uploadActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  changeBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#555', alignItems: 'center' },
+  changeBtnText: { color: '#ccc', fontWeight: '600' },
+  confirmBtn: { flex: 2, paddingVertical: 12, borderRadius: 10, backgroundColor: '#e91e8c', alignItems: 'center' },
+  confirmBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  // Compact controls used in modal
+  previewLarge: { height: 260 },
+  smallBtn: { paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#555', alignItems: 'center', justifyContent: 'center' },
+  smallBtnText: { color: '#ccc', fontWeight: '600', fontSize: 12 },
+  captureBtn: { backgroundColor: '#e91e8c', borderColor: 'transparent' },
+  controlsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 },
+  nudgeContainer: { flexDirection: 'row', gap: 8 },
+  timeBadge: { color: '#ccc', fontSize: 13, fontWeight: '600' },
+  headerBtn: { paddingHorizontal: 8, paddingVertical: 6, marginLeft: 6, borderRadius: 8 },
+  headerBtnText: { color: '#fff', fontWeight: '700' },
+  thumbSelectorRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 10 },
+  selectorThumbWrap: { width: 72, height: 72, borderRadius: 6, overflow: 'hidden', borderWidth: 2, borderColor: 'transparent' },
+  selectorThumb: { width: '100%', height: '100%' },
+  selectorThumbActive: { borderColor: '#e91e8c' },
+  selectorThumbPlaceholder: { width: 72, height: 72, backgroundColor: '#222', justifyContent: 'center', alignItems: 'center' },
+  gestionActions: { position: 'absolute', top: 6, left: 6, flexDirection: 'row', gap: 6, zIndex: 200 },
+  gestionBtn: { minWidth: 40, height: 36, borderRadius: 6, backgroundColor: '#e91e8c', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
+  // removed videoCardGestion to avoid visual side-effects when toggling gestion
 });

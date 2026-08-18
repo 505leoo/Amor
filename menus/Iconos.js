@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, StatusBar, TouchableOpacity,
-  ScrollView, TextInput, Alert, ActivityIndicator,
+  ScrollView, TextInput, Alert, ActivityIndicator, Modal,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -14,6 +14,9 @@ import { Buffer } from 'buffer';
 
 const BUCKET = 'amor-9df0d.firebasestorage.app';
 const ADMIN_EMAIL = 'admin@gmail.com';
+
+const SECCIONES = ['temporada', 'evento', 'animales'];
+const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', animales: '🐾 Animales' };
 
 const uploadToStorage = async (uri, nombre) => {
   const user = auth.currentUser;
@@ -32,13 +35,36 @@ const uploadToStorage = async (uri, nombre) => {
   return `https://firebasestorage.googleapis.com/v0/b/${BUCKET}/o/${encodeURIComponent(fullPath)}?alt=media`;
 };
 
-const nextNombre = (iconos) => {
+const SECCION_PREFIX = { temporada: 't', evento: 'e', animales: 'a' };
+
+const nextNombre = (iconos, seccion) => {
+  const prefix = SECCION_PREFIX[seccion] || 'x';
+  const pattern = new RegExp(`^icono_${prefix}_(\\d+)$`);
   const nums = iconos
-    .map(ic => parseInt(ic.nombre?.replace('icono_', '') || '0', 10))
-    .filter(n => !isNaN(n));
+    .map(ic => { const m = ic.nombre?.match(pattern); return m ? parseInt(m[1], 10) : null; })
+    .filter(n => n !== null);
   const max = nums.length ? Math.max(...nums) : 0;
-  return `icono_${String(max + 1).padStart(2, '0')}`;
+  return `icono_${prefix}_${max + 1}`;
 };
+
+// ── Modal selector de sección ─────────────────────────────────────────────────
+const SeccionModal = ({ visible, onSelect, onCancel }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <View style={m.backdrop}>
+      <View style={m.card}>
+        <Text style={m.titulo}>¿En qué sección?</Text>
+        {SECCIONES.map(sec => (
+          <TouchableOpacity key={sec} style={m.opcion} onPress={() => onSelect(sec)} activeOpacity={0.75}>
+            <Text style={m.opcionText}>{SECCION_LABELS[sec]}</Text>
+          </TouchableOpacity>
+        ))}
+        <TouchableOpacity style={m.cancelar} onPress={onCancel}>
+          <Text style={m.cancelarText}>Cancelar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+);
 
 // ── Modal editar nombre ───────────────────────────────────────────────────────
 const EditModal = ({ icono, onCancel, onSave }) => {
@@ -62,7 +88,7 @@ const EditModal = ({ icono, onCancel, onSave }) => {
 };
 
 // ── Icono individual ──────────────────────────────────────────────────────────
-const IconoItem = ({ ic, gestion, activo, seleccionado, onPress, onEliminar, onEditar }) => (
+const IconoItem = ({ ic, gestion, activo, seleccionado, separador, onPress, onEliminar, onEditar }) => (
   <View style={s.itemWrap}>
     {gestion && activo && (
       <View style={s.acciones}>
@@ -75,7 +101,7 @@ const IconoItem = ({ ic, gestion, activo, seleccionado, onPress, onEliminar, onE
       </View>
     )}
     <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
-      <View style={[s.cuadro, gestion && activo && s.cuadroActivo, seleccionado && s.cuadroSeleccionado]}>
+      <View style={[s.cuadro, gestion && activo && s.cuadroActivo, seleccionado && s.cuadroSeleccionado, separador && s.cuadroSep]}>
         <ExpoImage source={{ uri: ic.url }} style={s.icImg} contentFit="cover" cachePolicy="memory" />
         {seleccionado && (
           <View style={s.checkOverlay}>
@@ -88,6 +114,84 @@ const IconoItem = ({ ic, gestion, activo, seleccionado, onPress, onEliminar, onE
   </View>
 );
 
+const SECCION_POR_FILA = { temporada: 3, evento: 2, animales: 3 };
+const SECCION_ANCHO = { temporada: 204, evento: 136, animales: 204 }; // n×64 + (n-1)×4
+
+// ── Fila de N iconos ──────────────────────────────────────────────────────────
+const FilaIconos = ({ iconos, gestion, activoId, iconoSeleccionado, setActivoId, handleSeleccionar, handleEliminar, setEditTarget, porFila = 3 }) => {
+  const filas = [];
+  for (let i = 0; i < iconos.length; i += porFila) filas.push(iconos.slice(i, i + porFila));
+  return (
+    <>
+      {filas.map((fila, fi) => (
+        <View key={fi} style={s.fila}>
+          {fila.map(ic => (
+            <IconoItem
+              key={ic.id}
+              ic={ic}
+              gestion={gestion}
+              activo={activoId === ic.id}
+              seleccionado={!gestion && iconoSeleccionado === ic.url}
+              onPress={() => gestion
+                ? setActivoId(activoId === ic.id ? null : ic.id)
+                : handleSeleccionar(ic)
+              }
+              onEliminar={() => handleEliminar(ic)}
+              onEditar={() => setEditTarget(ic)}
+            />
+          ))}
+        </View>
+      ))}
+    </>
+  );
+};
+
+// ── Lista unificada con separadores ──────────────────────────────────────────
+const ListaUnificada = ({ porSeccion, sinSeccion, gestion, activoId, iconoSeleccionado, setActivoId, handleSeleccionar, handleEliminar, setEditTarget }) => {
+  const POR_FILA = 7;
+
+  // Aplanar iconos marcando cuál es el último de su sección
+  const secciones = [...SECCIONES.map(sec => porSeccion[sec]).filter(arr => arr.length > 0)];
+  if (sinSeccion.length > 0) secciones.push(sinSeccion);
+
+  const planos = [];
+  secciones.forEach((secIconos, si) => {
+    secIconos.forEach((ic, idx) => {
+      const esUltimoDeSec = idx === secIconos.length - 1 && si < secciones.length - 1;
+      planos.push({ ic, esUltimoDeSec });
+    });
+  });
+
+  // Armar filas de 7
+  const filas = [];
+  for (let i = 0; i < planos.length; i += POR_FILA) filas.push(planos.slice(i, i + POR_FILA));
+
+  return (
+    <>
+      {filas.map((fila, fi) => (
+        <View key={fi} style={s.fila}>
+          {fila.map(({ ic, esUltimoDeSec }) => (
+            <IconoItem
+              key={ic.id}
+              ic={ic}
+              gestion={gestion}
+              activo={activoId === ic.id}
+              seleccionado={!gestion && iconoSeleccionado === ic.url}
+              separador={esUltimoDeSec}
+              onPress={() => gestion
+                ? setActivoId(activoId === ic.id ? null : ic.id)
+                : handleSeleccionar(ic)
+              }
+              onEliminar={() => handleEliminar(ic)}
+              onEditar={() => setEditTarget(ic)}
+            />
+          ))}
+        </View>
+      ))}
+    </>
+  );
+};
+
 // ── Pantalla principal ────────────────────────────────────────────────────────
 const Iconos = ({ navigation }) => {
   const [iconos, setIconos] = useState([]);
@@ -96,6 +200,8 @@ const Iconos = ({ navigation }) => {
   const [activoId, setActivoId] = useState(null);
   const [editTarget, setEditTarget] = useState(null);
   const [iconoSeleccionado, setIconoSeleccionado] = useState(null);
+  const [showSeccionModal, setShowSeccionModal] = useState(false);
+  const [pendingUri, setPendingUri] = useState(null);
 
   const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
 
@@ -125,17 +231,26 @@ const Iconos = ({ navigation }) => {
     } catch (e) { console.error('Error al seleccionar icono:', e); }
   };
 
+  // Paso 1: elegir imagen
   const handleSubir = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images', allowsEditing: true, aspect: [1, 1], quality: 0.85,
     });
     if (result.canceled) return;
+    setPendingUri(result.assets[0].uri);
+    setShowSeccionModal(true);
+  };
+
+  // Paso 2: elegir sección y subir
+  const handleConfirmarSeccion = async (seccion) => {
+    setShowSeccionModal(false);
+    if (!pendingUri) return;
     setUploading(true);
     try {
-      const nombre = nextNombre(iconos);
-      const url = await uploadToStorage(result.assets[0].uri, nombre);
+      const nombre = nextNombre(iconos, seccion);
+      const url = await uploadToStorage(pendingUri, nombre);
       await addDoc(collection(db, 'iconos'), {
-        nombre, url, creadoEn: new Date(), creadoPor: auth.currentUser?.uid,
+        nombre, url, seccion, creadoEn: new Date(), creadoPor: auth.currentUser?.uid,
       });
       await cargarIconos();
     } catch (e) {
@@ -143,6 +258,7 @@ const Iconos = ({ navigation }) => {
       Alert.alert('Error', 'No se pudo subir el icono');
     } finally {
       setUploading(false);
+      setPendingUri(null);
     }
   };
 
@@ -178,9 +294,18 @@ const Iconos = ({ navigation }) => {
     setEditTarget(null);
   };
 
-  // Agrupar en filas de 10
-  const filas = [];
-  for (let i = 0; i < iconos.length; i += 10) filas.push(iconos.slice(i, i + 10));
+  // Agrupar por sección, ordenados numéricamente por nombre
+  const sortByNombre = (arr) => [...arr].sort((a, b) => {
+    const numA = parseInt(a.nombre?.match(/_(\d+)$/)?.[1] ?? '0', 10);
+    const numB = parseInt(b.nombre?.match(/_(\d+)$/)?.[1] ?? '0', 10);
+    return numA - numB;
+  });
+
+  const porSeccion = SECCIONES.reduce((acc, sec) => {
+    acc[sec] = sortByNombre(iconos.filter(ic => ic.seccion === sec));
+    return acc;
+  }, {});
+  const sinSeccion = sortByNombre(iconos.filter(ic => !ic.seccion || !SECCIONES.includes(ic.seccion)));
 
   return (
     <View style={s.root}>
@@ -204,14 +329,16 @@ const Iconos = ({ navigation }) => {
                 </View>
               </TouchableOpacity>
             )}
-            <TouchableOpacity onPress={handleSubir} activeOpacity={0.7} style={s.touchable} disabled={uploading}>
-              <View style={[s.addBtn, uploading && s.btnDisabled]}>
-                {uploading
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <MaterialIcons name="add" size={20} color="#fff" />
-                }
-              </View>
-            </TouchableOpacity>
+            {isAdmin && (
+              <TouchableOpacity onPress={handleSubir} activeOpacity={0.7} style={s.touchable} disabled={uploading}>
+                <View style={[s.addBtn, uploading && s.btnDisabled]}>
+                  {uploading
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <MaterialIcons name="add" size={20} color="#fff" />
+                  }
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -225,11 +352,6 @@ const Iconos = ({ navigation }) => {
         />
 
         <View style={s.box}>
-          {iconos.length === 0 && !uploading && (
-            <Text style={s.vacio}>Sin iconos — pulsa + para añadir</Text>
-          )}
-
-          {/* Si estamos editando, mostramos el editor en lugar de la lista */}
           {editTarget ? (
             <EditModal
               icono={editTarget}
@@ -237,30 +359,35 @@ const Iconos = ({ navigation }) => {
               onSave={handleGuardarEdicion}
             />
           ) : (
-            filas.map((fila, fi) => (
-              <View key={fi} style={s.fila}>
-                {fila.map((ic, idx) => (
-                  <React.Fragment key={ic.id}>
-                    {idx > 0 && idx % 3 === 0 && <View style={s.grupSep} />}
-                    <IconoItem
-                      ic={ic}
-                      gestion={gestion}
-                      activo={activoId === ic.id}
-                      seleccionado={!gestion && iconoSeleccionado === ic.url}
-                      onPress={() => gestion
-                        ? setActivoId(activoId === ic.id ? null : ic.id)
-                        : handleSeleccionar(ic)
-                      }
-                      onEliminar={() => handleEliminar(ic)}
-                      onEditar={() => { setEditTarget(ic); setActivoId(null); }}
-                    />
-                  </React.Fragment>
-                ))}
-              </View>
-            ))
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={s.scrollContent}
+            >
+              {iconos.length === 0 && !uploading && (
+                <Text style={s.vacio}>Sin iconos — pulsa + para añadir</Text>
+              )}
+              <ListaUnificada
+                porSeccion={porSeccion}
+                sinSeccion={sinSeccion}
+                gestion={gestion}
+                activoId={activoId}
+                iconoSeleccionado={iconoSeleccionado}
+                setActivoId={setActivoId}
+                handleSeleccionar={handleSeleccionar}
+                handleEliminar={handleEliminar}
+                setEditTarget={setEditTarget}
+              />
+            </ScrollView>
           )}
         </View>
       </View>
+
+      {/* Modal selector de sección */}
+      <SeccionModal
+        visible={showSeccionModal}
+        onSelect={handleConfirmarSeccion}
+        onCancel={() => { setShowSeccionModal(false); setPendingUri(null); }}
+      />
     </View>
   );
 };
@@ -269,18 +396,40 @@ const Iconos = ({ navigation }) => {
 const s = StyleSheet.create({
   root: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingLeft: 220 },
-  panelImg: { position: 'absolute', width: 650, height: 650, opacity: 0.85, left: 100 },
+  panelImg: { position: 'absolute', width: 650, height: 650, opacity: 0.85, left: 80, top: -148 },
 
   box: {
     position: 'absolute',
-    top: 80,
-    left: 173,
-    width: 600,
-    flexDirection: 'column',
+    top: 72,
+    left: 168,
+    width: 484, // 7×64px + 6×4px gap
+    height: 208, // 3 filas × 64px + 2 gaps × 4px + respiro
+  },
+  scrollContent: {
+    gap: 4,
+    paddingBottom: 12,
+  },
+
+  cuadroSep: {
+    borderRightWidth: 3,
+    borderRightColor: 'rgba(90,42,58,0.18)',
+  },
+  seccionWrap: {
     gap: 4,
   },
-  fila: { flexDirection: 'row', alignItems: 'flex-end', gap: 4 },
-  grupSep: { width: 10 },
+  seccionScroll: {
+    flex: 1,
+  },
+  seccionTitulo: {
+    fontSize: 9,
+    color: '#5a2a3a',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+
+  fila: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginBottom: 4 },
 
   itemWrap: { alignItems: 'center' },
   acciones: {
@@ -330,6 +479,61 @@ const s = StyleSheet.create({
   },
   btnActivo: { backgroundColor: '#5a2a3a' },
   btnDisabled: { backgroundColor: '#bbb' },
+});
+
+// ── Estilos modal sección ─────────────────────────────────────────────────────
+const m = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  card: {
+    backgroundColor: '#fdf0f4',
+    borderRadius: 14,
+    padding: 20,
+    width: 220,
+    gap: 10,
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,155,179,0.4)',
+    shadowColor: '#ff9bb3',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  titulo: {
+    fontFamily: 'Omori',
+    fontSize: 13,
+    color: '#e8607a',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  opcion: {
+    backgroundColor: '#fff7f9',
+    borderRadius: 9,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,143,168,0.3)',
+    alignItems: 'center',
+  },
+  opcionText: {
+    fontFamily: 'Omori',
+    fontSize: 11,
+    color: '#e8607a',
+  },
+  cancelar: {
+    alignItems: 'center',
+    paddingVertical: 6,
+    marginTop: 2,
+  },
+  cancelarText: {
+    fontFamily: 'Delius',
+    fontSize: 10,
+    color: 'rgba(90,42,58,0.5)',
+  },
 });
 
 // ── Estilos edición ───────────────────────────────────────────────────────────
