@@ -39,7 +39,6 @@ import AdminCodigos from './menus/AdminCodigos';
 import Iconos from './menus/Iconos';
 import Pase from './menus/Pase';
 import Juegos from './Juegos/Juegos';
-import TortitasGame from './Juegos/Tortitas/TortitasGame';
 import ConexionesGame from './Juegos/Conexiones/ConexionesGame';
 import Comerciante from './Comerciante';
 
@@ -227,7 +226,6 @@ export default function App() {
           {currentScreen === 'iconos'             && <Iconos           navigation={navigation} />}
           {currentScreen === 'pase'               && <Pase             navigation={navigation} />}
           {currentScreen === 'juegos'             && <Juegos           navigation={navigation} />}
-          {currentScreen === 'tortitas'           && <TortitasGame     navigation={navigation} />}
           {currentScreen === 'conexiones'         && <ConexionesGame   navigation={navigation} />}
           <Loading ref={loadingRef} />
           <Toast ref={toastRef} />
