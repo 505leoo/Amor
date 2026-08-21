@@ -16,11 +16,12 @@ const IMAGENES = [
 
 const POR_PAGINA = 4;
 
-export default function LibroTemp1({ navigation }) {
+export default function LibroTemp1({ navigation, route }) {
+  const destinoSalida = route?.params?.from === 'capsula1' ? 'capsula1' : 'temporada1';
+  const salidaCapsula = route?.params?.returnTo || 'temporada1';
   const [desbloqueadas, setDesbloqueadas] = useState({});
   const [pagina, setPagina] = useState(0);
   const [halconDesbloqueado, setHalconDesbloqueado] = useState(false);
-  const [historia1Desbloqueada, setHistoria1Desbloqueada] = useState(false);
   const [reclamando, setReclamando] = useState(false);
 
   useEffect(() => {
@@ -37,7 +38,6 @@ export default function LibroTemp1({ navigation }) {
     getDoc(doc(db, 'usuarios', uid)).then(snap => {
       if (snap.exists()) {
         setHalconDesbloqueado(!!snap.data().halconDesbloqueado);
-        setHistoria1Desbloqueada(!!snap.data().recompensaCapsula1);
       }
     }).catch(() => {});
     return unsub;
@@ -66,10 +66,19 @@ export default function LibroTemp1({ navigation }) {
   const esPagina2 = pagina === 1;
 
   const POSICIONES = [
-    { top: '26%',  left: '26.5%', texto: 'El día que todo comenzó...' },
-    { top: '26%', left: '59.6%', texto: 'Una sonrisa que no olvidé.' },
-    { top: '57%', left: '26.1%', texto: 'La lluvia y tus manos.' },
-    { top: '57%', left: '60%', texto: 'Un regalo sin palabras.' },
+    { top: '26%',  left: '24.2%' },
+    { top: '26%', left: '57.3%' },
+    { top: '55.5%', left: '23.8%' },
+    { top: '57%', left: '57.7%' },
+  ];
+
+  const DESCRIPCIONES = [
+    'El amanecer llego en silencio, pintando el cielo de dorado. A lo lejos, un pequeno capullo esperaba su momento.',
+    'Nos acercamos despacio. Entre la luz tibia y el rocio, algo se movio dentro de aquel capullo.',
+    'Entonces aparecio el pequeno Halcon: fragil, confundido y con una mirada que parecia pedirle permiso al mundo.',
+    'Intento extender sus alas. Cayo una vez, y otra mas. El cielo parecia enorme, casi imposible de alcanzar.',
+    'Pero siguio intentandolo. Cada tropiezo le dejo una pluma de valor y cada amanecer le devolvio las ganas.',
+    'Hasta que finalmente volo. No fue un vuelo perfecto, pero si el suyo: libre, valiente y hermoso.',
   ];
 
   return (
@@ -77,7 +86,7 @@ export default function LibroTemp1({ navigation }) {
       <StatusBar hidden />
       <Image source={require('../../assets/temporadas/libro/Temporada1/fondo1.png')} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} contentFit="cover" cachePolicy="memory" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
-      <TabButtons onExit={() => navigation?.navigate?.('temporada1')} customAddButton={<View />} />
+      <TabButtons onExit={() => navigation?.navigate?.(destinoSalida, destinoSalida === 'capsula1' ? { from: salidaCapsula === 'main' ? 'main' : undefined } : undefined)} customAddButton={<View />} />
       <Image source={require('../../assets/temporadas/libro/coleccion1.png')} style={styles.coleccion} contentFit="contain" cachePolicy="memory" />
       {esPagina2 && (
         <View style={styles.regaloWrap}>
@@ -103,7 +112,7 @@ export default function LibroTemp1({ navigation }) {
       )}
       {visibles.map((img, i) => {
         const idx = inicio + i;
-        const desbloqueada = !!desbloqueadas[`nodo${idx + 1}`] || (idx === 0 && historia1Desbloqueada);
+            const desbloqueada = !!desbloqueadas[`nodo${idx + 1}`];
         const pos = POSICIONES[i];
         return (
           <View key={idx} style={[styles.marco, { top: pos.top, left: pos.left }]}>
@@ -111,7 +120,9 @@ export default function LibroTemp1({ navigation }) {
               ? <Image source={img} style={styles.img} contentFit="cover" cachePolicy="memory" />
               : <View style={styles.bloqueado}><Text style={styles.bloqueadoIcon}>🔒</Text></View>
             }
-            <Text style={styles.marcoTexto}>{pos.texto}</Text>
+            <Text style={[styles.marcoTexto, !desbloqueada && styles.marcoTextoBloqueado]}>
+              {desbloqueada ? DESCRIPCIONES[idx] : 'Recuerdo bloqueado'}
+            </Text>
           </View>
         );
       })}
@@ -139,7 +150,8 @@ const styles = StyleSheet.create({
     padding: 4,
     shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 6,
   },
-  marcoTexto: { position: 'absolute', left: 88, top: 0, width: 110, color: '#fff', fontSize: 12, fontFamily: 'Delius', lineHeight: 17, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  marcoTexto: { position: 'absolute', left: 92, top: 0, width: 128, color: '#fff', fontSize: 10, fontFamily: 'Delius', lineHeight: 14, textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  marcoTextoBloqueado: { color: 'rgba(255,255,255,0.42)', fontStyle: 'italic' },
   img: { width: '100%', height: '100%' },
   bloqueado: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(90,62,43,0.06)' },
   bloqueadoIcon: { fontSize: 22, opacity: 0.4 },

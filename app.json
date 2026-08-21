@@ -14,7 +14,7 @@
       "enabled": true,
       "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0,
-      "url": "https://u.expo.dev/5a9a4938-ebde-4a94-a2b2-b762ea7c2791"
+      "url": "https://u.expo.dev/1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -38,7 +38,18 @@
       "enableProguardInReleaseBuilds": true,
       "enableShrinkResourcesInReleaseBuilds": true,
       "architectures": [
+        "arm64-v8a",
         "arm64-v8a"
+      ],
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "scheme": "amor",

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Animated, StatusBar, Image as RNImage } from 'react-native';
 import { Asset } from 'expo-asset';
 import { doc, getDoc, collection, getDocs, query, limit } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
@@ -7,16 +7,28 @@ import { Image } from 'expo-image';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
-const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
+const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, temporada = 't1' }) => {
+  const temporadaInicial = temporada;
+  const fondoTemporada = temporadaInicial;
+  const fondoLocal = fondoTemporada === 't2'
+    ? require('./assets/temporadas/libro/Temporada2/fondo2.png')
+    : require('./assets/temporadas/libro/Temporada1/fondo1.png');
+
+  useEffect(() => {
+    console.log('[Intro] Fondo local seleccionado', fondoTemporada === 't2' ? 'fondo2.png' : 'fondo1.png');
+  }, [fondoTemporada]);
+
   const brandFade = useRef(new Animated.Value(0)).current;
   const brandSlide = useRef(new Animated.Value(20)).current;
   const progressWidth = useRef(new Animated.Value(0)).current;
   const progressAnimRef = useRef(null);
+  const sequenceStartedRef = useRef(false);
+  const completedRef = useRef(false);
   const containerFade = useRef(new Animated.Value(0)).current;
   const [showContent, setShowContent] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('');
 
-  const gradientColors = ['#0a0a0a', '#000000', '#0a0a0a'];
+  const gradientColors = ['transparent', 'transparent', 'transparent'];
 
   const preloadLocalAssets = async () => {
     await Asset.loadAsync([
@@ -24,7 +36,9 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
       require('./assets/temporadas/libro/libro2.png'),
       require('./assets/temporadas/libro/Temporada1/logo1.png'),
       require('./assets/inicio/inicio.png'),
-    ]);
+      require('./assets/temporadas/libro/Temporada1/fondo1.png'),
+      require('./assets/temporadas/libro/Temporada2/fondo2.png'),
+    ]).catch(error => console.warn('[Intro] Error precargando assets', error?.message || error));
   };
 
   const preloadFirebaseData = async () => {
@@ -59,8 +73,16 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
 
   useEffect(() => {
     const startSequence = async () => {
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
+      if (sequenceStartedRef.current) return;
+      sequenceStartedRef.current = true;
+      // El fondo ya esta montado desde el primer render. La precarga no debe
+      // bloquear la intro ni retrasar la navegacion.
+      Asset.loadAsync(fondoLocal).then(() => {
+        console.log('[Intro] Fondo local preparado');
+      }).catch(error => {
+        console.warn('[Intro] No se pudo preparar el fondo', error?.message || error);
+      });
+
       setShowContent(true);
       
       // Animaciones suaves con useNativeDriver: true
@@ -106,23 +128,40 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
       
       // Preload en paralelo (no bloquea la animación)
       const preloadPromise = Promise.race([
-        Promise.all([preloadLocalAssets(), isAuthenticated ? preloadFirebaseData() : Promise.resolve()]),
+        Promise.all([preloadLocalAssets(), isAuthenticated ? preloadFirebaseData() : Promise.resolve()]).catch(error => {
+          console.warn('[Intro] Precarga incompleta, continuando', error?.message || error);
+        }),
         new Promise(resolve => setTimeout(resolve, 4500)),
       ]);
       
-      await Promise.all([progressPromise, preloadPromise]);
+      await Promise.all([progressPromise, preloadPromise]).catch(error => {
+        console.warn('[Intro] Error no bloqueante en carga', error?.message || error);
+      });
       
       setLoadingStatus('Preparando interfaz...');
       await new Promise(resolve => setTimeout(resolve, 300));
-      onComplete();
+      if (!completedRef.current) {
+        completedRef.current = true;
+        onComplete();
+      }
     };
 
     startSequence();
+    const fallbackTimer = setTimeout(() => {
+      if (!completedRef.current) {
+        completedRef.current = true;
+        console.warn('[Intro] Salida de emergencia: finalizando intro');
+        onComplete();
+      }
+    }, 7000);
+
+    return () => clearTimeout(fallbackTimer);
   }, [isAuthenticated, isConnected]);
 
   return (
-    <Animated.View style={[styles.container, { opacity: containerFade }]}>
+    <Animated.View style={styles.container}> 
       <StatusBar hidden={true} />
+      <RNImage source={fondoLocal} style={styles.background} resizeMode="cover" onLoad={() => console.log('[Intro] Fondo local cargado')} onError={error => console.warn('[Intro] Error cargando fondo local', error?.nativeEvent || error)} />
       <LinearGradient
         colors={gradientColors}
         style={styles.gradient}
@@ -140,6 +179,8 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true }) => {
                 }
               ]}
             >
+              <Text style={styles.brand}>AMOR</Text>
+              <Text style={styles.brandSub}>un rinconcito para ustedes</Text>
             </Animated.View>
           </View>
         )}
@@ -177,8 +218,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
+    zIndex: 1,
+  },
+  background: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    zIndex: 0,
+    backgroundColor: '#f2c4bd',
   },
   content: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 46,
     alignItems: 'center',
   },
   brandContainer: {
@@ -186,17 +241,23 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   brand: {
-    fontSize: 14,
-    color: '#888',
-    fontWeight: '300',
+    fontSize: 18,
+    color: '#fff8dc',
+    fontWeight: '900',
+    textShadowColor: 'rgba(84,54,34,0.45)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 7,
     letterSpacing: 4,
     marginBottom: 8,
   },
   brandSub: {
-    fontSize: 10,
-    color: '#555',
-    fontWeight: '200',
+    fontSize: 12,
+    color: '#fff1d0',
+    fontWeight: '700',
     letterSpacing: 2,
+    textShadowColor: 'rgba(84,54,34,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   progressBar: {
     position: 'absolute',

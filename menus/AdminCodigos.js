@@ -21,19 +21,33 @@ const formatFecha = (ts) => {
   return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
+const recompensaLabel = codigo => {
+  const tipo = codigo.recompensaTipo || 'dinero';
+  if (tipo === 'exp') return `${codigo.recompensaCantidad || codigo.recompensa || 0} EXP`;
+  if (tipo === 'cartasAnimalitos') return `${codigo.recompensaCantidad || codigo.recompensa || 0} cartas universales`;
+  if (tipo === 'icono') return `Icono: ${codigo.recompensaItemId || 'sin ID'}`;
+  return `${codigo.recompensaCantidad || codigo.recompensa || 0} monedas`;
+};
+
 const ModalForm = ({ visible, inicial, onClose, onSave }) => {
   const [codigo,      setCodigo]      = useState('');
   const [recompensa,  setRecompensa]  = useState('');
+  const [recompensaTipo, setRecompensaTipo] = useState('dinero');
+  const [recompensaItemId, setRecompensaItemId] = useState('');
   const [expiraDias,  setExpiraDias]  = useState('');
   const [usos,        setUsos]        = useState('1');
+  const [paso,        setPaso]        = useState(1);
   const [saving,      setSaving]      = useState(false);
 
   useEffect(() => {
     if (visible) {
       setCodigo(inicial?.codigo      ?? '');
       setRecompensa(inicial?.recompensa ?? '');
+      setRecompensaTipo(inicial?.recompensaTipo ?? 'dinero');
+      setRecompensaItemId(inicial?.recompensaItemId ?? '');
       setExpiraDias(inicial?.expiraDias != null ? String(inicial.expiraDias) : '');
       setUsos(inicial?.usos != null ? String(inicial.usos) : '1');
+      setPaso(1);
     }
   }, [visible]);
 
@@ -42,7 +56,10 @@ const ModalForm = ({ visible, inicial, onClose, onSave }) => {
     setSaving(true);
     await onSave({
       codigo:     codigo.trim().toUpperCase(),
-      recompensa: recompensa.trim(),
+      recompensa: recompensaTipo === 'icono' ? '1' : recompensa.trim(),
+      recompensaTipo,
+      recompensaCantidad: recompensaTipo === 'icono' ? 1 : (recompensa ? parseInt(recompensa) : 0),
+      recompensaItemId: recompensaItemId.trim() || null,
       expiraDias: expiraDias ? parseInt(expiraDias) : null,
       usos:       usos ? parseInt(usos) : 1,
     });
@@ -54,8 +71,9 @@ const ModalForm = ({ visible, inicial, onClose, onSave }) => {
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity style={m.overlay} activeOpacity={1} onPress={onClose}>
         <TouchableOpacity style={m.card} activeOpacity={1} onPress={() => {}}>
-          <Text style={m.titulo}>{inicial ? 'Editar código' : 'Nuevo código'}</Text>
+          <View style={m.titleRow}><View><Text style={m.titulo}>{inicial ? 'Editar código' : 'Nuevo código'}</Text><Text style={m.subtitulo}>Paso {paso} de 2</Text></View><View style={m.progress}><View style={[m.progressFill, paso === 2 && m.progressFull]} /></View></View>
 
+          {paso === 1 ? <>
           <Text style={m.label}>Código</Text>
           <TextInput
             style={m.input}
@@ -67,15 +85,22 @@ const ModalForm = ({ visible, inicial, onClose, onSave }) => {
             maxLength={12}
           />
 
-          <Text style={m.label}>Recompensa (monedas)</Text>
+          <Text style={m.label}>Tipo de recompensa</Text>
+          <Text style={m.help}>Elegí qué recibe cada persona al canjear este código.</Text>
+          <View style={m.typeRow}>
+            {[['dinero', 'Monedas'], ['exp', 'EXP'], ['cartasAnimalitos', 'Cartas'], ['icono', 'Icono']].map(([value, label]) => <TouchableOpacity key={value} onPress={() => setRecompensaTipo(value)} style={[m.typeBtn, recompensaTipo === value && m.typeBtnActive]}><Text style={[m.typeText, recompensaTipo === value && m.typeTextActive]}>{label}</Text></TouchableOpacity>)}
+          </View>
+          <Text style={m.label}>{recompensaTipo === 'icono' ? 'ID del icono' : 'Cantidad'}</Text>
+          <Text style={m.help}>{recompensaTipo === 'icono' ? 'Usá el ID interno del icono desbloqueable.' : recompensaTipo === 'exp' ? 'Puntos de experiencia que se suman al perfil.' : recompensaTipo === 'cartasAnimalitos' ? 'Cartas universales que se agregan al inventario.' : 'Monedas que se acreditan directamente.'}</Text>
           <TextInput
             style={m.input}
-            value={recompensa}
-            onChangeText={setRecompensa}
-            placeholder="Ej: 100"
+            value={recompensaTipo === 'icono' ? recompensaItemId : recompensa}
+            onChangeText={recompensaTipo === 'icono' ? setRecompensaItemId : setRecompensa}
+            placeholder={recompensaTipo === 'icono' ? 'Ej: icono_corazon' : 'Ej: 100'}
             placeholderTextColor="rgba(0,0,0,0.3)"
-            keyboardType="numeric"
+            keyboardType={recompensaTipo === 'icono' ? 'default' : 'numeric'}
           />
+          </> : <>
 
           <View style={m.row}>
             <View style={{ flex: 1 }}>
@@ -91,7 +116,8 @@ const ModalForm = ({ visible, inicial, onClose, onSave }) => {
             </View>
             <View style={{ width: 12 }} />
             <View style={{ flex: 1 }}>
-              <Text style={m.label}>Usos máximos</Text>
+                <Text style={m.label}>Usos máximos por persona</Text>
+                <Text style={m.help}>Cantidad de personas distintas que pueden usarlo.</Text>
               <TextInput
                 style={m.input}
                 value={usos}
@@ -102,16 +128,15 @@ const ModalForm = ({ visible, inicial, onClose, onSave }) => {
               />
             </View>
           </View>
+          <View style={m.explain}><MaterialIcons name="info-outline" size={15} color="#a87840" /><Text style={m.explainText}>Los usos máximos indican cuántas personas distintas pueden canjear este código. No limita cuántas veces puede tocarlo una misma persona: después del primer canje, el código queda registrado para ella.</Text></View>
+          </>}
 
           <View style={m.btns}>
-            <TouchableOpacity style={m.btnCancel} onPress={onClose} activeOpacity={0.7}>
-              <Text style={m.btnCancelText}>Cancelar</Text>
+            <TouchableOpacity style={m.btnCancel} onPress={paso === 1 ? onClose : () => setPaso(1)} activeOpacity={0.7}>
+              <Text style={m.btnCancelText}>{paso === 1 ? 'Cancelar' : 'Atrás'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={m.btnSave} onPress={handleSave} disabled={saving} activeOpacity={0.7}>
-              {saving
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={m.btnSaveText}>Guardar</Text>
-              }
+            <TouchableOpacity style={m.btnSave} onPress={paso === 1 ? () => setPaso(2) : handleSave} disabled={saving || (paso === 1 && (!codigo.trim() || (!recompensa.trim() && !recompensaItemId.trim())))} activeOpacity={0.7}>
+              {saving ? <ActivityIndicator size="small" color="#fff" /> : <Text style={m.btnSaveText}>{paso === 1 ? 'Siguiente' : 'Guardar'}</Text>}
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -123,18 +148,31 @@ const ModalForm = ({ visible, inicial, onClose, onSave }) => {
 const m = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
   card: {
-    width: 320, backgroundColor: '#fff', borderRadius: 16,
-    padding: 24, gap: 6,
+    width: 390, maxWidth: '94%', minHeight: 246, backgroundColor: '#fff', borderRadius: 16,
+    padding: 16, gap: 3,
     shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 20, elevation: 16,
   },
-  titulo: { fontSize: 16, fontWeight: '700', color: '#2a2a2a', marginBottom: 8 },
-  label:  { fontSize: 11, fontWeight: '600', color: '#888', letterSpacing: 0.5, textTransform: 'uppercase', marginTop: 6 },
+  titulo: { fontSize: 15, fontWeight: '700', color: '#2a2a2a', marginBottom: 5 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0 },
+  subtitulo: { fontSize: 8.5, color: '#a08f82', marginTop: -4, marginBottom: 4 },
+  progress: { width: 58, height: 4, borderRadius: 3, backgroundColor: '#eadfd3', overflow: 'hidden', marginTop: -8 },
+  progressFill: { width: '50%', height: '100%', backgroundColor: '#a87840' },
+  progressFull: { width: '100%' },
+  label:  { fontSize: 10, fontWeight: '600', color: '#888', letterSpacing: 0.45, textTransform: 'uppercase', marginTop: 3 },
+  help: { fontSize: 8, color: '#a08f82', lineHeight: 10, marginTop: 0 },
+  explain: { flexDirection: 'row', gap: 6, marginTop: 5, padding: 6, borderRadius: 8, backgroundColor: '#fff7e9' },
+  explainText: { flex: 1, color: '#8f725b', fontSize: 8, lineHeight: 10 },
   input: {
     borderBottomWidth: 1, borderBottomColor: '#ddd',
-    paddingVertical: 6, fontSize: 14, color: '#222',
+    paddingVertical: 4, fontSize: 13, color: '#222',
   },
-  row: { flexDirection: 'row', marginTop: 4 },
-  btns: { flexDirection: 'row', gap: 10, marginTop: 16 },
+  row: { flexDirection: 'row', marginTop: 2 },
+  typeRow: { flexDirection: 'row', gap: 5, marginTop: 3 },
+  typeBtn: { flex: 1, paddingHorizontal: 5, paddingVertical: 5, borderRadius: 7, borderWidth: 1, borderColor: '#dfd2c5', backgroundColor: '#faf7f1', alignItems: 'center' },
+  typeBtnActive: { backgroundColor: '#a87840', borderColor: '#7c522a' },
+  typeText: { color: '#8f7b6a', fontSize: 10, fontWeight: '700' },
+  typeTextActive: { color: '#fff8dc' },
+  btns: { flexDirection: 'row', gap: 10, marginTop: 9 },
   btnCancel: { flex: 1, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', alignItems: 'center' },
   btnCancelText: { fontSize: 13, color: '#888', fontWeight: '600' },
   btnSave: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: '#4CAF50', alignItems: 'center' },
@@ -245,8 +283,8 @@ const AdminCodigos = ({ navigation }) => {
                     </View>
 
                     <View style={s.cardMeta}>
-                      <Text style={s.metaText}>💎 {c.recompensa || '—'} monedas</Text>
-                      <Text style={s.metaText}>🔁 {usosLeft}/{c.usos} usos</Text>
+                      <Text style={s.metaText}>🎁 {recompensaLabel(c)}</Text>
+                      <Text style={s.metaText}>👥 {usosLeft}/{c.usos} personas</Text>
                       <Text style={s.metaText}>📅 {c.expiraDias ? `${c.expiraDias}d` : '∞'}</Text>
                     </View>
 

@@ -55,7 +55,6 @@ function ChicleDorado({ titulo, texto, monedas, exp, size = 220 }) {
   );
 }
 import TabButtons from '../../../components/TabButtons';
-import MisionesDiarias from '../../../components/MisionesDiarias';
 import RecompensaOverlay from '../../../components/RecompensaOverlay';
 import { db, auth } from '../../../firebaseConfig';
 import { doc, updateDoc, increment, setDoc, onSnapshot } from 'firebase/firestore';
@@ -298,7 +297,7 @@ function BtnVamos({ onPress, disabled, sinChicles }) {
       <Circle cx={10} cy={10} r={6} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth={1} />
       <Ellipse cx={7.5} cy={7.5} rx={2} ry={1.2} fill="rgba(255,255,255,0.3)" />
     </Svg>
-    <Text style={sv.num}>1</Text>
+    <Text style={sv.num}>2</Text>
     <Text style={sv.texto}>VAMOS</Text>
   </TouchableOpacity>
   </Animated.View>
@@ -306,8 +305,8 @@ function BtnVamos({ onPress, disabled, sinChicles }) {
 }
 
 // ── Modal Checkpoint ──────────────────────────────────────────────────────────
-const CP_LABELS = ['', '', '', '', '', '', '¡META!'];
-const CP_REWARDS = ['', '🪙 250 monedas', '⏏️ 25 exp', '🌸 Sorpresa', '💕 Momento especial', '✨ Recuerdo', '🏆 Premio mayor'];
+const CP_LABELS = ['', 'Recuerdo 1', 'Recuerdo 2', 'Recuerdo 3', 'Recuerdo 4', 'Recuerdo 5', 'Recuerdo 6'];
+const CP_REWARDS = ['', '📖 Imagen 1 desbloqueada', '📖 Imagen 2 desbloqueada', '📖 Imagen 3 desbloqueada', '📖 Imagen 4 desbloqueada', '📖 Imagen 5 desbloqueada', '📖 Imagen 6 desbloqueada'];
 
 function ModalCP({ cp, reclamado, reached, onClose }) {
   const anim = useRef(new Animated.Value(0)).current;
@@ -374,7 +373,7 @@ function ModalCP({ cp, reclamado, reached, onClose }) {
 }
 
 // ── Modal Recompensa Final ────────────────────────────────────────────────────
-function ModalRecompensaFinal({ onClose }) {
+function ModalEventoChicles({ onClose }) {
   const anim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.spring(anim, { toValue: 1, useNativeDriver: true, bounciness: 12 }).start();
@@ -408,20 +407,16 @@ function ModalRecompensaFinal({ onClose }) {
               <Ellipse cx={cx - R * 0.27} cy={cx - R * 0.27} rx={R * 0.38} ry={R * 0.21} fill="rgba(255,255,255,0.32)" />
               <Ellipse cx={cx - R * 0.1}  cy={cx - R * 0.48} rx={R * 0.13} ry={R * 0.07} fill="rgba(255,255,255,0.20)" />
             </Svg>
-            {/* Polaroid */}
-            <View style={smf.polaroid}>
-              <ExpoImage
-                source={require('../../../assets/temporadas/libro/Temporada1/Historia/historia1.png')}
-                style={smf.polaroidImg}
-                contentFit="cover"
-                cachePolicy="memory"
-              />
-              <Text style={smf.polaroidTexto}>El día que todo comenzó...</Text>
+            <View style={smf.infoBox}>
+              <Text style={smf.infoEmoji}>🫧</Text>
+              <Text style={smf.infoTitle}>El camino de Chicles</Text>
+              <Text style={smf.infoText}>Avanza gastando chicles y desbloquea seis recuerdos para completar el libro de la Temporada 1.</Text>
+              <Text style={smf.infoHint}>Cada checkpoint guarda una nueva imagen en tu colección.</Text>
             </View>
           </View>
           <Text style={{ fontFamily: 'Omori', fontSize: 12, color: GOLD3, marginTop: 8, letterSpacing: 0.5,
             textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 }}>
-            ¡Imagen desbloqueada! 🎉
+            ¡Tus recuerdos se ganan paso a paso! ✨
           </Text>
           <TouchableOpacity style={sm.xBtn} onPress={handleClose}
             hitSlop={{ top:12, bottom:12, left:12, right:12 }}>
@@ -439,16 +434,17 @@ function ModalRecompensaFinal({ onClose }) {
 // No se pasa misionesEvento ni eventoKey — MisionesDiarias usa useMisiones() global.
 
 // ── Pantalla principal ────────────────────────────────────────────────────────
-export default function Capsula({ navigation }) {
+export default function Capsula({ navigation, route }) {
   const [pasos,      setPasos]      = useState(0);
   const [reclamados, setReclamados] = useState([]);
   const [reward,     setReward]     = useState(null);
   const [chicles,    setChicles]    = useState(0);
   const [dinero,     setDinero]     = useState(0);
-  const [recompensaReclamada, setRecompensaReclamada] = useState(false);
-  const [modalRecompensaFinal, setModalRecompensaFinal] = useState(false);
+  const pasosRef = useRef(0);
+  const reclamadosRef = useRef([]);
 
   const [cpModal, setCpModal] = useState(null);
+  const destinoSalida = route?.params?.from === 'main' ? 'main' : 'temporada1';
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -458,6 +454,14 @@ export default function Capsula({ navigation }) {
     const ref = doc(db, 'usuarios', uid);
     const unsub = onSnapshot(ref, snap => {
       const data = snap.data() || {};
+      const pasosGuardados = Number(data.capsula1Pasos || 0);
+      const reclamadosGuardados = Array.isArray(data.capsula1Reclamados) ? data.capsula1Reclamados : [];
+      const pasosActuales = Math.max(pasosRef.current, pasosGuardados);
+      const reclamadosActuales = [...new Set([...reclamadosRef.current, ...reclamadosGuardados])];
+      pasosRef.current = pasosActuales;
+      reclamadosRef.current = reclamadosActuales;
+      setPasos(pasosActuales);
+      setReclamados(reclamadosActuales);
       if (data.chicles == null) {
         setDoc(ref, { chicles: 1 }, { merge: true });
         setChicles(1);
@@ -465,7 +469,6 @@ export default function Capsula({ navigation }) {
         setChicles(data.chicles);
       }
       setDinero(data.dinero ?? 0);
-      setRecompensaReclamada(!!data.recompensaCapsula1);
     });
     return () => { unsub(); };
   }, []);
@@ -478,28 +481,40 @@ export default function Capsula({ navigation }) {
   })();
 
   const handleVamos = () => {
-    if (cpPendiente !== null || pasos >= totalPasos || chicles <= 0) return;
+    if (cpPendiente !== null || pasos >= totalPasos || chicles < 2) return;
     const uid = auth.currentUser?.uid;
     if (uid) {
-      updateDoc(doc(db, 'usuarios', uid), { chicles: increment(-1) }).catch(() => {});
+      updateDoc(doc(db, 'usuarios', uid), { chicles: increment(-2) }).catch(() => {});
+      updateDoc(doc(db, 'usuarios', uid), { capsula1Pasos: increment(1) }).catch(() => {});
       // Progreso misión: pasos
       const diaKey = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
       setDoc(doc(db, 'misiones_diarias', diaKey), {
         [`${uid}_capsula`]: { progreso: { capsula_pasos_hoy: increment(1) } }
       }, { merge: true }).catch(() => {});
     }
+    pasosRef.current += 1;
     setChicles(v => v - 1);
-    setPasos(v => v + 1);
+    setPasos(pasosRef.current);
   };
 
   const handleCheckpoint = async (idx) => {
     const reached  = pasos >= posCheckpoint(idx - 1);
     const yaReclam = reclamados.includes(idx);
     if (reached && !yaReclam) {
-      setReclamados(v => [...v, idx]);
+      const nuevosReclamados = [...new Set([...reclamadosRef.current, idx])];
+      reclamadosRef.current = nuevosReclamados;
+      setReclamados(nuevosReclamados);
       const uid = auth.currentUser?.uid;
-      if (idx === 1 && uid) await updateDoc(doc(db, 'usuarios', uid), { dinero: increment(250) }).catch(() => {});
-      if (idx === 2 && uid) await updateDoc(doc(db, 'usuarios', uid), { exp: increment(25) }).catch(() => {});
+      if (uid) {
+        setDoc(doc(db, 'usuarios', uid), {
+          capsula1Reclamados: nuevosReclamados,
+        }, { merge: true }).catch(() => {});
+      }
+      if (uid) {
+        await setDoc(doc(db, 'Historias', uid), {
+          temporada1: { [`nodo${idx}`]: true },
+        }, { merge: true }).catch(() => {});
+      }
       // Progreso misión: checkpoints
       if (uid) {
         const diaKey = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
@@ -507,20 +522,10 @@ export default function Capsula({ navigation }) {
           [`${uid}_capsula`]: { progreso: { capsula_checkpoints_hoy: increment(1) } }
         }, { merge: true }).catch(() => {});
       }
-      setReward({ titulo: idx === 6 ? '¡META! 🏆' : null, monedas: idx === 1 ? 250 : null, exp: idx === 2 ? 25 : null, texto: (idx === 1 || idx === 2) ? null : '¡Recompensa desbloqueada! 🎁' });
+      setReward({ titulo: CP_LABELS[idx], texto: CP_REWARDS[idx] });
     } else {
       setCpModal({ idx, reclamado: yaReclam, reached });
     }
-  };
-
-  const megaReclamado = reclamados.includes(6);
-
-  const handleRecompensaFinal = async () => {
-    if (!megaReclamado || recompensaReclamada) return;
-    const uid = auth.currentUser?.uid;
-    if (uid) await setDoc(doc(db, 'usuarios', uid), { recompensaCapsula1: true }, { merge: true }).catch(() => {});
-    setRecompensaReclamada(true);
-    setModalRecompensaFinal(true);
   };
 
   const bloqueado = cpPendiente !== null || pasos >= totalPasos;
@@ -534,7 +539,15 @@ export default function Capsula({ navigation }) {
         contentFit="cover" cachePolicy="memory"
       />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.38)' }]} />
-      <TabButtons onExit={() => navigation?.navigate?.('temporada1')} customAddButton={<View />} chicles={chicles} userMoney={dinero} chicleIcono={ChicleSvgIcono} />
+      <TabButtons onExit={() => navigation?.navigate?.(destinoSalida)} customAddButton={<View />} chicles={chicles} userMoney={dinero} chicleIcono={ChicleSvgIcono} />
+
+      <View style={s.eventoHeader}>
+        <Text style={s.eventoHeaderTitle}>Libro de chicles</Text>
+        <Text style={s.eventoHeaderText}>Cada chicle que gastes te acerca a un nuevo recuerdo. Avanza por el camino, supera sus checkpoints y descubre las imágenes que forman la historia de esta temporada.</Text>
+        <TouchableOpacity style={s.albumBtn} onPress={() => navigation?.navigate?.('librotemp1', { from: 'capsula1', returnTo: destinoSalida })} activeOpacity={0.8}>
+          <Text style={s.albumBtnText}>Ver álbum</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={s.caminoWrap}>
         <CaminoSvg pasos={pasos} reclamados={reclamados} />
@@ -564,37 +577,7 @@ export default function Capsula({ navigation }) {
       </View>
 
       <View style={s.vamosWrap}>
-        <BtnVamos onPress={handleVamos} disabled={bloqueado} sinChicles={chicles <= 0} />
-      </View>
-
-      <View style={s.misionesWrap}>
-        <MisionesDiarias icono={ChicleSvgIcono} />
-      </View>
-
-      <View style={s.recompensaFinalWrap}>
-        <ExpoImage
-          source={require('../../../assets/temporadas/libro/Temporada1/Historia/historia1.png')}
-          style={s.recompensaFinalImg}
-          contentFit="cover"
-          cachePolicy="memory"
-        />
-        <View style={[
-          s.recompensaFinalOverlay,
-          { opacity: recompensaReclamada ? 0.35 : megaReclamado ? 0.55 : 0.82 },
-        ]} />
-        <View style={s.recompensaFinalContent}>
-          <Text style={s.recompensaFinalEmoji}>
-            {recompensaReclamada ? '🔓' : '🔒'}
-          </Text>
-          <Text style={s.recompensaFinalTexto}>
-            {recompensaReclamada ? '¡Ya es tuya!' : megaReclamado ? '¡Toca para reclamar!' : 'Llega a la meta'}
-          </Text>
-        </View>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          onPress={handleRecompensaFinal}
-          activeOpacity={megaReclamado && !recompensaReclamada ? 0.75 : 1}
-        />
+        <BtnVamos onPress={handleVamos} disabled={bloqueado} sinChicles={chicles < 2} />
       </View>
 
       {cpModal && (
@@ -610,9 +593,6 @@ export default function Capsula({ navigation }) {
         <ChicleDorado titulo={reward?.titulo} texto={reward?.texto} monedas={reward?.monedas} exp={reward?.exp} />
       </RecompensaOverlay>
 
-      {modalRecompensaFinal && (
-        <ModalRecompensaFinal onClose={() => setModalRecompensaFinal(false)} />
-      )}
     </View>
   );
 }
@@ -623,19 +603,11 @@ const s = StyleSheet.create({
   cpHit:        { position: 'absolute' },
   vamosWrap:    { position: 'absolute', right: 125, bottom: 40 },
   misionesWrap: { position: 'absolute', bottom: 32, left: 120 },
-  recompensaFinalWrap: {
-    position: 'absolute', bottom: 118, left: 120,
-    width: 120, height: 120,
-    borderRadius: 10,
-    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.5, shadowRadius: 6, elevation: 8,
-    overflow: 'hidden',
-  },
-  recompensaFinalImg:     { position: 'absolute', top: 0, left: 0, width: 120, height: 120 },
-  recompensaFinalOverlay: { position: 'absolute', top: 0, left: 0, width: 120, height: 120, backgroundColor: '#000' },
-  recompensaFinalContent: { position: 'absolute', top: 0, left: 0, width: 120, height: 120, justifyContent: 'flex-end', alignItems: 'center', paddingBottom: 10, gap: 3 },
-  recompensaFinalEmoji:   { fontSize: 26 },
-  recompensaFinalTexto:   { fontFamily: 'Omori', fontSize: 9, color: '#fff', textAlign: 'center', letterSpacing: 0.3, paddingHorizontal: 8, lineHeight: 14 },
+  eventoHeader: { position: 'absolute', top: 148, left: 74, width: 175, alignItems: 'center' },
+  eventoHeaderTitle: { fontFamily: 'Omori', fontSize: 22, color: GOLD3, textAlign: 'center', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 5 },
+  eventoHeaderText: { marginTop: 7, fontFamily: 'Delius', fontSize: 10, lineHeight: 15, color: CREAM, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  albumBtn: { marginTop: 10, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7, backgroundColor: 'rgba(45,20,48,0.82)', borderWidth: 1, borderColor: 'rgba(255,233,122,0.55)', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.35, shadowRadius: 4, elevation: 4 },
+  albumBtnText: { fontFamily: 'Omori', fontSize: 11, color: GOLD3, letterSpacing: 0.5 },
 });
 
 const sm = StyleSheet.create({
@@ -645,6 +617,11 @@ const sm = StyleSheet.create({
 });
 
 const smf = StyleSheet.create({
+  infoBox: { width: 230, minHeight: 220, alignItems: 'center', justifyContent: 'center', padding: 18, borderRadius: 16, backgroundColor: 'rgba(60,20,55,0.65)', borderWidth: 1, borderColor: 'rgba(255,233,122,0.35)' },
+  infoEmoji: { fontSize: 34, marginBottom: 8 },
+  infoTitle: { fontFamily: 'Omori', fontSize: 21, color: GOLD3, textAlign: 'center' },
+  infoText: { marginTop: 12, fontFamily: 'Delius', fontSize: 12, lineHeight: 18, color: CREAM, textAlign: 'center' },
+  infoHint: { marginTop: 12, fontFamily: 'Delius', fontSize: 10, lineHeight: 15, color: 'rgba(255,233,122,0.9)', textAlign: 'center' },
   polaroid: {
     width: 110, height: 130,
     backgroundColor: '#fff',

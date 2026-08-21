@@ -1,12 +1,34 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { useUserDocument } from './useUserDocument';
+
+const recompensaCache = new Map();
+
+// El primer día entrega el Halcón. Después alterna recursos y cartas
+// universales, que sirven para mejorar cualquier animalito desbloqueado.
+export const getRecompensaDiariaDelDia = (dia, userData) => {
+  // Día 1 siempre representa el Halcón, incluso en el historial de un usuario
+  // que ya lo desbloqueó.
+  if (dia === 1) return { tipo: 'halcon', cantidad: 1, etiqueta: 'x1' };
+  const ciclo = (dia - 2) % 4;
+  if (ciclo === 0) return { tipo: 'dinero', cantidad: 250, emoji: '🪙', etiqueta: '+250' };
+  if (ciclo === 1) return { tipo: 'exp', cantidad: 125, emoji: '⏏️', etiqueta: '+125' };
+  if (ciclo === 2) return { tipo: 'cartasAnimalitos', cantidad: 3, emoji: '✦', etiqueta: 'x3' };
+  return { tipo: 'diamantes', cantidad: 25, emoji: '💎', etiqueta: 'x25' };
+};
 
 export const useRecompensaDiaria = ({ paused = false } = {}) => {
-  const [diaActual, setDiaActual] = useState(1);
-  const [ultimoReclamo, setUltimoReclamo] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState(null);
+  const uidInicial = auth.currentUser?.uid;
+  const estadoInicial = uidInicial ? recompensaCache.get(uidInicial) : null;
+  const [diaActual, setDiaActual] = useState(() => estadoInicial?.diaActual ?? 1);
+  const [ultimoReclamo, setUltimoReclamo] = useState(() => estadoInicial?.ultimoReclamo ?? null);
+  const [loading, setLoading] = useState(() => !estadoInicial);
+  const { data: userData } = useUserDocument(
+    data => ({ halconDesbloqueado: data?.halconDesbloqueado, animalito: data?.animalito, dinero: data?.dinero, exp: data?.exp }),
+    undefined,
+    (a, b) => a?.halconDesbloqueado === b?.halconDesbloqueado && a?.animalito === b?.animalito && a?.dinero === b?.dinero && a?.exp === b?.exp,
+  );
 
   useEffect(() => {
     if (paused) return; // No iniciar listeners si está pausado
@@ -18,12 +40,7 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
     }
 
     const ref = doc(db, 'usuarios', uid, 'recompensaDiaria', 'estado');
-    const userRef = doc(db, 'usuarios', uid);
-    
-    // Combinar listeners en uno solo para evitar múltiples re-renders
-    let unsub1, unsub2;
-    
-    unsub1 = onSnapshot(ref, snap => {
+    const unsub = onSnapshot(ref, snap => {
       if (snap.exists()) {
         const data = snap.data();
         const timestampGuardado = data.ultimoReclamo;
@@ -42,29 +59,22 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
           setDoc(ref, { diaActual: nuevodia, ultimoReclamo: null }, { merge: true });
           setDiaActual(nuevodia);
           setUltimoReclamo(null);
+          recompensaCache.set(uid, { diaActual: nuevodia, ultimoReclamo: null });
         } else {
           setDiaActual(diaGuardado);
           setUltimoReclamo(timestampGuardado);
+          recompensaCache.set(uid, { diaActual: diaGuardado, ultimoReclamo: timestampGuardado });
         }
       } else {
         setDoc(ref, { diaActual: 1, ultimoReclamo: null });
         setDiaActual(1);
         setUltimoReclamo(null);
+        recompensaCache.set(uid, { diaActual: 1, ultimoReclamo: null });
       }
       setLoading(false);
     });
     
-    // Listener para userData (solo para halconDesbloqueado)
-    unsub2 = onSnapshot(userRef, snap => {
-      if (snap.exists()) {
-        setUserData(snap.data());
-      }
-    });
-
-    return () => {
-      unsub1?.();
-      unsub2?.();
-    };
+    return unsub;
   }, [paused]);
 
   const haPasado24Horas = (timestamp) => {
@@ -84,13 +94,21 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
     const ref = doc(db, 'usuarios', uid, 'recompensaDiaria', 'estado');
     const userRef = doc(db, 'usuarios', uid);
     
-    if (diaActual === 1) {
-      if (!userData?.halconDesbloqueado) {
-        await setDoc(userRef, { halconDesbloqueado: true }, { merge: true });
-      }
+    const recompensa = getRecompensaDiariaDelDia(diaActual, userData);
+    if (recompensa.tipo === 'halcon') {
+      await setDoc(userRef, {
+        halconDesbloqueado: true,
+      }, { merge: true });
+      await setDoc(doc(db, 'usuarios', uid, 'animalitos', 'halcon'), {
+        desbloqueado: true,
+        nivel: 1,
+        copias: 3,
+        skin: 'default',
+        skinsDesbloqueadas: {},
+        desbloqueadoAt: serverTimestamp(),
+      }, { merge: true });
     } else {
-      const dineroActual = userData?.dinero ?? 0;
-      await setDoc(userRef, { dinero: dineroActual + 250 }, { merge: true });
+      await setDoc(userRef, { [recompensa.tipo]: increment(recompensa.cantidad) }, { merge: true });
     }
     
     await setDoc(ref, { ultimoReclamo: serverTimestamp() }, { merge: true });

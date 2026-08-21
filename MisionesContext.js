@@ -27,33 +27,28 @@ const getMisionLogin = (fase) => {
 };
 
 const getFaseLoginReclamada = (reclamados) => {
-  const index = LOGIN_FASES.findIndex(f => reclamados.includes(f.id));
+  let index = -1;
+  LOGIN_FASES.forEach((fase, i) => {
+    if (reclamados.includes(fase.id)) index = i;
+  });
   return index === -1 ? null : index + 1;
 };
 
 // ── Banco de misiones ─────────────────────────────────────────────────────────
 export const BANCO = [
-  { id: 'explorar_t1', titulo: 'Exploradora',     desc: 'Explora toda la temporada.',           meta: 2,  icono: '🗺️', campo: 'explorar_t1_hoy',  _subCampos: ['explorar_t1_librotemp1','explorar_t1_historia1'], recompensa: 'chicle', _chicles: 1 },
-  { id: 'juego_60',    titulo: 'Maratonista',      desc: 'Juega durante 60 minutos',             meta: 60, icono: '⏱️', campo: 'minutos_hoy',    recompensa: 'chicle', _chicles: 2 },
-  { id: 'juego_30',    titulo: 'Jugadora',         desc: 'Juega durante 30 minutos',             meta: 30, icono: '🎮', campo: 'minutos_hoy',    recompensa: 'chicle', _chicles: 1 },
-  { id: 'login_3',     titulo: 'Constancia',       desc: 'Inicia sesión durante 3 días',         meta: 3,  icono: '📅', campo: 'login_streak',   recompensa: 'chicle', _chicles: 1 },
-  { id: 'login_7',     titulo: 'Semana completa',  desc: 'Inicia sesión durante 7 días',         meta: 7,  icono: '🔥', campo: 'login_streak',   recompensa: 'chicle', _chicles: 2 },
-  { id: 'mensaje_5',   titulo: 'Conversador',      desc: 'Envía 5 mensajes hoy',                 meta: 5,  icono: '💬', campo: 'mensajes_hoy',   recompensa: 'chicle', _chicles: 1 },
-  { id: 'mensaje_10',  titulo: 'Charlatán',        desc: 'Envía 10 mensajes hoy',                meta: 10, icono: '🗣️', campo: 'mensajes_hoy',   recompensa: 'chicle', _chicles: 2 },
-  { id: 'mision_1',    titulo: 'Primer paso',      desc: 'Completa 1 misión diaria',             meta: 1,  icono: '✅', campo: 'misiones_hoy',   recompensa: 'monedas', _monedas: 50 },
-  { id: 'mision_3',    titulo: 'Triatleta',        desc: 'Completa 3 misiones en un día',        meta: 3,  icono: '🏅', campo: 'misiones_hoy',   recompensa: 'chicle', _chicles: 1 },
-  { id: 'visita_menu', titulo: 'Explorador',       desc: 'Visita 3 secciones distintas hoy',     meta: 3,  icono: '🗺️', campo: 'secciones_hoy',  recompensa: 'chicle', _chicles: 1 },
-  { id: 'pareja_on',   titulo: 'Conectados',       desc: 'Haz que tu pareja se conecte.',        meta: 1,  icono: '💕', campo: 'pareja_entro_hoy', recompensa: 'chicle', _chicles: 1 },
-  { id: 'perfil_edit', titulo: 'Identidad',        desc: 'Edita tu perfil 1 vez',                meta: 1,  icono: '✏️', campo: 'perfil_editado', recompensa: 'monedas', _monedas: 30 },
-  { id: 'sticker_1',   titulo: 'Coleccionista',    desc: 'Usa 1 sticker hoy',                    meta: 1,  icono: '🎨', campo: 'stickers_hoy',   recompensa: 'monedas', _monedas: 20 },
+  { id: 'juego_60',    titulo: 'Maratonista',      desc: 'Juega durante 60 minutos',             meta: 60, icono: '⏱️', campo: 'minutos_hoy',    recompensa: 'chicle', _chicles: 1 },
+  { id: 'juego_30',    titulo: 'Jugadora',         desc: 'Juega durante 30 minutos',             meta: 30, icono: '🎮', campo: 'minutos_hoy',    recompensa: 'globo', _globos: 1 },
+  { id: 'juego_partida', titulo: 'Conexiones',      desc: 'Completa una partida de Hilito',       meta: 1,  icono: '🧩', campo: 'partidas_hoy', recompensa: 'chicle', _chicles: 1 },
+  { id: 'mision_1',    titulo: 'Primer paso',      desc: 'Completa 1 misión diaria',             meta: 1,  icono: '✅', campo: 'misiones_hoy',   recompensa: 'chicle', _chicles: 1 },
+  { id: 'mision_3',    titulo: 'Triatleta',        desc: 'Completa 3 misiones en un día',        meta: 3,  icono: '🏅', campo: 'misiones_hoy',   recompensa: 'globo', _globos: 1 },
+  { id: 'visita_menu', titulo: 'Explorador',       desc: 'Visita 3 secciones distintas hoy',     meta: 3,  icono: '🗺️', campo: 'secciones_hoy',  _distintas: true, recompensa: 'chicle', _chicles: 1 },
+  { id: 'pareja_on',   titulo: 'Conectados',       desc: 'Haz que tu pareja se conecte.',        meta: 1,  icono: '💕', campo: 'pareja_entro_hoy', recompensa: 'globo', _globos: 1 },
   { id: 'regalo_1',    titulo: 'Generoso',         desc: 'Envía 1 regalo hoy',                   meta: 1,  icono: '🎁', campo: 'regalos_hoy',    recompensa: 'chicle', _chicles: 1 },
-  { id: 'trofeo_1',    titulo: 'Cazador',          desc: 'Reclama 1 trofeo',                     meta: 1,  icono: '🏆', campo: 'trofeos_hoy',    recompensa: 'monedas', _monedas: 50 },
-  { id: 'foto_1',      titulo: 'Fotógrafo',        desc: 'Sube 1 foto hoy',                      meta: 1,  icono: '📷', campo: 'fotos_hoy',      recompensa: 'monedas', _monedas: 20 },
-  { id: 'cancion_1',   titulo: 'DJ',               desc: 'Escucha 1 canción en la app',          meta: 1,  icono: '🎵', campo: 'canciones_hoy',  recompensa: 'monedas', _monedas: 20 },
+  { id: 'comercio_1',  titulo: 'Comprita de Mentita', desc: 'Compra al menos una cosa en el Comerciante', meta: 1, icono: '🛍️', campo: 'compras_hoy', recompensa: 'globo', _globos: 1 },
 ];
 
-const getMisionesBase = () => {
-  const seed = parseInt(getDiaKey().replace(/-/g, ''), 10);
+const getMisionesBase = (salt = 0) => {
+  const seed = parseInt(getDiaKey().replace(/-/g, ''), 10) + salt;
   // Hash que mezcla seed con todos los caracteres del ID para mejor dispersión
   const hashId = (id) => {
     let h = seed;
@@ -79,6 +74,7 @@ export function MisionesProvider({ children }) {
   const [faseMisionDia, setFaseMisionDia] = useState(null);
   const [misiones, setMisiones]     = useState(null); // fijadas al montar
   const [reward, setReward]         = useState(null);
+  const [shuffleSeed, setShuffleSeed] = useState(0);
 
   const uid    = auth.currentUser?.uid;
   const diaKey = getDiaKey();
@@ -122,10 +118,10 @@ export function MisionesProvider({ children }) {
       };
       setLoginData(ld);
       const fase = faseMisionDia ?? getFaseLoginReclamada(reclamados) ?? ld.fase;
-      setMisiones([getMisionLogin(fase), ...getMisionesBase()]);
+      setMisiones([getMisionLogin(fase), ...getMisionesBase(shuffleSeed)]);
     });
     return () => unsub();
-  }, [uid, diaKey, faseMisionDia, reclamados]);
+  }, [uid, diaKey, faseMisionDia, reclamados, shuffleSeed]);
 
   // Fija la fase de login elegida para el día. Cambiar login_fase al reclamar
   // prepara el día siguiente, pero no reemplaza la misión mostrada hoy.
@@ -186,8 +182,16 @@ export function MisionesProvider({ children }) {
 
     const tipoRecompensa = recompensaOverride ?? mision.recompensa ?? 'monedas';
 
-    if (tipoRecompensa === 'globo') {
-      const globosGanados = mision._chicles > 0 ? mision._chicles : 1;
+    if (tipoRecompensa === 'exp') {
+      const expGanada = mision._exp ?? 5;
+      await updateDoc(doc(db, 'usuarios', uid), { exp: increment(expGanada) }).catch(() => {});
+      setReward({ titulo: mision.titulo, exp: expGanada });
+    } else if (tipoRecompensa === 'cartasAnimalitos') {
+      const cartasGanadas = mision._cartas ?? 1;
+      await updateDoc(doc(db, 'usuarios', uid), { cartasAnimalitos: increment(cartasGanadas) }).catch(() => {});
+      setReward({ titulo: mision.titulo, cartas: cartasGanadas });
+    } else if (tipoRecompensa === 'globo') {
+      const globosGanados = mision._globos ?? 1;
       await updateDoc(doc(db, 'usuarios', uid), { globos: increment(globosGanados) }).catch(() => {});
       setReward({ titulo: mision.titulo, globos: globosGanados });
     } else if (tipoRecompensa === 'chicle') {
@@ -196,9 +200,11 @@ export function MisionesProvider({ children }) {
       if (mision.campo === 'login_conteo') {
         const faseActual = loginData?.fase ?? 1;
         if (faseActual < 3) {
-          await updateDoc(doc(db, 'usuarios', uid), { login_fase: faseActual + 1, login_conteo: 1 }).catch(() => {});
+          // El contador es acumulativo: la siguiente fase debe continuar desde
+          // el total real de inicios de sesión, no volver a empezar en 1.
+          await updateDoc(doc(db, 'usuarios', uid), { login_fase: faseActual + 1 }).catch(() => {});
         } else {
-          await updateDoc(doc(db, 'usuarios', uid), { login_fase: 1, login_conteo: 1, login_ultimo_reclamo: diaKey }).catch(() => {});
+          await updateDoc(doc(db, 'usuarios', uid), { login_fase: 1, login_ultimo_reclamo: diaKey }).catch(() => {});
         }
       }
       setReward({ titulo: mision.titulo, chicles: chiclesGanados });
@@ -206,10 +212,23 @@ export function MisionesProvider({ children }) {
       const monedasGanadas = mision._monedas ?? RECOMPENSA_MONEDAS;
       await updateDoc(doc(db, 'usuarios', uid), { dinero: increment(monedasGanadas) }).catch(() => {});
       if (mision.campo === 'login_conteo') {
-        await updateDoc(doc(db, 'usuarios', uid), { login_fase: 2, login_conteo: 1 }).catch(() => {});
+        await updateDoc(doc(db, 'usuarios', uid), { login_fase: 2 }).catch(() => {});
       }
-      setReward({ titulo: mision.titulo, monedas: monedasGanadas });
+      setReward({
+        titulo: mision.titulo,
+        monedas: monedasGanadas,
+        ...(mision.id === 'login_f1' ? { tutorialPaso: 3 } : {}),
+      });
     }
+  };
+
+  // Registra acciones de otras pantallas en el progreso diario de forma atómica.
+  const registrarProgreso = async (campo, cantidad = 1) => {
+    if (!uid || !campo) return;
+    const refDia = getMisionDiaRef(uid, diaKey);
+    await updateDoc(refDia, { [`progreso.${campo}`]: increment(cantidad) }).catch(() =>
+      setDoc(refDia, { progreso: { [campo]: cantidad } }, { merge: true }).catch(() => {})
+    );
   };
 
   // ── Reset DEV ─────────────────────────────────────────────────────────────
@@ -222,21 +241,26 @@ export function MisionesProvider({ children }) {
     await setDoc(getMisionDiaRef(uid, diaKey), {
       progreso: {}, reclamados: [], loginMisionFase: 1,
     }, { merge: true }).catch(() => {});
+    setShuffleSeed(Date.now());
     setMisiones(null); // se re-fijan con el próximo snapshot
   };
 
   const getEstado = (mision) => {
     const actual = mision.campo === 'login_conteo'
-      ? (loginData?.conteo ?? 0)
+      // Corrige datos antiguos donde al reclamar una fase el contador se
+      // reiniciaba. La fase desbloqueada garantiza como mínimo su hito previo.
+      ? Math.max(loginData?.conteo ?? 0, mision._fase > 1 ? LOGIN_FASES[mision._fase - 2].meta : 0)
       : mision._subCampos
         ? mision._subCampos.filter(c => progreso[c]).length
+        : mision._distintas
+          ? Object.keys(progreso[mision.campo] || {}).length
         : (progreso[mision.campo] ?? 0);
     if (reclamados.includes(mision.id)) return 'reclamado';
     if (actual >= mision.meta)          return 'reclamar';
     return 'pendiente';
   };
 
-  const listaMisiones = misiones ?? [getMisionLogin(1), ...getMisionesBase()];
+  const listaMisiones = misiones ?? [getMisionLogin(1), ...getMisionesBase(shuffleSeed)];
   const completadas   = listaMisiones.filter(m => reclamados.includes(m.id)).length;
   const pendientesReclamar = listaMisiones.filter(m => getEstado(m) === 'reclamar').length;
 
@@ -251,6 +275,7 @@ export function MisionesProvider({ children }) {
       reward,
       setReward,
       reclamar,
+      registrarProgreso,
       getEstado,
       resetDev,
       RECOMPENSA_MONEDAS,

@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Polygon, Circle, Ellipse, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { db, auth } from '../firebaseConfig';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 const STRIP_H = 29;
 const STRIP_W = 96;
@@ -50,6 +50,7 @@ const MoneyStrip = ({ userMoney, chicles, chicleIcono }) => (
 );
 
 const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles, chicleIcono }) => {
+  const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
   const [open, setOpen] = useState(false);
   const slideAnim = useRef(new Animated.Value(-130)).current;
   const [dineroInterno, setDineroInterno] = useState(null);
@@ -67,6 +68,18 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
   }, []);
 
   const moneyFinal = userMoney !== undefined ? userMoney : dineroInterno;
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    const seccion = global.currentScreen;
+    if (!uid || !seccion) return undefined;
+    const ahora = new Date();
+    const diaKey = `${ahora.getFullYear()}-${ahora.getMonth() + 1}-${ahora.getDate()}`;
+    setDoc(doc(db, 'usuarios', uid, 'misiones', diaKey), {
+      progreso: { secciones_hoy: { [seccion]: true } },
+    }, { merge: true }).catch(() => {});
+    return undefined;
+  }, []);
 
   useEffect(() => {
     AsyncStorage.getItem('tabButtons_open').then(val => {
@@ -115,7 +128,7 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
         </TouchableOpacity>
       </View>
 
-      <View style={styles.rightButtons} pointerEvents="auto">
+      {isAdmin && <View style={styles.rightButtons} pointerEvents="auto">
         {customAddButton ? customAddButton : (
           <TouchableOpacity onPress={onAddSticker} activeOpacity={0.7} style={styles.touchable}>
             <LinearGradient colors={['#4CAF50', '#45a049']} style={styles.addButton}>
@@ -123,7 +136,7 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
             </LinearGradient>
           </TouchableOpacity>
         )}
-      </View>
+      </View>}
     </View>
   );
 };

@@ -7,16 +7,23 @@ import { Image as ExpoImage } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
-import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import TabButtons from '../components/TabButtons';
 import { Buffer } from 'buffer';
 
 const BUCKET = 'amor-9df0d.firebasestorage.app';
 const ADMIN_EMAIL = 'admin@gmail.com';
+const ICONO_DEFAULT_ID = 'icono_default';
+const ICONO_DEFAULT = {
+  id: ICONO_DEFAULT_ID,
+  nombre: 'icono1',
+  url: null,
+  source: require('../assets/inicio/iconos/icono1.jpg'),
+};
 
 const SECCIONES = ['temporada', 'evento', 'animales'];
-const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', animales: '🐾 Animales' };
+const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', animales: '🐾 Animalito' };
 
 const uploadToStorage = async (uri, nombre) => {
   const user = auth.currentUser;
@@ -36,6 +43,19 @@ const uploadToStorage = async (uri, nombre) => {
 };
 
 const SECCION_PREFIX = { temporada: 't', evento: 'e', animales: 'a' };
+let iconosCache = null;
+let iconosCarga = null;
+
+const cargarCatalogoIconos = async () => {
+  if (iconosCache) return iconosCache;
+  if (!iconosCarga) {
+    iconosCarga = getDocs(collection(db, 'iconos')).then(snap => {
+      iconosCache = snap.docs.map(icono => ({ id: icono.id, ...icono.data() }));
+      return iconosCache;
+    }).finally(() => { iconosCarga = null; });
+  }
+  return iconosCarga;
+};
 
 const nextNombre = (iconos, seccion) => {
   const prefix = SECCION_PREFIX[seccion] || 'x';
@@ -66,6 +86,44 @@ const SeccionModal = ({ visible, onSelect, onCancel }) => (
   </Modal>
 );
 
+const NombreIdentificableModal = ({ visible, value, onChange, onConfirm, onCancel }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <View style={m.backdrop}>
+      <View style={m.card}>
+        <Text style={m.titulo}>Nombre identificable</Text>
+        <Text style={m.descripcion}>Solo se usa internamente para encontrar este icono en las recompensas. No será visible para los jugadores.</Text>
+        <TextInput
+          style={m.input}
+          value={value}
+          onChangeText={onChange}
+          placeholder="Ej.: halcon_icon"
+          placeholderTextColor="rgba(90,42,58,0.35)"
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={40}
+          autoFocus
+        />
+        <Text style={m.ejemplo}>Ejemplo: animalito_icon</Text>
+        <TouchableOpacity style={[m.opcion, !value.trim() && m.opcionDisabled]} onPress={onConfirm} disabled={!value.trim()} activeOpacity={0.75}>
+          <Text style={m.opcionText}>Guardar y subir</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={m.cancelar} onPress={onCancel}><Text style={m.cancelarText}>Cancelar</Text></TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+);
+
+const TemporadaModal = ({ visible, onSelect, onCancel }) => (
+  <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <View style={m.backdrop}><View style={m.card}>
+      <Text style={m.titulo}>Temporada del icono</Text>
+      <Text style={m.descripcion}>Define cuándo podrá aparecer en el comercio y las recompensas.</Text>
+      {['t1', 't2', 't3'].map(temporada => <TouchableOpacity key={temporada} style={m.opcion} onPress={() => onSelect(temporada)}><Text style={m.opcionText}>{temporada.toUpperCase()}</Text></TouchableOpacity>)}
+      <TouchableOpacity style={m.cancelar} onPress={onCancel}><Text style={m.cancelarText}>Cancelar</Text></TouchableOpacity>
+    </View></View>
+  </Modal>
+);
+
 // ── Modal editar nombre ───────────────────────────────────────────────────────
 const EditModal = ({ icono, onCancel, onSave }) => {
   const [nombre, setNombre] = useState(icono?.nombre || '');
@@ -88,7 +146,7 @@ const EditModal = ({ icono, onCancel, onSave }) => {
 };
 
 // ── Icono individual ──────────────────────────────────────────────────────────
-const IconoItem = ({ ic, gestion, activo, seleccionado, separador, onPress, onEliminar, onEditar }) => (
+const IconoItem = ({ ic, gestion, activo, seleccionado, bloqueado, separador, onPress, onEliminar, onEditar }) => (
   <View style={s.itemWrap}>
     {gestion && activo && (
       <View style={s.acciones}>
@@ -100,9 +158,10 @@ const IconoItem = ({ ic, gestion, activo, seleccionado, separador, onPress, onEl
         </TouchableOpacity>
       </View>
     )}
-    <TouchableOpacity onPress={onPress} activeOpacity={0.75}>
-      <View style={[s.cuadro, gestion && activo && s.cuadroActivo, seleccionado && s.cuadroSeleccionado, separador && s.cuadroSep]}>
-        <ExpoImage source={{ uri: ic.url }} style={s.icImg} contentFit="cover" cachePolicy="memory" />
+    <TouchableOpacity onPress={onPress} disabled={bloqueado} activeOpacity={bloqueado ? 1 : 0.75}>
+      <View style={[s.cuadro, gestion && activo && s.cuadroActivo, seleccionado && s.cuadroSeleccionado, bloqueado && s.cuadroBloqueado, separador && s.cuadroSep]}>
+        <ExpoImage source={ic.source || { uri: ic.url }} style={s.icImg} contentFit="cover" cachePolicy="memory" />
+        {bloqueado && <View style={s.lockOverlay}><MaterialIcons name="lock" size={16} color="#fff" /></View>}
         {seleccionado && (
           <View style={s.checkOverlay}>
             <Text style={s.checkEmoji}>✓</Text>
@@ -147,7 +206,7 @@ const FilaIconos = ({ iconos, gestion, activoId, iconoSeleccionado, setActivoId,
 };
 
 // ── Lista unificada con separadores ──────────────────────────────────────────
-const ListaUnificada = ({ porSeccion, sinSeccion, gestion, activoId, iconoSeleccionado, setActivoId, handleSeleccionar, handleEliminar, setEditTarget }) => {
+const ListaUnificada = ({ porSeccion, sinSeccion, gestion, activoId, iconoSeleccionado, iconosDesbloqueados, setActivoId, handleSeleccionar, handleEliminar, setEditTarget }) => {
   const POR_FILA = 7;
 
   // Aplanar iconos marcando cuál es el último de su sección
@@ -171,20 +230,26 @@ const ListaUnificada = ({ porSeccion, sinSeccion, gestion, activoId, iconoSelecc
       {filas.map((fila, fi) => (
         <View key={fi} style={s.fila}>
           {fila.map(({ ic, esUltimoDeSec }) => (
+            (() => {
+              const bloqueado = !gestion && ic.id !== ICONO_DEFAULT_ID && !iconosDesbloqueados?.[ic.id] && iconoSeleccionado !== ic.url;
+              return (
             <IconoItem
               key={ic.id}
               ic={ic}
               gestion={gestion}
               activo={activoId === ic.id}
               seleccionado={!gestion && iconoSeleccionado === ic.url}
+              bloqueado={bloqueado}
               separador={esUltimoDeSec}
               onPress={() => gestion
                 ? setActivoId(activoId === ic.id ? null : ic.id)
-                : handleSeleccionar(ic)
+                : !bloqueado && handleSeleccionar(ic)
               }
               onEliminar={() => handleEliminar(ic)}
               onEditar={() => setEditTarget(ic)}
             />
+              );
+            })()
           ))}
         </View>
       ))}
@@ -201,16 +266,33 @@ const Iconos = ({ navigation }) => {
   const [editTarget, setEditTarget] = useState(null);
   const [iconoSeleccionado, setIconoSeleccionado] = useState(null);
   const [showSeccionModal, setShowSeccionModal] = useState(false);
+  const [showNombreIdentificableModal, setShowNombreIdentificableModal] = useState(false);
+  const [showTemporadaModal, setShowTemporadaModal] = useState(false);
   const [pendingUri, setPendingUri] = useState(null);
+  const [nombreIdentificable, setNombreIdentificable] = useState('');
+  const [seccionPendiente, setSeccionPendiente] = useState(null);
+  const [temporadaPendiente, setTemporadaPendiente] = useState('t1');
+  const [iconosDesbloqueados, setIconosDesbloqueados] = useState({});
 
   const isAdmin = auth.currentUser?.email === ADMIN_EMAIL;
 
-  useEffect(() => { cargarIconos(); cargarIconoUsuario(); }, []);
+  useEffect(() => {
+    cargarIconos();
+    const uid = auth.currentUser?.uid;
+    if (!uid) return undefined;
+    return onSnapshot(doc(db, 'usuarios', uid), snap => {
+      const data = snap.data() || {};
+      setIconoSeleccionado(data.iconoUrl || null);
+      if (data.iconoUrl === undefined) {
+        updateDoc(doc(db, 'usuarios', uid), { iconoUrl: null }, { merge: true }).catch(() => {});
+      }
+      setIconosDesbloqueados(data.iconosDesbloqueados || {});
+    });
+  }, []);
 
   const cargarIconos = async () => {
     try {
-      const snap = await getDocs(collection(db, 'iconos'));
-      setIconos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setIconos(await cargarCatalogoIconos());
     } catch (e) {
       console.error('Error al cargar iconos:', e);
     }
@@ -225,8 +307,9 @@ const Iconos = ({ navigation }) => {
 
   const handleSeleccionar = async (ic) => {
     try {
-      await updateDoc(doc(db, 'usuarios', auth.currentUser.uid), { iconoUrl: ic.url });
-      setIconoSeleccionado(ic.url);
+      const valor = ic.id === ICONO_DEFAULT_ID ? null : ic.url;
+      await updateDoc(doc(db, 'usuarios', auth.currentUser.uid), { iconoUrl: valor });
+      setIconoSeleccionado(valor);
       global.showToast?.({ message: 'Icono actualizado', type: 'success' });
     } catch (e) { console.error('Error al seleccionar icono:', e); }
   };
@@ -242,16 +325,21 @@ const Iconos = ({ navigation }) => {
   };
 
   // Paso 2: elegir sección y subir
-  const handleConfirmarSeccion = async (seccion) => {
-    setShowSeccionModal(false);
+  const subirIcono = async (seccion, nombreManual, temporada = 't1') => {
     if (!pendingUri) return;
+    const nombre = nombreManual?.trim() || nextNombre(iconos, seccion);
+    if (iconos.some(icono => icono.seccion === seccion && icono.nombre?.toLowerCase() === nombre.toLowerCase())) {
+      Alert.alert('Nombre en uso', 'Ya existe un icono con ese nombre identificable.');
+      setShowNombreIdentificableModal(true);
+      return;
+    }
     setUploading(true);
     try {
-      const nombre = nextNombre(iconos, seccion);
       const url = await uploadToStorage(pendingUri, nombre);
       await addDoc(collection(db, 'iconos'), {
-        nombre, url, seccion, creadoEn: new Date(), creadoPor: auth.currentUser?.uid,
+        nombre, url, seccion, temporada, creadoEn: new Date(), creadoPor: auth.currentUser?.uid,
       });
+      iconosCache = null;
       await cargarIconos();
     } catch (e) {
       console.error('Error al subir icono:', e);
@@ -259,7 +347,22 @@ const Iconos = ({ navigation }) => {
     } finally {
       setUploading(false);
       setPendingUri(null);
+      setNombreIdentificable('');
     }
+  };
+
+  const handleConfirmarSeccion = (seccion) => {
+    setShowSeccionModal(false);
+    if (!pendingUri) return;
+    setSeccionPendiente(seccion);
+    setShowTemporadaModal(true);
+  };
+
+  const handleConfirmarTemporada = temporada => {
+    setShowTemporadaModal(false);
+    setTemporadaPendiente(temporada);
+    setNombreIdentificable('');
+    setShowNombreIdentificableModal(true);
   };
 
   const handleEliminar = (ic) => {
@@ -305,7 +408,7 @@ const Iconos = ({ navigation }) => {
     acc[sec] = sortByNombre(iconos.filter(ic => ic.seccion === sec));
     return acc;
   }, {});
-  const sinSeccion = sortByNombre(iconos.filter(ic => !ic.seccion || !SECCIONES.includes(ic.seccion)));
+  const sinSeccion = [ICONO_DEFAULT, ...sortByNombre(iconos.filter(ic => !ic.seccion || !SECCIONES.includes(ic.seccion)))];
 
   return (
     <View style={s.root}>
@@ -372,6 +475,7 @@ const Iconos = ({ navigation }) => {
                 gestion={gestion}
                 activoId={activoId}
                 iconoSeleccionado={iconoSeleccionado}
+                iconosDesbloqueados={iconosDesbloqueados}
                 setActivoId={setActivoId}
                 handleSeleccionar={handleSeleccionar}
                 handleEliminar={handleEliminar}
@@ -387,6 +491,18 @@ const Iconos = ({ navigation }) => {
         visible={showSeccionModal}
         onSelect={handleConfirmarSeccion}
         onCancel={() => { setShowSeccionModal(false); setPendingUri(null); }}
+      />
+      <NombreIdentificableModal
+        visible={showNombreIdentificableModal}
+        value={nombreIdentificable}
+        onChange={setNombreIdentificable}
+        onConfirm={() => { setShowNombreIdentificableModal(false); subirIcono(seccionPendiente, nombreIdentificable, temporadaPendiente); }}
+        onCancel={() => { setShowNombreIdentificableModal(false); setNombreIdentificable(''); setPendingUri(null); }}
+      />
+      <TemporadaModal
+        visible={showTemporadaModal}
+        onSelect={handleConfirmarTemporada}
+        onCancel={() => { setShowTemporadaModal(false); setSeccionPendiente(null); setPendingUri(null); }}
       />
     </View>
   );
@@ -450,6 +566,8 @@ const s = StyleSheet.create({
   },
   cuadroActivo: { borderColor: '#c9748f' },
   cuadroSeleccionado: { borderColor: '#4CAF50', borderWidth: 3 },
+  cuadroBloqueado: { opacity: 0.38 },
+  lockOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(42,35,40,0.46)' },
   checkOverlay: {
     position: 'absolute', bottom: 2, right: 2,
     backgroundColor: '#4CAF50',
@@ -524,6 +642,10 @@ const m = StyleSheet.create({
     fontSize: 11,
     color: '#e8607a',
   },
+  opcionDisabled: { opacity: 0.45 },
+  descripcion: { fontFamily: 'Delius', fontSize: 8.5, lineHeight: 12, color: 'rgba(90,42,58,0.68)', textAlign: 'center', marginTop: -4 },
+  input: { backgroundColor: '#fff7f9', borderWidth: 1.5, borderColor: 'rgba(255,143,168,0.38)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, color: '#5a2a3a', fontFamily: 'Delius', fontSize: 10 },
+  ejemplo: { marginTop: -6, fontFamily: 'Delius', fontSize: 7.5, color: 'rgba(90,42,58,0.42)', textAlign: 'center' },
   cancelar: {
     alignItems: 'center',
     paddingVertical: 6,

@@ -1,66 +1,85 @@
-import React, { useEffect, useState, memo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
+import React, { useEffect, useRef, useState, memo } from 'react';
+import { Animated, View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import Svg, { Path, Defs, LinearGradient, Stop, G, Text as SvgText, Ellipse, Filter, FeGaussianBlur } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, onSnapshot, query, where, deleteDoc } from 'firebase/firestore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, query, where, deleteDoc } from 'firebase/firestore';
+import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 
-const Avatar = memo(({ uri, nombre, size = 48 }) => {
-  if (uri) return (
-    <ExpoImage source={{ uri }} style={{ width: size, height: size, borderRadius: size / 2 }} contentFit="cover" cachePolicy="memory" />
-  );
+let usuariosCache = null;
+let usuariosRequest = null;
+const getUsuariosCacheados = async () => {
+  if (usuariosCache) return usuariosCache;
+  if (!usuariosRequest) {
+    usuariosRequest = getDocs(collection(db, 'usuarios')).then(snap => {
+      usuariosCache = snap.docs.map(item => ({ id: item.id, ...item.data() }));
+      return usuariosCache;
+    }).finally(() => { usuariosRequest = null; });
+  }
+  return usuariosRequest;
+};
+const PAREJA_BACKGROUND = require('../assets/inicio/pareja.png');
+const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+
+const Avatar = memo(({ uri, size = 48 }) => {
   return (
-    <View style={[styles.avatarFallback, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={styles.avatarLetter}>{(nombre || '?')[0].toUpperCase()}</Text>
+    <View style={{ width: size, height: size, borderRadius: 7, overflow: 'hidden', backgroundColor: '#fff7e6', borderWidth: 1, borderColor: '#d5b475' }}>
+      <ExpoImage
+        source={uri ? { uri } : ICONO_DEFAULT}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        cachePolicy="memory-disk"
+        priority="high"
+        transition={0}
+      />
     </View>
   );
 });
 
-export default memo(function Pareja({ navigation, isPaused }) {
-  const uid = auth.currentUser?.uid;
-  const [pareja, setPareja] = useState(undefined); // undefined = cargando
-  const [parejaData, setParejaData] = useState(null);
-  const [usuarios, setUsuarios] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud, tutorialSolicitudEnviada = false }) {
+  const uidInicial = auth.currentUser?.uid;
+  const datosIniciales = getCachedUserData(uidInicial);
+  const parejaInicial = datosIniciales ? datosIniciales.pareja || null : undefined;
+  const datosParejaIniciales = parejaInicial ? getCachedUserData(parejaInicial) : null;
+  const contenidoEnCache = Boolean(parejaInicial ? datosParejaIniciales : usuariosCache);
+  const { data: parejaActual, loaded: userLoaded, uid } = useUserDocument(data => data?.pareja || null);
+  const { data: tutorialSolicitudGuardada } = useUserDocument(data => Boolean(data?.tutorialSolicitudEnviada));
+  const [pareja, setPareja] = useState(parejaInicial); // undefined = cargando
+  const [usuarios, setUsuarios] = useState(() => usuariosCache?.filter(user => user.id !== uidInicial) || []);
+  const [loading, setLoading] = useState(() => !usuariosCache);
   const [solicitudEnviada, setSolicitudEnviada] = useState(false);
+  const contentReveal = useRef(new Animated.Value(contenidoEnCache ? 1 : 0)).current;
+  const contenidoYaVisible = useRef(contenidoEnCache);
+  // Una cadena vacía evita que el hook use por error el documento del usuario
+  // actual mientras todavía no existe una pareja seleccionada.
+  const { data: parejaDocumento } = useUserDocument(data => data, pareja || '');
+  const parejaDataActual = pareja && parejaDocumento ? { id: pareja, ...parejaDocumento } : null;
+  // Firestore puede tardar un instante al reconectar el listener. Conservamos
+  // el último perfil válido para que la tarjeta no quede vacía entre snapshots.
+  const ultimaParejaData = useRef(datosParejaIniciales ? { id: parejaInicial, ...datosParejaIniciales } : null);
+  if (parejaDataActual) ultimaParejaData.current = parejaDataActual;
+  const parejaData = parejaDataActual || (ultimaParejaData.current?.id === pareja ? ultimaParejaData.current : null);
 
   useEffect(() => {
-    if (isPaused || !uid) return;
-    AsyncStorage.getItem(`pareja_cache_${uid}`).then(value => {
-      if (!value) return;
-      const cached = JSON.parse(value);
-      if (cached?.id) { setPareja(cached.id); setParejaData(cached); }
-    }).catch(() => {});
-    const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
-      const partnerId = snap.data()?.pareja || null;
-      setPareja(partnerId);
-      if (!partnerId) { setParejaData(null); AsyncStorage.removeItem(`pareja_cache_${uid}`).catch(() => {}); }
-    });
-    return unsub;
-  }, [uid, isPaused]);
+    if (isPaused || !uid || !userLoaded) return;
+    setPareja(parejaActual);
+  }, [uid, isPaused, userLoaded, parejaActual]);
 
-  // Si tiene pareja, cargar sus datos
+  const contentLoaded = pareja === null ? !loading : Boolean(parejaData);
   useEffect(() => {
-    if (!pareja) { setParejaData(null); return; }
-    getDoc(doc(db, 'usuarios', pareja)).then(snap => {
-      if (snap.exists()) {
-        const fresh = { id: snap.id, ...snap.data() };
-        setParejaData(fresh);
-        AsyncStorage.setItem(`pareja_cache_${uid}`, JSON.stringify(fresh)).catch(() => {});
-      }
-    }).catch(() => {});
-  }, [pareja]);
+    if (!contentLoaded) return;
+    if (contenidoYaVisible.current) return;
+    contenidoYaVisible.current = true;
+    Animated.timing(contentReveal, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+  }, [contentLoaded, contentReveal]);
 
   // Si no tiene pareja, cargar lista de usuarios
   useEffect(() => {
     if (pareja !== null) return;
     setLoading(true);
-    getDocs(collection(db, 'usuarios')).then(snap => {
-      const lista = snap.docs
-        .filter(d => d.id !== uid)
-        .map(d => ({ id: d.id, ...d.data() }));
-      setUsuarios(lista);
+    getUsuariosCacheados().then(lista => {
+      const disponibles = lista.filter(user => user.id !== uid);
+      setUsuarios(disponibles);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [pareja]);
@@ -84,6 +103,7 @@ export default memo(function Pareja({ navigation, isPaused }) {
       
       await Promise.all(promesas);
       setSolicitudEnviada(true);
+      onTutorialSolicitud?.();
       global.showToast?.({ text1: 'Solicitud enviada ✓', type: 'success' });
     } catch (e) {
       console.error('Error al enviar solicitud:', e);
@@ -110,6 +130,7 @@ export default memo(function Pareja({ navigation, isPaused }) {
         estado: 'pendiente',
       });
       setEnviados(prev => ({ ...prev, [destinatario.id]: true }));
+      onTutorialSolicitud?.();
       global.showToast?.({ text1: 'Invitación enviada ✓', type: 'success' });
     } catch (e) {
       console.error('Error al enviar invitación:', e);
@@ -121,17 +142,19 @@ export default memo(function Pareja({ navigation, isPaused }) {
   return (
     <View style={styles.wrap}>
       <ExpoImage
-        source={require('../assets/inicio/pareja.png')}
+        source={PAREJA_BACKGROUND}
         style={StyleSheet.absoluteFill}
         contentFit="fill"
         cachePolicy="memory-disk"
+        priority="high"
+        transition={0}
       />
 
       {pareja && parejaData ? (
         // Tiene pareja — mostrar solo ella en la lista
-        <View style={styles.listaWrap}>
+        <Animated.View style={[styles.listaWrap, { opacity: contentReveal }]}>
           <View style={styles.usuarioRow}>
-            <Avatar uri={parejaData.photoURL} nombre={parejaData.nombre} size={32} />
+            <Avatar uri={parejaData.iconoUrl || parejaData.photoURL} size={32} />
             <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
               <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{parejaData.nombre}</Text>
               <View style={styles.onlineIndicator}>
@@ -145,30 +168,33 @@ export default memo(function Pareja({ navigation, isPaused }) {
             <Svg width="120" height="24" viewBox="0 0 140 28">
               <Defs><LinearGradient id="partnerGrad" x1="0%" y1="0%" x2="0%" y2="100%"><Stop offset="0%" stopColor="#e8dcc8" /><Stop offset="100%" stopColor="#dcd0bb" /></LinearGradient><LinearGradient id="partnerHeart" x1="0%" y1="0%" x2="0%" y2="100%"><Stop offset="0%" stopColor="#ff5a8f" /><Stop offset="50%" stopColor="#ff6b9d" /><Stop offset="100%" stopColor="#d9577f" /></LinearGradient></Defs>
               <Path d="M 20 4 L 135 4 Q 138 4 138 14 Q 138 24 135 24 L 20 24 Q 17 24 17 14 Q 17 4 20 4 Z" fill="url(#partnerGrad)" stroke="#c9b8a0" strokeWidth="1.5" />
-              <G transform="translate(-2, -2)"><Path d="M 18 30 C 8 22 2 15 2 10 C 2 5 5 2 9 2 C 12 2 14.5 3.5 18 7 C 21.5 3.5 24 2 27 2 C 31 2 34 5 34 10 C 34 15 28 22 18 30 Z" fill="url(#partnerHeart)" /><Path d="M 9 4 Q 11 2 13 5 Q 11.5 1 9 2 C 5 2 3 4.5 3 8" fill="#ffffff" opacity="0.5" /><Ellipse cx="11" cy="7" rx="3" ry="3.5" fill="#ffffff" opacity="0.35" /><SvgText x="18" y="20" fontSize="12" fontWeight="bold" fill="#ffffff" textAnchor="middle" dominantBaseline="middle">{String(parejaData.nivelAmor || 3)}</SvgText></G>
+              <G transform="translate(-2, -2)"><Path d="M 18 30 C 8 22 2 15 2 10 C 2 5 5 2 9 2 C 12 2 14.5 3.5 18 7 C 21.5 3.5 24 2 27 2 C 31 2 34 5 34 10 C 34 15 28 22 18 30 Z" fill="url(#partnerHeart)" /><Path d="M 9 4 Q 11 2 13 5 Q 11.5 1 9 2 C 5 2 3 4.5 3 8" fill="#ffffff" opacity="0.5" /><Ellipse cx="11" cy="7" rx="3" ry="3.5" fill="#ffffff" opacity="0.35" /><SvgText x="18" y="20" fontSize="12" fontWeight="bold" fill="#ffffff" textAnchor="middle" dominantBaseline="middle">{String(1 + Math.floor((parejaData.exp || 0) / 125))}</SvgText></G>
             </Svg>
           </View>
           <TouchableOpacity style={styles.verPerfilBtn} onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.8}>
-            <Text style={styles.verPerfilText}>Ver perfil</Text>
+            <View style={styles.verPerfilInner}>
+              <Text style={styles.verPerfilText}>Ver perfil</Text>
+              <View style={styles.verPerfilDot} />
+            </View>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       ) : (
         // Sin pareja — lista de usuarios
-        <View style={styles.listaWrap}>
+        <Animated.View style={[styles.listaWrap, { opacity: contentReveal }]}>
           <FlatList
             data={usuarios}
             keyExtractor={i => i.id}
             style={styles.lista}
             scrollEnabled={false}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <View style={styles.usuarioRow}>
-                <Avatar uri={item.photoURL} nombre={item.nombre} size={32} />
+                <Avatar uri={item.iconoUrl || item.photoURL} size={32} />
                 <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: item.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
                   <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{item.nombre}</Text>
-                  <View style={styles.onlineIndicator}>
+                  {index === 0 && <View style={styles.onlineIndicator}>
                     <View style={styles.onlineDot} />
                     <Text style={styles.onlineText}>Conectado/a</Text>
-                  </View>
+                  </View>}
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.addBtn, styles.addBtnHidden, enviados[item.id] && styles.addBtnSent]} onPress={() => !enviados[item.id] && enviarInvitacion(item)} disabled={!!enviados[item.id]}>
                   <Text style={styles.addBtnText}>+</Text>
@@ -212,15 +238,15 @@ export default memo(function Pareja({ navigation, isPaused }) {
             </Svg>
           </View>
           <TouchableOpacity 
-            style={[styles.enviarSolicitudBtn, solicitudEnviada && styles.enviarSolicitudBtnEnviado]}
+            style={[styles.enviarSolicitudBtn, (solicitudEnviada || tutorialSolicitudEnviada || tutorialSolicitudGuardada) && styles.enviarSolicitudBtnEnviado]}
             onPress={enviarSolicitudGeneral}
-            disabled={solicitudEnviada}
+            disabled={solicitudEnviada || tutorialSolicitudEnviada || tutorialSolicitudGuardada}
           >
-            <Text style={[styles.enviarSolicitudText, solicitudEnviada && styles.enviarSolicitudTextEnviado]}>
-              {solicitudEnviada ? 'Enviado' : 'Enviar solicitud'}
+            <Text style={[styles.enviarSolicitudText, (solicitudEnviada || tutorialSolicitudEnviada || tutorialSolicitudGuardada) && styles.enviarSolicitudTextEnviado]}>
+              {solicitudEnviada || tutorialSolicitudEnviada || tutorialSolicitudGuardada ? 'Enviado' : 'Enviar solicitud'}
             </Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       )}
     </View>
   );
@@ -239,13 +265,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-start',
     alignItems: 'center',
   },
-  avatarFallback: {
-    backgroundColor: 'rgba(201,116,143,0.3)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  avatarLetter: { color: '#fff', fontWeight: '700', fontSize: 14 },
-
   // Con pareja
   parejaInfo: {
     flexDirection: 'row',
@@ -295,15 +314,16 @@ const styles = StyleSheet.create({
     borderColor: '#4CAF50',
   },
   addBtnText: { fontSize: 14, color: '#c9748f', fontWeight: 'bold' },
-  nivelAmor: { fontSize: 8, color: '#795a37', fontFamily: 'Globo', textAlign: 'center', marginTop: 2, marginBottom: 1, fontWeight: '700' },
-  capsulaContainer: { width: '100%', alignItems: 'center', marginTop: 1, marginBottom: 2 },
+  nivelAmor: { fontSize: 8, color: '#795a37', fontFamily: 'Globo', textAlign: 'center', marginTop: 2, marginBottom: 1, fontWeight: '700', transform: [{ translateY: -35 }] },
+  capsulaContainer: { width: '100%', alignItems: 'center', marginTop: 1, marginBottom: 2, transform: [{ translateY: -35 }] },
   enviarSolicitudBtn: {
-    marginTop: 9,
+    marginTop: 4,
     marginLeft: 'auto',
     marginRight: 60,
     paddingVertical: 6,
     paddingHorizontal: 10,
     maxWidth: '50%',
+    transform: [{ translateY: -35 }],
     backgroundColor: '#d9577f',
     borderRadius: 12,
     justifyContent: 'center',
@@ -322,9 +342,11 @@ const styles = StyleSheet.create({
   enviarSolicitudTextEnviado: {
     color: '#ffffff',
   },
-  partnerLoveBar: { alignSelf: 'center', width: 120, height: 24, marginTop: 10, alignItems: 'center', justifyContent: 'center' },
-  partnerLoveTitle: { alignSelf: 'center', color: '#795a37', fontSize: 8, fontFamily: 'Globo', textAlign: 'center', marginTop: 9, marginBottom: 1, fontWeight: '700' },
-  verPerfilBtn: { alignSelf: 'center', marginTop: 9, paddingHorizontal: 22, paddingVertical: 6, borderRadius: 7, backgroundColor: 'rgba(201,116,143,0.18)', borderWidth: 1, borderColor: '#c9748f' },
+  partnerLoveBar: { alignSelf: 'center', width: 120, height: 24, marginTop: 2, alignItems: 'center', justifyContent: 'center' },
+  partnerLoveTitle: { alignSelf: 'center', color: '#795a37', fontSize: 8, fontFamily: 'Globo', textAlign: 'center', marginTop: 3, marginBottom: 1, fontWeight: '700' },
+  verPerfilBtn: { alignSelf: 'center', marginTop: 9, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7, backgroundColor: 'rgba(201,116,143,0.18)', borderWidth: 1, borderColor: '#c9748f' },
+  verPerfilInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  verPerfilDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#d94b4b', borderWidth: 1, borderColor: 'rgba(201,116,143,0.3)' },
   verPerfilText: { color: '#c05d7d', fontSize: 10, fontFamily: 'Globo', fontWeight: '700' },
   vacio: { fontSize: 10, color: '#aaa', textAlign: 'center', marginTop: 40 },
   listaCargando: { marginTop: 34 },

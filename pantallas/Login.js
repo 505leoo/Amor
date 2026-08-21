@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Dimensions, Image as RNImage } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -79,8 +79,10 @@ const PinDots = ({ length, filled }) => (
   </View>
 );
 
-export default function Login({ navigation }) {
-  const gradientColors = ['#0a0a0a', '#000000', '#0a0a0a'];
+export default function Login({ navigation, temporada = 't1' }) {
+  const temporadaActual = temporada;
+  const fondoLocal = temporadaActual === 't2' ? require('../assets/temporadas/libro/Temporada2/fondo2.png') : require('../assets/temporadas/libro/Temporada1/fondo1.png');
+  const gradientColors = ['transparent', 'transparent', 'transparent'];
 
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -98,7 +100,8 @@ export default function Login({ navigation }) {
         const snap = await getDocs(collection(db, 'usuarios'));
         const all = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
         const isAdmin = u => u.correo === 'admin@gmail.com' || u.email === 'admin@gmail.com' || u.nombre === 'Admin' || u.displayName === 'Administración';
-        const regular = all.filter(u => !isAdmin(u)).slice(0, 2);
+        const hasName = u => Boolean(String(u.displayName || u.datosCompletos?.nombre || u.nombre || '').trim());
+        const regular = all.filter(u => !isAdmin(u) && hasName(u)).slice(0, 2);
         const admin = all.find(isAdmin);
         const list = admin ? [...regular, { ...admin, _isAdmin: true }] : regular;
         setUsers(list);
@@ -141,7 +144,11 @@ export default function Login({ navigation }) {
       setLoading(true);
       try {
         const email = selectedUser.correo || selectedUser.email || `${selectedUser.displayName?.toLowerCase().replace(/\s/g, '')}@gmail.com`;
-        await signInWithEmailAndPassword(auth, email, next);
+        const credential = await signInWithEmailAndPassword(auth, email, next);
+        // Esperar el token antes de navegar: las funciones protegidas necesitan
+        // que Firebase ya haya restaurado por completo la sesión.
+        await credential.user.getIdToken(true);
+        console.log('[Auth/Login] Sesión confirmada', { uid: credential.user.uid });
         global.showToast({ type: 'success', text1: `Hola, ${displayName || 'bienvenid@'} 🌸`, text2: 'Iniciando sesión...', duration: 1500 });
         setTimeout(() => navigation?.navigate('intro'), 400);
       } catch {
@@ -160,7 +167,8 @@ export default function Login({ navigation }) {
   return (
     <View style={s.root}>
       <StatusBar hidden />
-      <LinearGradient colors={gradientColors} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+      <RNImage source={fondoLocal} style={s.background} resizeMode="cover" onLoad={() => console.log('[Login] Fondo local cargado', temporadaActual)} onError={error => console.warn('[Login] Error cargando fondo local', error?.nativeEvent || error)} />
+      <LinearGradient colors={gradientColors} style={s.overlay} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
       {!selectedUser ? (
         // — Pantalla de selección de perfil —
         <Animated.View style={[s.center, { opacity: profileFade }]}>
@@ -170,7 +178,7 @@ export default function Login({ navigation }) {
           ) : (
           <View style={s.profilesRow}>
             {users.map(user => {
-              const name = user._isAdmin ? 'Admin' : (user.displayName || user.datosCompletos?.nombre || user.nombre || 'Usuario');
+              const name = user._isAdmin ? 'Admin' : (user.displayName || user.datosCompletos?.nombre || user.nombre || '');
               const avatar = !user._isAdmin && (user.selectedSticker?.imageUrl || user.currentStickerUrl || user.photoURL || null);
               return (
                 <TouchableOpacity key={user.uid} style={s.profileCard} onPress={() => handleSelectUser(user)} activeOpacity={0.8}>
@@ -180,7 +188,7 @@ export default function Login({ navigation }) {
                       : <View style={[s.avatarPlaceholder, user._isAdmin && s.avatarPlaceholderAdmin]}><Text style={s.avatarInitial}>{name[0]?.toUpperCase()}</Text></View>
                     }
                   </View>
-                  <Text style={s.profileName}>{name}</Text>
+                  {name ? <Text style={s.profileName}>{name}</Text> : null}
                 </TouchableOpacity>
               );
             })}
@@ -238,8 +246,10 @@ export default function Login({ navigation }) {
 const BUBBLE = 48;
 
 const s = StyleSheet.create({
-  root: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  background: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0, backgroundColor: '#f2c4bd' },
+  root: { flex: 1, zIndex: 1 },
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', zIndex: 2 },
   centerPin: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 100 },
 
   // Selección de perfil

@@ -1,7 +1,9 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { auth, db } from '../firebaseConfig';
-import { doc, updateDoc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, getDocs, setDoc, addDoc, collection, query, where, serverTimestamp } from 'firebase/firestore';
+
+const BUZON_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Configurar comportamiento de notificaciones
 Notifications.setNotificationHandler({
@@ -46,18 +48,24 @@ class NotificationSystem {
 
       // Obtener token real de Pushy usando el módulo nativo
       const PushyService = require('./PushyService').default;
-      const isRegistered = await PushyService.isRegistered();
-      let token = null;
+      // register() también devuelve el token existente. Es importante llamarlo
+      // en cada inicio de sesión para reasignar el dispositivo a la cuenta actual.
+      const token = await PushyService.register();
+      this.expoPushToken = token;
 
-      if (!isRegistered) {
-        token = await PushyService.register();
-        this.expoPushToken = token;
-      }
-
-      // Guardar token en Firebase si se generó uno nuevo
+      // Un mismo dispositivo no debe quedar asociado a dos cuentas.
       const user = auth.currentUser;
       if (user && token) {
         try {
+          const sameTokenSnap = await getDocs(query(collection(db, 'usuarios'), where('MyPushyToken', '==', token)));
+          await Promise.all(sameTokenSnap.docs
+            .filter(previous => previous.id !== user.uid)
+            .map(previous => setDoc(doc(db, 'usuarios', previous.id), {
+              MyPushyToken: null,
+              pushyToken: null,
+              lastTokenUpdate: new Date(),
+            }, { merge: true })));
+
           const userDocRef = doc(db, 'usuarios', user.uid);
           const userDoc = await getDoc(userDocRef);
 
@@ -153,9 +161,13 @@ class NotificationSystem {
   // Notificar a la pareja que el usuario acaba de entrar (throttle de 5 min persistido en Firestore)
   async notifyPartnerUserEntered(userId, userName) {
     try {
+      // Evita que una tarea pendiente de una cuenta anterior notifique
+      // despues de cerrar sesion o cambiar de usuario.
+      if (!userId || auth.currentUser?.uid !== userId) return;
       const userRef = doc(db, 'usuarios', userId);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists()) return;
+      if (auth.currentUser?.uid !== userId) return;
       const userData = userSnap.data();
       const partnerId = userData.pareja;
       if (!partnerId || partnerId === userId) return;
@@ -163,12 +175,11 @@ class NotificationSystem {
       const partnerRef = doc(db, 'usuarios', partnerId);
       const partnerSnap = await getDoc(partnerRef);
       if (!partnerSnap.exists()) return;
+      if (auth.currentUser?.uid !== userId) return;
       const partnerData = partnerSnap.data();
       const preferred = this._getPreferredToken(partnerData);
-      if (!preferred.token) return;
-
       // Throttle persistido: no enviar si ya se notificó en los últimos 5 minutos
-      const THROTTLE_MS = 5 * 60 * 1000;
+      const THROTTLE_MS = 60 * 60 * 1000;
       const lastNotif = partnerData.lastEntradaNotif;
       if (lastNotif) {
         const lastMs = lastNotif.toMillis ? lastNotif.toMillis() : Number(lastNotif);
@@ -177,20 +188,33 @@ class NotificationSystem {
 
       // Marcar timestamp ANTES de enviar para evitar race conditions
       await setDoc(partnerRef, { lastEntradaNotif: serverTimestamp() }, { merge: true });
+      if (auth.currentUser?.uid !== userId) return;
+
+      await addDoc(collection(db, 'buzon'), {
+        para: partnerId,
+        tipo: 'pareja_conectada',
+        creadoEn: serverTimestamp(),
+        expiraEn: new Date(Date.now() + BUZON_RETENTION_MS),
+        leido: false,
+        de: userId,
+        texto: `${userName || 'Tu pareja'} acaba de conectarse, que pesad@...`,
+      });
 
       // Registrar para misión "Haz que tu pareja se conecte" (una sola escritura por día)
       const hoy = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
       const flagKey = `pareja_entro_hoy_${partnerId}_${hoy}`;
       if (!global[flagKey]) {
         global[flagKey] = true;
-        setDoc(doc(db, 'misiones_diarias', hoy), { [userId]: { progreso: { pareja_entro_hoy: 1 } } }, { merge: true }).catch(() => {});
+        // La misión pertenece a quien recibe el aviso: esa es la persona
+        // cuya pareja acaba de conectarse.
+        setDoc(doc(db, 'usuarios', partnerId, 'misiones', hoy), { progreso: { pareja_entro_hoy: 1 } }, { merge: true }).catch(() => {});
       }
 
       const title = '💕 Tu amor está aquí';
-      const body = 'Tu amor acaba de entrar a la app ❤️';
+      const body = `${userName || 'Tu pareja'} acaba de conectarse, que pesad@...`;
       const pairKey = [String(userId), String(partnerId)].sort().join('_');
       const collapseKey = `user_pair_entered_${pairKey}`;
-      await this.sendPushNotification(preferred.token, title, body, { type: 'user_pair_entered', userId, partnerId, collapseKey });
+      if (preferred.token) await this.sendPushNotification(preferred.token, title, body, { type: 'user_pair_entered', userId, partnerId, collapseKey });
 
       try {
         await fetch('https://us-central1-amor-9df0d.cloudfunctions.net/userEntered', {

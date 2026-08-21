@@ -1,9 +1,9 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { auth, db } from '../firebaseConfig';
 import * as ImagePicker from 'expo-image-picker';
@@ -160,8 +160,10 @@ const LetterKeyboard = React.memo(({ onPress }) => {
 
 const STEPS = ['correo', 'pin', 'nombre', 'foto', 'genero'];
 
-export default function Register({ navigation }) {
-  const gradientColors = ['#0a0a0a', '#000000', '#0a0a0a'];
+export default function Register({ navigation, temporada = 't1' }) {
+  const temporadaActual = temporada;
+  const fondoLocal = temporadaActual === 't2' ? require('../assets/temporadas/libro/Temporada2/fondo2.png') : require('../assets/temporadas/libro/Temporada1/fondo1.png');
+  const gradientColors = ['transparent', 'transparent', 'transparent'];
 
   const [step, setStep] = useState(0); // 0=correo, 1=pin, 2=nombre, 3=genero
   const [emailPrefix, setEmailPrefix] = useState('');
@@ -246,6 +248,15 @@ export default function Register({ navigation }) {
         ultimaActividad: new Date().toISOString(),
         fechaUltimaRacha: new Date().toISOString(),
         ownedStickers: [],
+        tutorial: 'no',
+        tutorialPaso: 0,
+      });
+      await setDoc(doc(db, 'buzon', `bienvenida-${cred.user.uid}`), {
+        para: cred.user.uid,
+        tipo: 'bienvenida_menta',
+        creadoEn: serverTimestamp(),
+        leido: false,
+        texto: 'Bienvenida a Menta. Este pequeño mundo también es tuyo.',
       });
       navigation?.navigate('login');
     } catch (e) {
@@ -269,14 +280,15 @@ export default function Register({ navigation }) {
   return (
     <View style={s.root}>
       <StatusBar hidden />
-      <LinearGradient colors={gradientColors} style={StyleSheet.absoluteFill} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
+      <RNImage source={fondoLocal} style={s.background} resizeMode="cover" onLoad={() => console.log('[Register] Fondo local cargado', temporadaActual)} onError={error => console.warn('[Register] Error cargando fondo local', error?.nativeEvent || error)} />
+      <LinearGradient colors={gradientColors} style={s.overlay} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => step === 0 ? navigation?.navigate('login') : setStep(s => s - 1)} style={s.backBtn}>
           <Text style={s.backBtnText}>{step === 0 ? 'Iniciar sesión' : '← Atrás'}</Text>
         </TouchableOpacity>
         {step < 4 && (
-          <TouchableOpacity onPress={handleNext} style={[s.nextBtn, canContinue && s.nextBtnActive]} disabled={!canContinue}>
+          <TouchableOpacity onPress={handleNext} style={[s.nextBtn, canContinue && s.nextBtnActive]} activeOpacity={0.78}>
             <Text style={[s.nextBtnText, canContinue && s.nextBtnTextActive]}>Continuar</Text>
           </TouchableOpacity>
         )}
@@ -370,8 +382,12 @@ export default function Register({ navigation }) {
 const BUBBLE = 44;
 
 const s = StyleSheet.create({
-  root: { flex: 1 },
+  background: { position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 0, backgroundColor: '#f2c4bd' },
+  root: { flex: 1, zIndex: 1 },
+  overlay: { ...StyleSheet.absoluteFillObject, zIndex: 1 },
   header: {
+    zIndex: 10,
+    elevation: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -382,6 +398,8 @@ const s = StyleSheet.create({
   backBtn: { paddingVertical: 8, paddingHorizontal: 4 },
   backBtnText: { color: 'rgba(255,255,255,0.55)', fontSize: 14, fontWeight: '500' },
   nextBtn: {
+    zIndex: 11,
+    elevation: 11,
     backgroundColor: 'rgba(255,255,255,0.12)',
     paddingHorizontal: 20,
     paddingVertical: 9,
@@ -397,6 +415,8 @@ const s = StyleSheet.create({
   nextBtnTextActive: { color: '#111' },
 
   stepsRow: {
+    zIndex: 0,
+    elevation: 0,
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 9,
@@ -411,7 +431,7 @@ const s = StyleSheet.create({
   },
   stepDotActive: { backgroundColor: 'rgba(255,255,255,0.85)', width: 18 },
 
-  body: { flex: 1, alignItems: 'center', paddingHorizontal: 20, paddingTop: 0 },
+  body: { flex: 1, alignItems: 'center', paddingHorizontal: 20, paddingTop: 0, zIndex: 2 },
   title: {
     fontSize: 20,
     fontWeight: '700',

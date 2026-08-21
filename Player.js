@@ -1,8 +1,7 @@
-import React, { useState, useEffect, memo, useMemo } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState, useEffect, memo, useRef } from 'react';
+import { Animated, View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from './firebaseConfig';
+import { useUserDocument } from './hooks/useUserDocument';
 
 const ANIMALITOS = {
   halcon: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
@@ -20,7 +19,7 @@ export const SinAnimal = memo(() => (
   </View>
 ));
 
-const PlayerContent = ({ animalito, skin, loading, imageStyle, placeholder }) => {
+const PlayerContent = ({ animalito, skin, loading, imageStyle, placeholder, onLoadStart, onLoad, onError }) => {
   const source = animalito ? (SKINS[skin || 'default'] ?? SKINS.default ?? ANIMALITOS[animalito] ?? null) : null;
 
   return (
@@ -31,6 +30,9 @@ const PlayerContent = ({ animalito, skin, loading, imageStyle, placeholder }) =>
           style={[styles.image, imageStyle]}
           contentFit="contain"
           cachePolicy="memory-disk"
+          onLoadStart={onLoadStart}
+          onLoad={onLoad}
+          onError={onError}
         />
       ) : (
         placeholder ?? null
@@ -40,34 +42,55 @@ const PlayerContent = ({ animalito, skin, loading, imageStyle, placeholder }) =>
 };
 
 const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, disabled }) => {
+  const { data: userData, loaded: userLoaded, uid } = useUserDocument(
+    data => ({ animalito: data?.animalito, skin: data?.skin }),
+    uidProp,
+    (a, b) => a?.animalito === b?.animalito && a?.skin === b?.skin,
+  );
   const [animalito, setAnimalito] = useState(null);
   const [skin, setSkin] = useState('default');
   const [loading, setLoading] = useState(true);
+  const playerReveal = useRef(new Animated.Value(0)).current;
+
+  const hidePlayer = () => {
+    playerReveal.stopAnimation();
+    playerReveal.setValue(0);
+  };
+  const revealPlayer = () => {
+    Animated.timing(playerReveal, { toValue: 1, duration: 220, useNativeDriver: true }).start();
+  };
 
   useEffect(() => {
-    // Si está deshabilitado, no escuchar cambios
     if (disabled) {
+      hidePlayer();
       setLoading(false);
       return;
     }
+    if (!uid) { hidePlayer(); setLoading(false); return; }
+    if (!userLoaded) { setLoading(true); return; }
+    setAnimalito(userData?.animalito ?? null);
+    setSkin(userData?.skin ?? 'default');
+    setLoading(false);
+  }, [disabled, uid, userLoaded, userData?.animalito, userData?.skin]);
 
-    const uid = uidProp ?? auth.currentUser?.uid;
-    if (!uid) { setLoading(false); return; }
-    
-    const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
-      if (snap.exists()) {
-        const data = snap.data();
-        setAnimalito(data.animalito ?? null);
-        setSkin(data.skin ?? 'default');
-      }
-      setLoading(false);
-    });
-    return unsub;
-  }, [uidProp, disabled]);
+  useEffect(() => {
+    if (!loading && !animalito) revealPlayer();
+  }, [animalito, loading]);
 
   return (
     <View style={[styles.container, containerStyle]} pointerEvents="box-none">
-      <PlayerContent animalito={animalito} skin={skin} loading={loading} imageStyle={imageStyle} placeholder={placeholder} />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: playerReveal }]}>
+        <PlayerContent
+          animalito={animalito}
+          skin={skin}
+          loading={loading}
+          imageStyle={imageStyle}
+          placeholder={placeholder}
+          onLoadStart={hidePlayer}
+          onLoad={revealPlayer}
+          onError={hidePlayer}
+        />
+      </Animated.View>
     </View>
   );
 });

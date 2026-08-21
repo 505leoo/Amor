@@ -5,7 +5,6 @@ import Svg, { Defs, LinearGradient, Stop, Circle, Ellipse, Path, G, Line } from 
 const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 import TabButtons from '../../../components/TabButtons';
 import Loading from '../../../components/Loading';
-import MisionesDiarias from '../../../components/MisionesDiarias';
 import { db, auth } from '../../../firebaseConfig';
 import { doc, onSnapshot, updateDoc, collection, query, where, getDocs, getDoc, setDoc, increment } from 'firebase/firestore';
 
@@ -240,7 +239,8 @@ function BtnVamos({ onPress, disabled }) {
   );
 }
 
-export default function Paleta({ navigation }) {
+export default function Paleta({ navigation, route }) {
+  const destinoSalida = route?.params?.from === 'main' ? 'main' : 'temporadas';
   const [paletas, setPaletas] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showInfo, setShowInfo] = useState(false);
@@ -482,7 +482,7 @@ export default function Paleta({ navigation }) {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <TabButtons onExit={() => navigation?.navigate?.('temporadas')} customAddButton={<View />} chicles={paletas} chicleIcono={<Text style={{ fontSize: 12 }}>🎈</Text>} />
+      <TabButtons onExit={() => navigation?.navigate?.(destinoSalida)} customAddButton={<View />} chicles={paletas} chicleIcono={<Text style={{ fontSize: 12 }}>🎈</Text>} />
       
       <ExpoImage
         source={require('../../../assets/temporadas/libro/Temporada2/fondo2.png')}
@@ -523,7 +523,6 @@ export default function Paleta({ navigation }) {
         {/* Botones */}
         <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
           <BtnVamos onPress={handleVamos} disabled={paletas <= 0} />
-          <MisionesDiarias icono={<Text style={{ fontSize: 18 }}>🎈</Text>} recompensaOverride="globo" />
         </View>
       </View>
 

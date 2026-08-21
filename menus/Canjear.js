@@ -1,15 +1,16 @@
 // TODO: Migrar validación a Cloud Function en producción.
 
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Animated, Modal, Image, TextInput } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Animated, Modal, Image, TextInput, useWindowDimensions } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Rect, Path } from 'react-native-svg';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { collection, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { auth, db } from '../firebaseConfig';
+import { auth, functions } from '../firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
 import RoomBackground from '../components/RoomBackground';
 import TabButtons from '../components/TabButtons';
 import RecompensaOverlay from '../components/RecompensaOverlay';
+import { MaterialIcons } from '@expo/vector-icons';
 
 const ADMIN = 'admin@gmail.com';
 
@@ -62,8 +63,8 @@ const AdminBtn = ({ onPress }) => (
 );
 
 export default function Canjear({ navigation }) {
+  const { width } = useWindowDimensions();
   const [input,      setInput]      = useState('');
-  const [codigos,    setCodigos]    = useState([]);
   const [cargando,   setCargando]   = useState(false);
   const [recompensa, setRecompensa] = useState(null);
   const [scanOpen,   setScanOpen]   = useState(false);
@@ -80,12 +81,6 @@ export default function Canjear({ navigation }) {
       Animated.timing(cursorAnim, { toValue: 1, duration: 530, useNativeDriver: true }),
     ])).start();
   }, []);
-  useEffect(() => {
-    getDocs(collection(db, 'codigos')).then(snap => {
-      setCodigos(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }).catch(() => {});
-  }, []);
-
   const shake = () => {
     shakeAnim.setValue(0);
     Animated.sequence([
@@ -98,32 +93,21 @@ export default function Canjear({ navigation }) {
   };
 
   const validarCodigo = async (codigo) => {
-    const uid = auth.currentUser?.uid;
-    const match = codigos.find(c => {
-      if (!c.codigo || c.codigo !== codigo) return false;
-      const vencido = c.expiraDias && c.creadoEn
-        ? new Date() > new Date((c.creadoEn.toDate?.() ?? new Date(c.creadoEn)).getTime() + c.expiraDias * 86400000)
-        : false;
-      const agotado = (c.reclamadoPor?.length ?? 0) >= c.usos;
-      const yaUsado = c.reclamadoPor?.includes(uid);
-      if (vencido) { global.showToast?.({ text1: 'Código vencido',    text2: 'Este código ya expiró',        type: 'error' }); return false; }
-      if (agotado) { global.showToast?.({ text1: 'Código agotado',    text2: 'Ya no quedan usos disponibles', type: 'error' }); return false; }
-      if (yaUsado) { global.showToast?.({ text1: 'Ya reclamado',      text2: 'Ya usaste este código antes',   type: 'error' }); return false; }
-      return true;
-    });
-
-    if (!match) {
-      const existe = codigos.find(c => c.codigo === codigo);
-      if (!existe) { shake(); setInput(''); }
-      return;
-    }
-
     setCargando(true);
     try {
-      await updateDoc(doc(db, 'codigos', match.id), { reclamadoPor: arrayUnion(uid) });
-      setRecompensa({ monedas: match.recompensa });
-    } catch {
-      global.showToast?.({ text1: 'Error', text2: 'No se pudo canjear', type: 'error' });
+      const resultado = await httpsCallable(functions, 'canjearCodigo')({ codigo });
+      setRecompensa(resultado.data?.recompensa || null);
+    } catch (error) {
+      const code = error?.code || '';
+      const messages = {
+        'functions/not-found': 'Código no encontrado.',
+        'functions/already-exists': 'Ya usaste este código.',
+        'functions/resource-exhausted': 'Este código ya alcanzó sus usos por persona.',
+        'functions/deadline-exceeded': 'Este código ya expiró.',
+      };
+      if (code === 'functions/not-found') shake();
+      global.showToast?.({ text1: messages[code] || 'No se pudo canjear el código.', type: 'error' });
+      if (code === 'functions/not-found') setInput('');
     } finally {
       setCargando(false);
     }
@@ -160,22 +144,25 @@ export default function Canjear({ navigation }) {
       />
 
       <View style={s.layout}>
+        <View style={s.pageHeader}>
+          <View style={s.pageHeaderIcon}><MaterialIcons name="confirmation-number" size={22} color="#fff8dc" /></View>
+          <View><Text style={s.pageTitle}>Canjear código</Text><Text style={s.pageSubtitle}>CONVIERTE TU CÓDIGO EN UNA SORPRESA</Text></View>
+        </View>
+        <View style={[s.contentCard, width < 700 && s.contentCardSmall]}>
 
         {/* Columna izquierda — QR */}
-        <View style={s.qrCol}>
+        <View style={[s.qrCol, width < 700 && s.qrColSmall]}>
+          <View style={s.sectionLabel}><MaterialIcons name="qr-code-scanner" size={14} color="#a87840" /><Text style={s.sectionLabelText}>ESCANEAR</Text></View>
           <TouchableOpacity onPress={abrirScanner} activeOpacity={0.7} style={s.qrBtn}>
             <QRDecorativo />
-            <Text style={s.qrHint}>escanear</Text>
+            <Text style={s.qrHint}>Abrir cámara</Text>
           </TouchableOpacity>
-          <Image source={require('../assets/inicio/menta1.png')} style={s.menta} />
+          <Text style={s.qrDescription}>Usá un código QR para completar el canje rápidamente.</Text>
         </View>
 
         {/* Columna derecha — input */}
-        <View style={s.center}>
-          <View style={s.topSection}>
-            <Text style={s.titulo}>canjear código</Text>
-            <View style={s.tituloLinea} />
-          </View>
+        <View style={[s.center, width < 700 && s.centerSmall]}>
+          <View style={s.sectionLabel}><MaterialIcons name="keyboard" size={14} color="#a87840" /><Text style={s.sectionLabelText}>ESCRIBIR CÓDIGO</Text></View>
 
           <TextInput
             ref={inputRef}
@@ -206,9 +193,11 @@ export default function Canjear({ navigation }) {
               disabled={cargando}
               activeOpacity={0.7}
             >
-              <Text style={s.keyConfirmarText}>{cargando ? '...' : 'confirmar'}</Text>
+              <MaterialIcons name={cargando ? 'hourglass-top' : 'check'} size={16} color="#fff8dc" />
+              <Text style={s.keyConfirmarText}>{cargando ? 'validando...' : 'confirmar código'}</Text>
             </TouchableOpacity>
           )}
+        </View>
         </View>
       </View>
 
@@ -224,18 +213,21 @@ export default function Canjear({ navigation }) {
           <View style={s.scanFrame} />
           <Text style={s.scanHint}>Apuntá al código QR</Text>
           <TouchableOpacity style={s.scanClose} onPress={() => setScanOpen(false)} activeOpacity={0.7}>
-            <Text style={s.scanCloseText}>cancelar</Text>
+            <MaterialIcons name="close" size={16} color="#fff8dc" /><Text style={s.scanCloseText}>cancelar</Text>
           </TouchableOpacity>
         </View>
       </Modal>
 
       <RecompensaOverlay
         visible={!!recompensa}
-        monedas={recompensa?.monedas}
-        titulo="¡Código canjeado!"
-        texto="Las monedas fueron acreditadas a tu cuenta"
         onClose={() => { setRecompensa(null); navigation?.navigate('main'); }}
-      />
+      >
+        <View style={s.rewardType}>
+          <MaterialIcons name={recompensa?.tipo === 'dinero' ? 'monetization-on' : recompensa?.tipo === 'exp' ? 'bolt' : recompensa?.tipo === 'cartasAnimalitos' ? 'style' : 'auto-awesome'} size={42} color="#ffd36f" />
+          <Text style={s.rewardTypeText}>¡Código canjeado!</Text>
+          <Text style={s.rewardTypeText}>{recompensa?.tipo === 'dinero' ? `+${recompensa.cantidad} monedas` : recompensa?.tipo === 'exp' ? `+${recompensa.cantidad} EXP` : recompensa?.tipo === 'cartasAnimalitos' ? `x${recompensa.cantidad} cartas universales` : 'Icono desbloqueado'}</Text>
+        </View>
+      </RecompensaOverlay>
     </View>
   );
 }
@@ -250,78 +242,69 @@ const s = StyleSheet.create({
 
   container: { flex: 1 },
 
-  layout: {
-    flex: 1,
-    paddingTop: 60,
-  },
+  layout: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, paddingTop: 24, paddingBottom: 16 },
+  pageHeader: { flexDirection: 'row', alignItems: 'center', alignSelf: 'center', marginBottom: 9 },
+  pageHeaderIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#a87840', borderWidth: 1, borderColor: '#fff3ca', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.22, shadowRadius: 4, elevation: 5 },
+  pageTitle: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 14, fontWeight: '900', letterSpacing: 0.8, marginLeft: 8, textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  pageSubtitle: { color: 'rgba(255,248,220,0.72)', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '800', letterSpacing: 0.55, marginLeft: 8, marginTop: 1 },
+  contentCard: { width: '100%', maxWidth: 580, minHeight: 218, flexDirection: 'row', alignItems: 'stretch', padding: 11, borderRadius: 15, backgroundColor: '#fff5dd', borderWidth: 2, borderColor: '#d4b06c', shadowColor: '#2e1c10', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.34, shadowRadius: 11, elevation: 19 },
+  contentCardSmall: { maxWidth: 400, padding: 10, flexDirection: 'column' },
 
   // QR col
   qrCol: {
-    position: 'absolute',
-    left: 150,
-    top: '30%',
+    flex: 0.85,
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+    borderRightWidth: 1,
+    borderRightColor: '#e3c991',
   },
+  qrColSmall: { borderRightWidth: 0, borderBottomWidth: 1, borderBottomColor: '#e3c991', paddingBottom: 9, marginBottom: 9 },
+  sectionLabel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 },
+  sectionLabelText: { color: '#8e6539', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.75 },
   qrHint: {
-    fontSize: 10, fontWeight: '400', color: 'rgba(255,255,255,0.65)',
-    letterSpacing: 2, textTransform: 'lowercase',
-    marginTop: 4,
+    fontSize: 7, fontWeight: '900', color: '#795a38', fontFamily: 'Delius', letterSpacing: 0.3, marginTop: 5,
   },
-  menta: { width: 180, height: 180, resizeMode: 'contain', position: 'absolute', bottom: -130, left: 15 },
+  qrDescription: { color: '#9a7244', fontFamily: 'Delius', fontSize: 6, lineHeight: 8, fontWeight: '700', textAlign: 'center', marginTop: 7, maxWidth: 120 },
   qrBtn: {
-    padding: 8,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 8,
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    width: 84, height: 84, padding: 13, borderWidth: 1, borderColor: '#d8b670', borderRadius: 11, backgroundColor: '#f7e9c8',
     alignItems: 'center',
+    justifyContent: 'center',
   },
 
   center: {
-    position: 'absolute',
-    right: 100,
-    top: '25%',
-    alignItems: 'flex-start',
-    gap: 18,
-    marginLeft: -50,
+    flex: 1.15, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 12,
   },
+  centerSmall: { flex: 1, width: '100%', paddingHorizontal: 4 },
 
   topSection: { alignItems: 'center', gap: 10 },
-  titulo: {
-    fontSize: 15, fontWeight: '500', color: '#fff',
-    letterSpacing: 4, textTransform: 'uppercase', fontFamily: 'Delius',
-    textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
-  },
-  tituloLinea: {
-    height: 0.5, alignSelf: 'stretch',
-    backgroundColor: 'rgba(255,255,255,0.4)', marginTop: -6,
-  },
 
   hiddenInput: { position: 'absolute', width: 0, height: 0, opacity: 0 },
 
-  barsRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-end' },
-  barSlot: { alignItems: 'center', gap: 6 },
-  barChar: { fontSize: 22, fontWeight: '300', color: '#fff', minWidth: 22, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  barLine: { width: 22, height: 1.5, backgroundColor: 'rgba(255,255,255,0.7)' },
-  barLineActive: { backgroundColor: '#fff' },
+  barsRow: { flexDirection: 'row', gap: 7, alignItems: 'flex-end', paddingVertical: 9, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#f7e9c8', borderWidth: 1, borderColor: '#e3c991' },
+  barSlot: { alignItems: 'center', gap: 4 },
+  barChar: { fontSize: 18, fontWeight: '900', color: '#704b2d', minWidth: 20, textAlign: 'center' },
+  barLine: { width: 20, height: 1.5, backgroundColor: '#d0ad70', borderRadius: 2 },
+  barLineActive: { backgroundColor: '#a87840' },
 
   inputRow: { flexDirection: 'row', alignItems: 'flex-end' },
 
-  keyConfirmar:         { marginTop: 6, paddingHorizontal: 36, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.45)' },
-  keyConfirmarDisabled: { opacity: 0.25 },
-  keyConfirmarText:     { fontSize: 11, fontWeight: '300', color: '#fff', letterSpacing: 4, textTransform: 'uppercase', fontFamily: 'Delius' },
+  keyConfirmar:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 9, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 9, backgroundColor: '#a87840', borderWidth: 1, borderColor: '#7c522a', shadowColor: '#5e3d20', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.24, shadowRadius: 3, elevation: 4 },
+  keyConfirmarDisabled: { opacity: 0.55 },
+  keyConfirmarText:     { fontSize: 7.5, fontWeight: '900', color: '#fff8dc', letterSpacing: 0.55, textTransform: 'uppercase', fontFamily: 'Delius' },
 
   // Scanner
-  scanOverlay: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+  scanOverlay: { flex: 1, backgroundColor: '#2e1c10', justifyContent: 'center', alignItems: 'center' },
   camera:      { width: 280, height: 280, borderRadius: 12, overflow: 'hidden' },
   scanFrame: {
     position: 'absolute',
     width: 200, height: 200,
-    borderWidth: 2, borderColor: 'rgba(255,105,180,0.8)',
+    borderWidth: 2, borderColor: '#e8bd67',
     borderRadius: 8,
   },
   scanHint:      { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontFamily: 'Delius', letterSpacing: 1, marginTop: 24 },
-  scanClose:     { marginTop: 20, paddingHorizontal: 32, paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.4)' },
-  scanCloseText: { color: '#fff', fontSize: 11, fontFamily: 'Delius', letterSpacing: 3, textTransform: 'uppercase' },
+  scanClose:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 20, paddingHorizontal: 22, paddingVertical: 10, borderRadius: 10, backgroundColor: '#a87840', borderWidth: 1, borderColor: '#e8bd67' },
+  scanCloseText: { color: '#fff8dc', fontSize: 8, fontWeight: '900', fontFamily: 'Delius', letterSpacing: 1.2, textTransform: 'uppercase' },
+  rewardType: { alignItems: 'center', marginTop: 18 },
+  rewardTypeText: { color: '#ffd36f', fontFamily: 'Delius', fontSize: 16, fontWeight: '900', marginTop: 8 },
 });

@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
+import { Asset } from 'expo-asset';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebaseConfig';
-import { doc, getDoc, collection, getDocs, query, limit, updateDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, query, limit, updateDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as ImagePicker from 'expo-image-picker';
@@ -41,6 +42,10 @@ import Pase from './menus/Pase';
 import Juegos from './Juegos/Juegos';
 import ConexionesGame from './Juegos/Conexiones/ConexionesGame';
 import Comerciante from './Comerciante';
+import Anuncios from './components/Anuncios';
+import Tutorial from './components/Tutorial';
+import { ReporteSemanal } from './components/ReporteSemanal';
+import { reporteId, semanaActual } from './components/ReporteSemanal';
 
 export default function App() {
   const [loading, setLoading]           = useState(true);
@@ -49,6 +54,10 @@ export default function App() {
   const [screenParams, setScreenParams]   = useState({});
   const [isConnected, setIsConnected]   = useState(true);
   const [inicioReady, setInicioReady]   = useState(false);
+  const [temporadaInicio, setTemporadaInicio] = useState('t1');
+  const [tipoAnuncio, setTipoAnuncio] = useState('reporte');
+  const [eventosAnuncio, setEventosAnuncio] = useState(['reporte']);
+  const [tutorialActivo, setTutorialActivo] = useState(false);
   const toastRef = useRef(null);
   const userRef = useRef(null);
   const loadingRef = useRef(null);
@@ -73,6 +82,7 @@ export default function App() {
     const key = `${currentScreenRef.current}|${screenName}`;
     const doNavigate = () => {
       currentScreenRef.current = screenName;
+      global.currentScreen = screenName;
       setCurrentScreen(screenName);
       setScreenParams(params ?? {});
     };
@@ -98,6 +108,11 @@ export default function App() {
       await ExpoImage.prefetch(require('./assets/temporadas/libro/panel1.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
       await ExpoImage.prefetch(require('./assets/inicio/pareja.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
       await ExpoImage.prefetch(require('./assets/inicio/jugar.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/inicio.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/regalodiario.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/eventos/eventochicle.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/temporadas/libro/libroanimal.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/temporadas/libro/libroanimal2.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
       // Precargar las skins del Halcón para que el selector no muestre imágenes tarde.
       [
         require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
@@ -122,13 +137,37 @@ export default function App() {
     NavigationBar.setVisibilityAsync('hidden');
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      let temporada = 't1';
+      try {
+        const temporadaSnap = await getDoc(doc(db, 'Temporada', 'actual'));
+        const datos = temporadaSnap.data() || {};
+        temporada = String(datos.Temporada || datos.temporadaActual || 't1').toLowerCase();
+        if (!temporadaSnap.exists()) await setDoc(doc(db, 'Temporada', 'actual'), { Temporada: 't1', creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() });
+      } catch (error) { console.warn('[App] No se pudo leer la temporada, usando t1', error?.message || error); }
+      const temporadaSeleccionada = temporada === 't2' ? 't2' : 't1';
+      setTemporadaInicio(temporadaSeleccionada);
+
+      // Decodificar el fondo antes de montar Intro evita un frame vacio/parpadeo.
+      const fondoInicio = temporadaSeleccionada === 't2'
+        ? require('./assets/temporadas/libro/Temporada2/fondo2.png')
+        : require('./assets/temporadas/libro/Temporada1/fondo1.png');
+      await Asset.loadAsync(fondoInicio).catch(error => {
+        console.warn('[App] No se pudo precargar el fondo de inicio', error?.message || error);
+      });
       if (currentUser) {
         userRef.current = currentUser;
 
+        // La configuración de temporada se administra desde Firestore. Solo se
+        // crea la primera vez: nunca reemplaza el valor que cambies manualmente.
         // Ejecutar en background sin bloquear
         setImmediate(() => {
+          // El callback puede sobrevivir a un cambio rapido de cuenta.
+          // Nunca registrar ni notificar usando una sesion que ya no es activa.
+          if (auth.currentUser?.uid !== currentUser.uid) return;
           NotificationSystem.registerForPushNotifications().catch(() => {});
-          NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName).catch(() => {});
+          if (auth.currentUser?.uid === currentUser.uid) {
+            NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName).catch(() => {});
+          }
           NotificationSystem.setupNotificationListeners();
         });
 
@@ -136,6 +175,13 @@ export default function App() {
         getDoc(doc(db, 'usuarios', currentUser.uid)).then(snap => {
           if (snap.exists()) {
             const data = snap.data();
+            setTutorialActivo(data.tutorial === 'no');
+            if (data.tutorial === 'no' && Number(data.tutorialPaso || 0) < 2 && data.animalito) {
+              updateDoc(doc(db, 'usuarios', currentUser.uid), { animalito: null }).catch(() => {});
+            }
+            if (data.tutorial === 'si' && Number(data.tutorialPaso || 0) !== 0) {
+              updateDoc(doc(db, 'usuarios', currentUser.uid), { tutorialPaso: 0 }).catch(() => {});
+            }
             if (data.pareja) {
               getDoc(doc(db, 'usuarios', data.pareja)).then(partnerSnap => {
                 if (partnerSnap.exists()) AsyncStorage.setItem(`pareja_cache_${currentUser.uid}`, JSON.stringify({ id: partnerSnap.id, ...partnerSnap.data() })).catch(() => {});
@@ -146,7 +192,6 @@ export default function App() {
             if (data.nivel         === undefined) updates.nivel         = 1;
             if (data.exp           === undefined) updates.exp           = 0;
             if (data.racha         === undefined) updates.racha         = 1;
-            if (data.animalito     === undefined) updates.animalito     = 'halcon';
             if (data.ultimaActividad    === undefined) updates.ultimaActividad    = new Date().toISOString();
             if (data.fechaUltimaRacha   === undefined) updates.fechaUltimaRacha   = new Date().toISOString();
             if (Object.keys(updates).length > 0)
@@ -190,20 +235,84 @@ export default function App() {
           <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
 
           {currentScreen === 'intro' && (
-            <Intro
-              onComplete={() => {
-                const next = userRef.current ? 'main' : 'login';
-                currentScreenRef.current = next;
-                setCurrentScreen(next);
-              }}
+              <Intro
+                onComplete={() => {
+                if (!userRef.current) {
+                  currentScreenRef.current = 'login';
+                  setCurrentScreen('login');
+                  return;
+                }
+                (async () => {
+                  const usuarioSnap = await getDoc(doc(db, 'usuarios', userRef.current.uid));
+                  const usuarioData = usuarioSnap.data() || {};
+                  const tutorialActual = usuarioData.tutorial === 'no';
+                  setTutorialActivo(tutorialActual);
+                  if (tutorialActual) {
+                    currentScreenRef.current = 'main';
+                    setCurrentScreen('main');
+                    return;
+                  }
+                  const parejaUid = usuarioSnap.data()?.pareja;
+                  let completo = false;
+                  if (parejaUid) {
+                    const reporteSnap = await getDoc(doc(db, 'reportes_semanales', reporteId(userRef.current.uid, parejaUid, semanaActual())));
+                    const reportes = reporteSnap.data()?.reportes || {};
+                    completo = Boolean(reportes[userRef.current.uid]);
+                  }
+                  setTipoAnuncio(completo ? 'fechas' : 'reporte');
+                  setEventosAnuncio(completo ? ['fechas'] : ['reporte', 'fechas']);
+                  currentScreenRef.current = 'anuncios';
+                  setCurrentScreen('anuncios');
+                })().catch(() => {
+                  setTipoAnuncio('reporte');
+                  setEventosAnuncio(['reporte', 'fechas']);
+                  currentScreenRef.current = 'anuncios';
+                  setCurrentScreen('anuncios');
+                });
+                }}
+                temporada={temporadaInicio}
               isAuthenticated={!!userRef.current}
               isConnected={isConnected}
+              />
+          )}
+
+          {currentScreen === 'anuncios' && (
+            <Anuncios
+              key={tipoAnuncio}
+              visible
+              preview
+              evento={tipoAnuncio}
+              eventosDisponibles={eventosAnuncio}
+              onOpen={(evento) => {
+                if (evento !== 'reporte') return;
+                currentScreenRef.current = 'reporteSemanal';
+                setScreenParams({});
+                setCurrentScreen('reporteSemanal');
+              }}
+              onClose={() => {
+                currentScreenRef.current = 'main';
+                setScreenParams({});
+                setCurrentScreen('main');
+              }}
             />
           )}
 
-          {currentScreen === 'login'    && <Login    navigation={navigation} />}
-          {currentScreen === 'register' && <Register navigation={navigation} />}
-          {currentScreen === 'main'     && <Inicio   navigation={navigation} onReady={() => setInicioReady(true)} />}
+          {currentScreen === 'login'    && <Login    navigation={navigation} temporada={temporadaInicio} />}
+          {currentScreen === 'register' && <Register navigation={navigation} temporada={temporadaInicio} />}
+          {currentScreen === 'main'     && <Inicio   navigation={navigation} tutorialActivo={tutorialActivo} openReporteSemanal={screenParams?.openReporteSemanal} onReady={() => setInicioReady(true)} />}
+          {currentScreen === 'main' && tutorialActivo && <Tutorial visible onFinish={async () => {
+            const uid = auth.currentUser?.uid;
+            if (uid) await updateDoc(doc(db, 'usuarios', uid), {
+              tutorial: 'si',
+              tutorialPaso: 0,
+              tutorialSolicitudEnviada: true,
+              chicles: increment(2),
+            }).catch(() => {});
+            setTutorialActivo(false);
+            currentScreenRef.current = 'intro';
+            setCurrentScreen('intro');
+          }} />}
+          {currentScreen === 'reporteSemanal' && <ReporteSemanal onTerminado={() => { currentScreenRef.current = 'main'; setCurrentScreen('main'); }} />}
           {currentScreen === 'coleccion'       && <Coleccion        navigation={navigation} />}
           {currentScreen === 'tienda'          && <Tienda           navigation={navigation} />}
           {currentScreen === 'perfil'          && <Perfil           navigation={navigation} route={{ params: screenParams }} />}
@@ -214,11 +323,11 @@ export default function App() {
           {currentScreen === 'temporadas'      && <Temporadas       navigation={navigation} />}
           {currentScreen === 'temporada1'      && <Temporada1       navigation={navigation} />}
           {currentScreen === 'temporada2'      && <Temporada2       navigation={navigation} />}
-          {currentScreen === 'kitty'             && <Kitty            navigation={navigation} />}
-          {currentScreen === 'paleta'            && <Paleta           navigation={navigation} />}
+          {currentScreen === 'kitty'             && <Kitty            navigation={navigation} route={{ params: screenParams }} />}
+          {currentScreen === 'paleta'            && <Paleta           navigation={navigation} route={{ params: screenParams }} />}
           {currentScreen === 'historia1'       && <Historia1        navigation={navigation} />}
-          {currentScreen === 'capsula1'        && <Capsula1         navigation={navigation} />}
-          {currentScreen === 'librotemp1'      && <LibroTemp1       navigation={navigation} />}
+          {currentScreen === 'capsula1'        && <Capsula1         navigation={navigation} route={{ params: screenParams }} />}
+          {currentScreen === 'librotemp1'      && <LibroTemp1       navigation={navigation} route={{ params: screenParams }} />}
           {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} mode={screenParams?.mode} />}
           {currentScreen === 'canjear'          && <Canjear          navigation={navigation} />}
           {currentScreen === 'comerciante'      && <Comerciante      navigation={navigation} />}

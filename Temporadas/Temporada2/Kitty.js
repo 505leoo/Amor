@@ -357,7 +357,8 @@ const VideoItem = ({ item, gestion, activoId, setActivoId, onEliminar }) => {
 };
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
-export default function Kitty({ navigation }) {
+export default function Kitty({ navigation, route }) {
+  const destinoSalida = route?.params?.from === 'main' ? 'main' : 'temporada2';
   const loadingRef = useRef(null);
   const [videos, setVideos] = useState([]);
 
@@ -485,7 +486,7 @@ export default function Kitty({ navigation }) {
         cachePolicy="memory"
       />
       <TabButtons
-        onExit={() => navigation?.navigate?.('temporada2')}
+        onExit={() => navigation?.navigate?.(destinoSalida)}
         customAddButton={(
           <View style={{ flexDirection: 'row' }}>
             {auth.currentUser?.email === ADMIN_EMAIL && (

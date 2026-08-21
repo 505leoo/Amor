@@ -1,42 +1,69 @@
-import React, { useEffect, useState, memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import React, { useEffect, useRef, useState, memo } from 'react';
+import { Animated, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import Svg, { Path, Defs, LinearGradient, Stop, G, Text as SvgText, Ellipse } from 'react-native-svg';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../firebaseConfig';
+import { auth } from '../firebaseConfig';
+import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 
-const ANIMALITOS = {
-  halcon: require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
-};
+const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
 
 export default memo(function PanelPerfil({ navigation }) {
-  const [nombre, setNombre] = useState(auth.currentUser?.displayName || 'amigo');
-  const [animalito, setAnimalito] = useState('halcon');
-  const [avatarUri, setAvatarUri] = useState(null);
-  const [nivel, setNivel] = useState(1);
-  const [exp, setExp] = useState(0);
+  const datosIniciales = getCachedUserData(auth.currentUser?.uid);
+  const nombreInicial = datosIniciales?.datosCompletos?.nombre || datosIniciales?.nombre || auth.currentUser?.displayName || 'amigo';
+  const avatarInicial = datosIniciales?.iconoUrl || datosIniciales?.photoURL || ICONO_DEFAULT;
+  const expInicial = typeof datosIniciales?.exp === 'number' ? datosIniciales.exp : 0;
+  const { data: userData, loaded } = useUserDocument(
+    data => ({
+      nombre: data?.datosCompletos?.nombre || data?.nombre,
+      avatarUri: data?.iconoUrl || data?.photoURL || ICONO_DEFAULT,
+      exp: data?.exp,
+    }),
+    undefined,
+    (a, b) => a?.nombre === b?.nombre && a?.avatarUri === b?.avatarUri && a?.exp === b?.exp,
+  );
+  const [nombre, setNombre] = useState(nombreInicial);
+  const [avatarUri, setAvatarUri] = useState(avatarInicial);
+  const [profileLoaded, setProfileLoaded] = useState(Boolean(datosIniciales));
+  const profileReveal = useRef(new Animated.Value(datosIniciales ? 1 : 0)).current;
+  const [nivel, setNivel] = useState(1 + Math.floor(expInicial / 125));
+  const [exp, setExp] = useState(expInicial);
+  const perfilYaVisible = useRef(Boolean(datosIniciales));
 
   useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) return undefined;
-    return onSnapshot(doc(db, 'usuarios', uid), snap => {
-      if (!snap.exists()) return;
-      const d = snap.data() || {};
-      setNombre(d.datosCompletos?.nombre || d.nombre || auth.currentUser?.displayName || 'amigo');
-      setAnimalito(d.animalito ?? 'halcon');
-      setAvatarUri(d.iconoUrl || d.photoURL || null);
-      const currentExp = typeof d.exp === 'number' ? d.exp : 0;
-      setExp(currentExp);
-      setNivel(1 + Math.floor(currentExp / 125));
-    }, () => {});
-  }, []);
+    if (!loaded) return;
+    const d = userData || {};
+    setNombre(d.nombre || auth.currentUser?.displayName || 'amigo');
+    setAvatarUri(d.avatarUri || ICONO_DEFAULT);
+    const currentExp = typeof d.exp === 'number' ? d.exp : 0;
+    setExp(currentExp);
+    setNivel(1 + Math.floor(currentExp / 125));
+    setProfileLoaded(true);
+  }, [loaded, userData]);
+
+  useEffect(() => {
+    if (!profileLoaded) return;
+    if (perfilYaVisible.current) return;
+    perfilYaVisible.current = true;
+    Animated.timing(profileReveal, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+  }, [profileLoaded, profileReveal]);
 
   return (
-    <TouchableOpacity style={styles.wrap} onPress={() => navigation?.navigate('perfil')} activeOpacity={0.8}>
+    <TouchableOpacity
+      style={styles.wrap}
+      onPress={() => navigation?.navigate('perfil')}
+      hitSlop={6}
+      activeOpacity={0.8}
+    >
       <View style={styles.avatarBox}>
-        <Image source={avatarUri ? { uri: avatarUri } : (ANIMALITOS[animalito] ?? ANIMALITOS.halcon)} style={styles.avatar} contentFit="contain" cachePolicy="memory-disk" />
+        {avatarUri && <Image
+          source={typeof avatarUri === 'string' ? { uri: avatarUri } : avatarUri}
+          style={styles.avatar}
+          contentFit="cover"
+          cachePolicy="memory-disk"
+          transition={0}
+        />}
       </View>
-      <View style={styles.greetingBox}>
+      <Animated.View style={[styles.greetingBox, { opacity: profileReveal }]}>
         <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
         <View style={styles.profileLevelBar}>
           <View style={styles.profileHeartWrap}>
@@ -47,7 +74,7 @@ export default memo(function PanelPerfil({ navigation }) {
           </View>
           <View style={styles.profileLevelTrack}><View style={[styles.profileLevelFill, { width: `${Math.round((exp % 125) / 125 * 100)}%` }]} /></View>
         </View>
-      </View>
+      </Animated.View>
       <Text style={styles.profileArrow}>›</Text>
     </TouchableOpacity>
   );
@@ -65,14 +92,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d0ad70',
     shadowColor: '#5f4428', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 10,
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 260, zIndex: 260,
   },
   avatarBox: {
     width: 38, height: 38, borderRadius: 7,
     overflow: 'hidden',
     backgroundColor: '#fff7e6', borderWidth: 1, borderColor: '#d5b475',
   },
-  avatar: { width: '100%', height: '100%' },
+  avatar: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   greetingBox: { marginLeft: 8, maxWidth: 132, flex: 1 },
   nombre: {
     fontFamily: 'Delius', fontSize: 12, lineHeight: 14, fontWeight: '900',

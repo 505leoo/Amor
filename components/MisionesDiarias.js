@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated, Modal } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Defs, LinearGradient, Stop, Circle, Ellipse } from 'react-native-svg';
 import { useMisiones } from '../MisionesContext';
+import { actualizarPasoTutorial } from './Tutorial';
 import RecompensaOverlay from './RecompensaOverlay';
 import { doc, updateDoc, increment, setDoc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebaseConfig';
@@ -15,7 +17,7 @@ const DIM   = 'rgba(90,40,55,0.55)';
 const BG    = '#fdf0f4';
 const BG2   = '#fff7f9';
 
-function ChicleMision({ titulo, monedas, chicles, globos, size = 180 }) {
+function ChicleMision({ titulo, monedas, chicles, globos, exp, cartas, size = 180 }) {
   const R  = size / 2 - 20;
   const cx = size / 2;
   const ts = { textShadowColor: 'rgba(0,0,0,0.45)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 };
@@ -54,6 +56,16 @@ function ChicleMision({ titulo, monedas, chicles, globos, size = 180 }) {
           <View style={{ alignItems: 'center', gap: 2 }}>
             <Text style={{ fontSize: 28, lineHeight: 32 }}>🍬</Text>
             <Text style={[{ fontFamily: 'Omori', fontSize: 18, color: GOLD2 }, ts]}>+{chicles}</Text>
+          </View>
+        ) : exp != null ? (
+          <View style={{ alignItems: 'center', gap: 2 }}>
+            <Text style={{ fontSize: 28, lineHeight: 32 }}>⚡</Text>
+            <Text style={[{ fontFamily: 'Omori', fontSize: 18, color: GOLD2 }, ts]}>+{exp} EXP</Text>
+          </View>
+        ) : cartas != null ? (
+          <View style={{ alignItems: 'center', gap: 2 }}>
+            <Text style={{ fontSize: 28, lineHeight: 32 }}>🃏</Text>
+            <Text style={[{ fontFamily: 'Omori', fontSize: 18, color: GOLD2 }, ts]}>+{cartas}</Text>
           </View>
         ) : monedas != null ? (
           <View style={{ alignItems: 'center', gap: 2 }}>
@@ -116,7 +128,11 @@ function useMisionesNs(lista, nsKey) {
     } else {
       const mon = mision._monedas ?? 10;
       await updateDoc(userRef, { dinero: increment(mon) }).catch(() => {});
-      setReward({ titulo: mision.titulo, monedas: mon });
+      setReward({
+        titulo: mision.titulo,
+        monedas: mon,
+        ...(mision.id === 'login_f1' ? { tutorialPaso: 3 } : {}),
+      });
     }
   };
 
@@ -136,7 +152,7 @@ const useMisionesEvento = useMisionesNs;
 //   eventoKey          — string identificador del evento para Firestore (requerido si misionesEvento)
 //   instanceKey        — string para aislar reclamados en modo global (ej: 'inicio', 'paleta')
 //   recompensaOverride — 'globo' | 'chicle' | 'monedas' — fuerza un tipo de recompensa en modo global
-export default function MisionesDiarias({ icono, misionesEvento, eventoKey, instanceKey, recompensaOverride }) {
+export default function MisionesDiarias({ icono, misionesEvento, eventoKey, instanceKey, recompensaOverride, compacto = false, externo = false, abierto = false, onCerrar }) {
   // ── Modo contexto global (sin evento) ────────────────────────────────────
   const ctx = useMisiones();
 
@@ -183,6 +199,7 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
   const [open, setOpen]       = useState(false);
   const [mounted, setMounted] = useState(false);
   const [tiempoReset, setTiempoReset] = useState('');
+  const [paginaMision, setPaginaMision] = useState(0);
   const slideAnim    = useRef(new Animated.Value(300)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -225,7 +242,37 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
     }
   }, [open]);
 
+  useEffect(() => {
+    if (externo) setOpen(abierto);
+  }, [abierto, externo]);
+
+  useEffect(() => {
+    if (open) setPaginaMision(0);
+  }, [open]);
+
+  const cerrar = () => {
+    setOpen(false);
+    onCerrar?.();
+  };
+
   const iconoBoton = icono ?? <Text style={{ fontSize: 18 }}>🎈</Text>;
+  const iconoMision = m => ({
+    login_conteo: 'calendar-today', minutos_hoy: 'sports-esports', partidas_hoy: 'extension',
+    misiones_hoy: 'task-alt', secciones_hoy: 'explore', pareja_entro_hoy: 'favorite',
+    regalos_hoy: 'card-giftcard', compras_hoy: 'storefront',
+  }[m.campo] || 'auto-awesome');
+  const misionActual = misiones?.[paginaMision] || misiones?.[0];
+  let progresoActual = 0;
+  if (misionActual) {
+    progresoActual = misionActual.campo === 'login_conteo'
+      ? Math.min(loginData?.conteo ?? 0, misionActual.meta)
+      : misionActual._subCampos
+        ? Math.min(misionActual._subCampos.filter(c => progreso[c]).length, misionActual.meta)
+        : misionActual._distintas
+          ? Math.min(Object.keys(progreso[misionActual.campo] || {}).length, misionActual.meta)
+          : Math.min(progreso[misionActual.campo] ?? 0, misionActual.meta);
+  }
+  const estadoActual = misionActual ? getEstado(misionActual) : 'pendiente';
 
   // ── Calcular etiqueta de recompensa para mostrar en cada misión ───────────
   const getRecompensaLabel = (m) => {
@@ -235,43 +282,39 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
     if (tipo === 'globo') {
       const n = esEvento
         ? (m._globos > 0 ? m._globos : 1)
-        : (m._chicles > 0 ? m._chicles : 1);
+        : (m._globos ?? m._chicles ?? 1);
       return `+${n} 🎈`;
     }
     if (tipo === 'chicle') {
       const n = m._chicles > 0 ? m._chicles : 1;
       return `+${n} 🍬`;
     }
+    if (tipo === 'exp') return `+${m._exp ?? 5} EXP`;
+    if (tipo === 'cartasAnimalitos') return `+${m._cartas ?? 1} cartas`;
     const n = m._monedas ?? 10;
     return `+${n} 🪙`;
   };
 
   return (
     <>
-      <TouchableOpacity onPress={() => setOpen(v => !v)} activeOpacity={0.82} style={s.boton}>
-        {iconoBoton}
-        <Text style={s.botonTexto}>Misiones</Text>
-        {pendientesReclamar > 0 && (
-          <View style={s.badge}><Text style={s.badgeText}>{pendientesReclamar}</Text></View>
-        )}
-      </TouchableOpacity>
+      {!externo && <TouchableOpacity onPress={() => setOpen(v => !v)} activeOpacity={0.82} style={[s.boton, compacto && s.botonCompacto]}>
+          {iconoBoton}
+          <Text style={[s.botonTexto, compacto && s.botonTextoCompacto]}>Misiones</Text>
+          {pendientesReclamar > 0 && <View style={s.badge}><Text style={s.badgeText}>{pendientesReclamar}</Text></View>}
+        </TouchableOpacity>}
 
-      <Modal visible={mounted} transparent animationType="none" onRequestClose={() => setOpen(false)}>
-        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setOpen(false)}>
-          <Animated.View style={[s.backdrop, { opacity: backdropAnim, ...StyleSheet.absoluteFillObject }]} />
-        </TouchableOpacity>
-        <Animated.View style={[s.panel, { transform: [{ translateX: slideAnim }] }]} onStartShouldSetResponder={() => true}>
+      <Modal visible={mounted} transparent animationType="none" onRequestClose={cerrar}>
+        <View style={s.modalRoot}>
+          <TouchableOpacity style={s.modalBackdrop} activeOpacity={1} onPress={cerrar}>
+            <Animated.View style={[s.backdrop, { opacity: backdropAnim, ...StyleSheet.absoluteFillObject }]} />
+          </TouchableOpacity>
+          <Animated.View style={[s.panel, { transform: [{ translateX: slideAnim }] }]} onStartShouldSetResponder={() => true}>
 
           <View style={s.panelHeader}>
             <View style={s.panelHeaderRow}>
               <Text style={s.panelTitulo}>Misiones del día</Text>
               <View style={s.panelHeaderAcciones}>
-                {resetDev && (
-                  <TouchableOpacity onPress={resetDev} style={s.resetBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Text style={s.resetBtnText}>🔄</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity onPress={() => setOpen(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <TouchableOpacity onPress={cerrar} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Text style={s.panelX}>✕</Text>
                 </TouchableOpacity>
               </View>
@@ -286,56 +329,41 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
           </View>
 
           <View style={s.lista}>
-            {(misiones ?? []).map((m) => {
-              // Calcular progreso visual correctamente
-              let actual;
-              if (!esEvento && m.campo === 'login_conteo') {
-                actual = Math.min(loginData?.conteo ?? 0, m.meta);
-              } else if (!esEvento && m._subCampos) {
-                actual = Math.min(m._subCampos.filter(c => progreso[c]).length, m.meta);
-              } else {
-                actual = Math.min(progreso[m.campo] ?? 0, m.meta);
-              }
+            {(misiones ?? []).map(m => {
+              const actual = m.campo === 'login_conteo'
+                ? Math.min(loginData?.conteo ?? 0, m.meta)
+                : m._subCampos
+                  ? Math.min(m._subCampos.filter(c => progreso[c]).length, m.meta)
+                  : m._distintas
+                    ? Math.min(Object.keys(progreso[m.campo] || {}).length, m.meta)
+                    : Math.min(progreso[m.campo] ?? 0, m.meta);
               const estado = getEstado(m);
-              return (
-                <View key={m.id} style={s.item}>
-                  <Text style={s.itemIcono}>{m.icono}</Text>
-                  <View style={s.itemInfo}>
-                    <Text style={s.itemTitulo}>{m.titulo}</Text>
-                    <Text style={s.itemDesc}>{m.desc}</Text>
-                    <Text style={s.itemProgreso}>{actual}/{m.meta}</Text>
-                  </View>
-                  <View style={s.itemDerecha}>
-                    <Text style={[
-                      s.itemRecompensa,
-                      estado === 'reclamado' && s.itemRecompensaReclamada,
-                    ]}>
-                      {getRecompensaLabel(m)}
-                    </Text>
-                    <TouchableOpacity
-                      style={[s.itemBtn, estado === 'reclamar' && s.itemBtnReclamar, estado === 'reclamado' && s.itemBtnReclamado]}
-                      onPress={() => estado === 'reclamar' && reclamar(m)}
-                      activeOpacity={estado === 'reclamar' ? 0.75 : 1}
-                      disabled={estado !== 'reclamar'}
-                    >
-                      <Text style={[s.itemBtnText, estado === 'reclamar' && s.itemBtnTextReclamar]}>
-                        {estado === 'pendiente' ? 'Pendiente' : estado === 'reclamar' ? 'Reclamar' : '✓'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
+              return <View key={m.id} style={s.misionRow}>
+                <View style={s.misionRowIcon}><MaterialIcons name={iconoMision(m)} size={17} color="#c46d83" /></View>
+                <View style={s.misionRowInfo}><Text style={s.misionRowTitle}>{m.titulo}</Text><Text style={s.misionRowDesc} numberOfLines={1}>{m.desc}</Text><View style={s.misionRowBar}><View style={[s.misionRowBarFill, { width: `${(actual / m.meta) * 100}%` }]} /></View></View>
+                <View style={s.misionRowRight}><View style={s.misionRowStats}><Text style={s.misionRowReward}>{getRecompensaLabel(m)}</Text><Text style={s.misionRowProgress}>{actual}/{m.meta}</Text></View><TouchableOpacity style={[s.misionRowBtn, estado === 'reclamar' && s.misionRowBtnReady]} onPress={() => estado === 'reclamar' && reclamar(m)} disabled={estado !== 'reclamar'}><Text style={[s.misionRowBtnText, estado === 'reclamar' && s.misionRowBtnTextReady]}>{estado === 'reclamado' ? '✓ Reclamada' : estado === 'reclamar' ? 'Reclamar' : 'Pendiente'}</Text></TouchableOpacity></View>
+              </View>;
             })}
           </View>
 
           {/* reset movido al header */}
-        </Animated.View>
+          </Animated.View>
+        </View>
       </Modal>
 
-      <RecompensaOverlay visible={!!reward} onClose={() => setReward(null)}>
+      <RecompensaOverlay
+        visible={!!reward}
+        onClose={() => {
+          const pasoTutorial = reward?.tutorialPaso;
+          setReward(null);
+          if (pasoTutorial != null) actualizarPasoTutorial(auth.currentUser?.uid, pasoTutorial).catch(() => {});
+        }}
+      >
         <ChicleMision
           titulo={reward?.titulo}
           chicles={reward?.chicles}
+          exp={reward?.exp}
+          cartas={reward?.cartas}
           monedas={reward?.monedas ?? null}
           globos={reward?.globos ?? null}
         />
@@ -354,32 +382,81 @@ const s = StyleSheet.create({
     shadowOpacity: 0.35, shadowRadius: 4, elevation: 5,
   },
   botonTexto: { fontFamily: 'Omori', fontSize: 10, color: '#fdf0e0', letterSpacing: 1 },
+  botonTextoCompacto: { color: '#76552f', fontFamily: 'Delius', fontSize: 5.8, fontWeight: '900', letterSpacing: 0.1 },
+  botonCompacto: {
+    width: 50, height: 38, flexDirection: 'column', justifyContent: 'center', gap: 0,
+    paddingVertical: 3, paddingHorizontal: 2,
+    backgroundColor: '#f1e1bd', borderRadius: 0,
+    borderLeftWidth: 1, borderLeftColor: '#d0ad70',
+    borderWidth: 1, borderColor: '#d0ad70',
+    shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.28, shadowRadius: 6, elevation: 12,
+  },
   badge: {
     backgroundColor: '#f5c842', borderRadius: 4,
     minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 4,
   },
   badgeText: { fontSize: 8, color: '#3a2000', fontWeight: '900' },
-  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(6,0,10,0.88)' },
+  modalRoot: { flex: 1, backgroundColor: 'rgba(35,24,18,0.68)' },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent' },
   panel: {
-    position: 'absolute', top: 0, bottom: 0, right: 0, width: '36%',
-    backgroundColor: BG, borderLeftWidth: 1, borderLeftColor: 'rgba(255,143,168,0.35)',
-    paddingTop: 8, paddingBottom: 12,
-    shadowColor: '#c06080', shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.18, shadowRadius: 12, elevation: 12,
+    position: 'absolute', top: '50%', left: '50%', width: 330, height: 320,
+    marginLeft: -165, marginTop: -160, backgroundColor: '#fff1e5', borderRadius: 18,
+    borderWidth: 2, borderColor: '#d78da2', paddingTop: 8, paddingBottom: 8,
+    shadowColor: '#73394f', shadowOffset: { width: 0, height: 7 },
+    shadowOpacity: 0.3, shadowRadius: 14, elevation: 20,
   },
-  panelHeader:    { paddingHorizontal: 14, marginBottom: 6 },
+  panelHeader:    { paddingHorizontal: 14, marginBottom: 3 },
   panelHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   panelHeaderAcciones: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  panelTitulo:    { fontFamily: 'Omori', fontSize: 13, color: ROSE, letterSpacing: 0.4 },
+  panelTitulo:    { fontFamily: 'Delius', fontSize: 15, color: '#a34f6b', fontWeight: '900', letterSpacing: 0.2 },
   panelX:         { fontSize: 14, color: 'rgba(180,80,100,0.55)', fontWeight: '700' },
   resetBtn:       { width: 20, height: 20, justifyContent: 'center', alignItems: 'center' },
   resetBtnText:   { fontSize: 13 },
   panelSubRow:    { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
   panelSub:       { fontFamily: 'Delius', fontSize: 8, color: DIM },
   panelReset:     { fontFamily: 'Omori', fontSize: 7, color: 'rgba(180,80,100,0.45)', letterSpacing: 0.2 },
-  barBg:   { height: 2, backgroundColor: 'rgba(255,143,168,0.18)', marginHorizontal: 14, borderRadius: 2, marginBottom: 6 },
+  barBg:   { height: 3, backgroundColor: 'rgba(255,143,168,0.2)', marginHorizontal: 14, borderRadius: 2, marginBottom: 3 },
   barFill: { height: '100%', backgroundColor: PINK, borderRadius: 2 },
-  lista: { flex: 1, paddingHorizontal: 8, gap: 4, justifyContent: 'center' },
+  lista: { flex: 1, paddingHorizontal: 10, paddingVertical: 4, gap: 5, justifyContent: 'center' },
+  misionRow: { minHeight: 45, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 6, paddingVertical: 5, borderRadius: 10, backgroundColor: '#fffaf0', borderWidth: 1, borderColor: '#edc3ce' },
+  misionRowIcon: { width: 29, height: 29, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#f8dce5' },
+  misionRowEmoji: { fontSize: 16 },
+  misionRowInfo: { flex: 1 },
+  misionRowTitle: { color: '#a34f6b', fontFamily: 'Delius', fontSize: 9, fontWeight: '900' },
+  misionRowDesc: { color: '#886473', fontFamily: 'Delius', fontSize: 6.5, lineHeight: 8, fontWeight: '700' },
+  misionRowBar: { height: 3, marginTop: 3, overflow: 'hidden', borderRadius: 3, backgroundColor: '#f1dfe4' },
+  misionRowBarFill: { height: '100%', borderRadius: 3, backgroundColor: '#d67892' },
+  misionRowRight: { width: 51, alignItems: 'flex-end', gap: 2 },
+  misionRowStats: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  misionRowProgress: { color: '#b45e78', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
+  misionRowReward: { color: '#c18a43', fontFamily: 'Delius', fontSize: 6, fontWeight: '900' },
+  misionRowBtn: { minWidth: 43, alignItems: 'center', paddingHorizontal: 3, paddingVertical: 3, borderRadius: 5, backgroundColor: '#f2e7e5', borderWidth: 1, borderColor: '#d9c6c8' },
+  misionRowBtnReady: { backgroundColor: '#d67892', borderColor: '#ad536f' },
+  misionRowBtnText: { color: '#987b83', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '900' },
+  misionRowBtnTextReady: { color: '#fffaf0' },
+  misionCard: { alignItems: 'center', paddingHorizontal: 18, paddingVertical: 8, borderRadius: 14, backgroundColor: '#fffaf0', borderWidth: 1, borderColor: '#edc3ce' },
+  misionIconWrap: { width: 46, height: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 16, backgroundColor: '#f8dce5', borderWidth: 1, borderColor: '#e6a9ba' },
+  misionIcon: { fontSize: 23 },
+  misionTitulo: { marginTop: 5, color: '#a34f6b', fontFamily: 'Delius', fontSize: 14, fontWeight: '900' },
+  misionDesc: { marginTop: 2, color: '#886473', fontFamily: 'Delius', fontSize: 8, lineHeight: 10, fontWeight: '700', textAlign: 'center' },
+  misionProgressRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 7 },
+  misionProgress: { color: '#b45e78', fontFamily: 'Delius', fontSize: 13, fontWeight: '900' },
+  misionReward: { color: '#c18a43', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  misionBar: { width: '100%', height: 4, marginTop: 3, overflow: 'hidden', borderRadius: 4, backgroundColor: '#f1dfe4' },
+  misionBarFill: { height: '100%', borderRadius: 4, backgroundColor: '#d67892' },
+  misionBtn: { width: '100%', alignItems: 'center', marginTop: 7, paddingVertical: 6, borderRadius: 9, backgroundColor: '#f2e7e5', borderWidth: 1, borderColor: '#d9c6c8' },
+  misionBtnReady: { backgroundColor: '#d67892', borderColor: '#ad536f' },
+  misionBtnDone: { backgroundColor: '#e2f0df', borderColor: '#a4c99c' },
+  misionBtnText: { color: '#987b83', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  misionBtnTextReady: { color: '#fff9f2' },
+  misionPager: { height: 23, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
+  misionArrow: { color: '#a34f6b', fontSize: 25, lineHeight: 25 },
+  misionArrowDisabled: { color: '#d9c9c5' },
+  misionDots: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  misionDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#e0c5ca' },
+  misionDotActive: { width: 14, backgroundColor: '#d67892' },
   item: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: BG2, borderRadius: 7, borderWidth: 1, borderColor: 'rgba(255,143,168,0.22)',

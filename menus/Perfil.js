@@ -1,13 +1,43 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, View, Text, StyleSheet, StatusBar, TouchableOpacity } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { Svg, Ellipse, Circle, Path } from 'react-native-svg';
 import TabButtons from '../components/TabButtons';
-import TrophyIcon, { getTrophyRank, getTrophyColors } from '../components/TrophyIcon';
+
+const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
 import Player, { SinAnimal } from '../Player';
+import { HistorialReporteSemanal } from '../components/ReporteSemanal';
+
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
+
+const GAME_DETAILS = {
+  conexiones: { nombre: 'Hilito', icono: 'all-inclusive', color: '#8064ee' },
+};
+
+const gameDetailsFor = key => GAME_DETAILS[key] || {
+  nombre: key.replace(/[_-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase()),
+  icono: 'sports-esports',
+  color: '#c9748f',
+};
+
+const topGameFor = (juegos) => {
+  const candidates = Object.entries(juegos || {})
+    .map(([key, stats]) => ({ key, nivel: Number(stats?.nivel) || 1 }))
+    .filter(({ nivel }) => Number.isFinite(nivel));
+  const best = candidates.sort((a, b) => b.nivel - a.nivel)[0] || { key: 'conexiones', nivel: 1 };
+  return { ...gameDetailsFor(best.key), nivel: best.nivel };
+};
+
+const masteryTitleFor = (genero, nivel) => {
+  if (nivel >= 99) return 'Leyenda';
+  if (nivel >= 60) return genero === 'femenino' ? 'Maestra' : 'Maestro';
+  if (nivel >= 30) return genero === 'femenino' ? 'Experta' : 'Experto';
+  if (nivel >= 10) return 'Aprendiz';
+  return 'Principiante';
+};
 
 const generoCorto = (g) => {
   if (g === 'masculino') return 'M';
@@ -219,6 +249,10 @@ const Stat = ({ label, value }) => (
 const Perfil = ({ navigation, route }) => {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [avatarLoaded, setAvatarLoaded] = useState(false);
+  const [historialAbierto, setHistorialAbierto] = useState(false);
+  const avatarReveal = useRef(new Animated.Value(0)).current;
+  const contentReveal = useRef(new Animated.Value(0)).current;
 
   // Si se pasa un uid externo, es modo "ver perfil ajeno" (solo lectura)
   const externalUid = route?.params?.uid ?? null;
@@ -227,8 +261,11 @@ const Perfil = ({ navigation, route }) => {
   useEffect(() => {
     const user = auth.currentUser;
     const targetUid = externalUid ?? user?.uid;
+    // Al cambiar de perfil no conservamos la imagen del usuario anterior
+    // mientras llega el snapshot nuevo.
+    setLoading(true);
+    setUserData(null);
     if (!targetUid) { setLoading(false); return; }
-
     const unsub = onSnapshot(
       doc(db, 'usuarios', targetUid),
       (snap) => {
@@ -247,6 +284,7 @@ const Perfil = ({ navigation, route }) => {
             nivel: typeof d.nivel === 'number' ? d.nivel : 1,
             exp: typeof d.exp === 'number' ? d.exp : 0,
             racha: typeof d.racha === 'number' ? d.racha : 0,
+            juegos: d.juegos || {},
             estado: d.estado || 'activo',
             uid: targetUid,
           });
@@ -256,20 +294,38 @@ const Perfil = ({ navigation, route }) => {
             dni: null, correo: soloLectura ? '—' : (user?.email || '—'),
             edad: null, fechaNacimiento: null, genero: null,
             photoURL: null, dinero: 0, nivel: 1, exp: 0, racha: 0, estado: '—', uid: targetUid,
-            iconoUrl: null,
+            iconoUrl: null, juegos: {},
           });
         }
         setLoading(false);
       },
-      () => setLoading(false),
-    );
+      () => setLoading(false),    );
     return () => unsub();
   }, [externalUid]);
 
+  // Fade in del contenido cuando los datos están listos
+  useEffect(() => {
+    if (!loading && userData) {
+      contentReveal.setValue(0);
+      Animated.timing(contentReveal, {
+        toValue: 1,
+        duration: 60,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [loading, userData]);
+
   const d = userData;
-  const nivel = d?.nivel ?? 1;
-  const trophyRank = getTrophyRank(nivel);
-  const trophyColors = getTrophyColors(nivel);
+  const mastery = topGameFor(d?.juegos);
+  const masteryTitle = masteryTitleFor(d?.genero, mastery.nivel);
+  const avatarUri = d?.iconoUrl || d?.photoURL || ICONO_DEFAULT;
+
+  const prevAvatarUri = useRef(null);
+
+  useEffect(() => {
+    if (prevAvatarUri.current === avatarUri) return;
+    prevAvatarUri.current = avatarUri;
+  }, [avatarUri]);
 
   return (
     <View style={s.root}>
@@ -294,31 +350,33 @@ const Perfil = ({ navigation, route }) => {
           cachePolicy="memory-disk"
         />
         <View style={s.box}>
-          {loading ? (
-            <Text style={s.loadingText}>Cargando…</Text>
-          ) : d ? (
-            <View style={s.inner}>
-
-              {/* Columna izquierda: avatar + trofeo */}
+          {d && (
+            <Animated.View style={[s.inner, { opacity: contentReveal }]}>
+              {/* Columna izquierda: avatar + juego destacado */}
               <View style={s.leftCol}>
-                <TouchableOpacity
+                <AnimatedTouchableOpacity
                   style={s.photoShell}
-                  onPress={() => !soloLectura && navigation?.navigate('iconos')}
+                  onPress={() => !soloLectura && navigation?.navigate?.('iconos')}
+                  disabled={soloLectura}
                   activeOpacity={soloLectura ? 1 : 0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Cambiar icono de perfil"
                 >
-                  {d.iconoUrl
-                    ? <ExpoImage source={{ uri: d.iconoUrl }} style={s.photoImg} contentFit="cover" cachePolicy="memory-disk" />
-                    : d.photoURL
-                      ? <ExpoImage source={{ uri: d.photoURL }} style={s.photoImg} contentFit="cover" cachePolicy="memory-disk" />
-                      : <View style={s.photoFallback}><Text style={s.photoLetter}>{(d.nombre || '?')[0].toUpperCase()}</Text></View>
-                  }
-                </TouchableOpacity>
-                <View style={s.trophyBlock}>
-                  <View style={s.trophyClip}>
-                    <TrophyIcon nivel={nivel} scale={0.2} />
+                  <View style={s.photoTouch}>
+                    {avatarUri && <ExpoImage
+                      source={typeof avatarUri === 'string' ? { uri: avatarUri } : avatarUri}
+                      style={s.photoImg}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />}
                   </View>
-                  <Text style={[s.trophyRank, { color: trophyColors[0] }]}>{trophyRank}</Text>
-                  <Text style={s.nivelText}>NV. {nivel}</Text>
+                </AnimatedTouchableOpacity>
+                <View style={s.masteryBlock}>
+                  <View style={[s.masteryIcon, { backgroundColor: `${mastery.color}20`, borderColor: `${mastery.color}66` }]}>
+                    <MaterialIcons name={mastery.icono} size={23} color={mastery.color} />
+                  </View>
+                  <Text style={s.masteryTitle}>{masteryTitle} de "{mastery.nombre}"</Text>
+                  <Text style={[s.masteryLevel, { color: mastery.color }]}>Nivel {mastery.nivel}</Text>
                 </View>
               </View>
 
@@ -351,6 +409,10 @@ const Perfil = ({ navigation, route }) => {
                   <View style={s.statDiv} />
                   <Stat label="MONEDAS" value={d.dinero} />
                 </View>
+                <TouchableOpacity style={s.reporteBtn} onPress={() => setHistorialAbierto(true)} activeOpacity={0.76}>
+                  <MaterialIcons name="insights" size={13} color="#b5667f" />
+                  <Text style={s.reporteBtnText}>Percepción semanal</Text>
+                </TouchableOpacity>
               </View>
 
               <View style={s.dividerV} />
@@ -392,10 +454,11 @@ const Perfil = ({ navigation, route }) => {
                 </View>
               </View>
 
-            </View>
-          ) : null}
+            </Animated.View>
+          )}
         </View>
       </View>
+      <HistorialReporteSemanal visible={historialAbierto} onClose={() => setHistorialAbierto(false)} targetUid={d?.uid} targetName={d?.nombre} />
     </View>
   );
 };
@@ -442,17 +505,15 @@ const s = StyleSheet.create({
     top: -7,
     borderColor: '#333',
     backgroundColor: '#0a0a0a',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  photoImg: { width: '100%', height: '100%' },
-  photoFallback: { width: 88, height: 88, borderRadius: 4, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0a0a0a' },
-  photoLetter: { fontSize: 32, fontWeight: '800', color: '#c9748f' },
+  photoTouch: { ...StyleSheet.absoluteFillObject },
+  photoImg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  photoHidden: { opacity: 0 },
 
-  trophyBlock: { alignItems: 'center', marginTop: 8 },
-  trophyClip: { width: 38, height: 38, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  trophyRank: { fontSize: 8, fontWeight: '900', letterSpacing: 0.5, marginTop: 2 },
-  nivelText: { fontSize: 7, fontWeight: '700', color: '#8a5a6a', letterSpacing: 1, marginTop: 1 },
+  masteryBlock: { alignItems: 'center', marginTop: 8, width: 104 },
+  masteryIcon: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  masteryTitle: { color: '#5a2a3a', fontSize: 7.5, fontWeight: '900', letterSpacing: 0.1, marginTop: 3, textAlign: 'center' },
+  masteryLevel: { fontSize: 8, fontWeight: '900', letterSpacing: 0.45, marginTop: 1 },
 
   dividerV: { width: 1, backgroundColor: 'rgba(90,42,58,0.2)', marginVertical: 4 },
   dividerH: { height: 1, backgroundColor: 'rgba(90,42,58,0.15)', marginVertical: 8 },
@@ -482,6 +543,8 @@ const s = StyleSheet.create({
   chipText: { fontSize: 7, fontWeight: '800', color: '#1565C0', letterSpacing: 0.4 },
 
   statsRow: { flexDirection: 'row', alignItems: 'center' },
+  reporteBtn: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 9, paddingVertical: 3 },
+  reporteBtnText: { color: '#b5667f', fontSize: 8, fontWeight: '800', letterSpacing: 0.25 },
   statCell: { flex: 1, alignItems: 'center' },
   statValue: { fontSize: 14, fontWeight: '800', color: '#5a2a3a' },
   statLabel: { fontSize: 6, fontWeight: '700', color: '#c9748f', letterSpacing: 1, marginTop: 1 },
