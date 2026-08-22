@@ -11,7 +11,6 @@ const PASOS = [
   { icon: 'storefront', titulo: 'Una visita al Comerciante', texto: 'Usá tus monedas para comprar la oferta especial del tutorial.' },
   { icon: 'inventory-2', titulo: 'Tu inventario', texto: 'Entrá al Inventario para conocer lo que tenés guardado.' },
   { icon: 'trending-up', titulo: 'Hacé crecer a Halcón', texto: 'Volvé a Cambiar y mejorá a Halcón usando tus cartas universales y monedas.' },
-  { icon: 'favorite', titulo: 'Conectá sus corazones', texto: 'Buscá a tu pareja y enviále una solicitud para empezar a compartir la app.' },
   { icon: 'star', titulo: 'Tu aventura recién empieza', texto: 'Ya aprendiste lo básico de Amor. Ahora podés continuar tu aventura y descubrir todo lo que preparamos para vos.' },
 ];
 
@@ -29,18 +28,18 @@ export default function Tutorial({ visible = false, onFinish }) {
   const paso = Math.min(Number(datos?.tutorialPaso || 0), PASOS.length - 1);
   const actual = PASOS[Math.min(paso, PASOS.length - 1)];
   useEffect(() => {
-    let timer;
     if (datos && pasoMostrado === null) {
       setPasoMostrado(paso);
       setModalVisible(true);
     } else if (datos && paso > pasoMostrado) {
       setPasoMostrado(paso);
-      // Deja que termine el overlay/recompensa anterior antes de presentar
-      // el siguiente paso del tutorial.
-      timer = setTimeout(() => setModalVisible(true), 260);
+      // El overlay de recompensa ya se cerró antes de avanzar el paso.
+      // Abrimos inmediatamente el siguiente modal: si lo hacíamos mediante
+      // un timer, el cleanup de este mismo efecto lo cancelaba al actualizar
+      // `pasoMostrado`.
+      setModalVisible(true);
     }
     if (datos?.tutorial === 'no' && Number(datos?.tutorialPaso || 0) >= PASOS.length) onFinish?.();
-    return () => clearTimeout(timer);
   }, [datos, paso, pasoMostrado, onFinish]);
 
   useEffect(() => {

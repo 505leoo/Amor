@@ -1,6 +1,6 @@
 {
   "name": "amor",
-  "version": "1.0.60",
+  "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node ./scripts/start.js",

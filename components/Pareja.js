@@ -45,7 +45,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
   const { data: parejaActual, loaded: userLoaded, uid } = useUserDocument(data => data?.pareja || null);
   const { data: tutorialSolicitudGuardada } = useUserDocument(data => Boolean(data?.tutorialSolicitudEnviada));
   const [pareja, setPareja] = useState(parejaInicial); // undefined = cargando
-  const [usuarios, setUsuarios] = useState(() => usuariosCache?.filter(user => user.id !== uidInicial) || []);
+  const [usuarios, setUsuarios] = useState(() => usuariosCache?.filter(user => user.id !== uidInicial && !user.pareja) || []);
   const [loading, setLoading] = useState(() => !usuariosCache);
   const [solicitudEnviada, setSolicitudEnviada] = useState(false);
   const contentReveal = useRef(new Animated.Value(contenidoEnCache ? 1 : 0)).current;
@@ -78,7 +78,9 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
     if (pareja !== null) return;
     setLoading(true);
     getUsuariosCacheados().then(lista => {
-      const disponibles = lista.filter(user => user.id !== uid);
+      // Una persona que ya está en pareja no puede recibir nuevas
+      // invitaciones ni aparecer como opción disponible.
+      const disponibles = lista.filter(user => user.id !== uid && !user.pareja);
       setUsuarios(disponibles);
       setLoading(false);
     }).catch(() => setLoading(false));
@@ -137,7 +139,23 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
     }
   };
 
-  if (pareja === undefined) return null;
+  // Mostrar el marco inmediatamente mientras Firestore resuelve la pareja.
+  // Antes devolvíamos null y el menú parecía no cargar cuando la red tardaba.
+  if (pareja === undefined) {
+    return (
+      <View style={styles.wrap}>
+        <ExpoImage
+          source={PAREJA_BACKGROUND}
+          style={StyleSheet.absoluteFill}
+          contentFit="fill"
+          cachePolicy="memory-disk"
+          priority="high"
+          transition={0}
+        />
+        <ActivityIndicator size="small" color="#d9577f" style={styles.menuCargando} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.wrap}>
@@ -201,7 +219,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
                 </TouchableOpacity>
               </View>
             )}
-            ListEmptyComponent={loading ? <ActivityIndicator size="small" color="#d9577f" style={styles.listaCargando} /> : <Text style={styles.vacio}>No hay usuarios</Text>}
+            ListEmptyComponent={loading ? <ActivityIndicator size="small" color="#d9577f" style={styles.listaCargando} /> : <Text style={styles.vacio}>No hay parejas disponibles</Text>}
           />
           <Text style={styles.nivelAmor}>Nivel de amor</Text>
           <View style={styles.capsulaContainer}>
@@ -314,16 +332,16 @@ const styles = StyleSheet.create({
     borderColor: '#4CAF50',
   },
   addBtnText: { fontSize: 14, color: '#c9748f', fontWeight: 'bold' },
-  nivelAmor: { fontSize: 8, color: '#795a37', fontFamily: 'Globo', textAlign: 'center', marginTop: 2, marginBottom: 1, fontWeight: '700', transform: [{ translateY: -35 }] },
-  capsulaContainer: { width: '100%', alignItems: 'center', marginTop: 1, marginBottom: 2, transform: [{ translateY: -35 }] },
+  nivelAmor: { position: 'absolute', left: 0, right: 0, bottom: -20, fontSize: 8, color: '#795a37', fontFamily: 'Globo', textAlign: 'center', marginBottom: 1, fontWeight: '700' },
+  capsulaContainer: { position: 'absolute', left: 0, right: 0, bottom: -48, width: '100%', alignItems: 'center' },
   enviarSolicitudBtn: {
-    marginTop: 4,
-    marginLeft: 'auto',
+    position: 'absolute',
+    left: 87,
+    bottom: -75,
     marginRight: 60,
     paddingVertical: 6,
     paddingHorizontal: 10,
     maxWidth: '50%',
-    transform: [{ translateY: -35 }],
     backgroundColor: '#d9577f',
     borderRadius: 12,
     justifyContent: 'center',
@@ -342,12 +360,13 @@ const styles = StyleSheet.create({
   enviarSolicitudTextEnviado: {
     color: '#ffffff',
   },
-  partnerLoveBar: { alignSelf: 'center', width: 120, height: 24, marginTop: 2, alignItems: 'center', justifyContent: 'center' },
-  partnerLoveTitle: { alignSelf: 'center', color: '#795a37', fontSize: 8, fontFamily: 'Globo', textAlign: 'center', marginTop: 3, marginBottom: 1, fontWeight: '700' },
-  verPerfilBtn: { alignSelf: 'center', marginTop: 9, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7, backgroundColor: 'rgba(201,116,143,0.18)', borderWidth: 1, borderColor: '#c9748f' },
+  partnerLoveBar: { alignSelf: 'center', width: 120, height: 24, marginTop: 2, alignItems: 'center', justifyContent: 'center', transform: [{ translateY: 2 }] },
+  partnerLoveTitle: { alignSelf: 'center', color: '#795a37', fontSize: 8, fontFamily: 'Globo', textAlign: 'center', marginTop: 3, marginBottom: 1, fontWeight: '700', transform: [{ translateY: 2 }] },
+  verPerfilBtn: { alignSelf: 'center', marginTop: 9, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 7, backgroundColor: 'rgba(201,116,143,0.18)', borderWidth: 1, borderColor: '#c9748f', transform: [{ translateY: 2 }] },
   verPerfilInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   verPerfilDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#d94b4b', borderWidth: 1, borderColor: 'rgba(201,116,143,0.3)' },
   verPerfilText: { color: '#c05d7d', fontSize: 10, fontFamily: 'Globo', fontWeight: '700' },
-  vacio: { fontSize: 10, color: '#aaa', textAlign: 'center', marginTop: 40 },
+  vacio: { fontSize: 10, color: '#aaa', textAlign: 'center', marginTop: 20 },
   listaCargando: { marginTop: 34 },
+  menuCargando: { marginTop: 56 },
 });

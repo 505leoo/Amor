@@ -157,35 +157,38 @@ export default function Comerciante({ navigation }) {
   const tiempoDeuda = creditoActivo ? tiempoRestanteCredito(credito.vencimientoMs, ahora) : '';
   const tieneSkin = skinId => Boolean(usuario?.skinsDesbloqueadas?.halcon?.[skinId] || usuario?.skin === skinId);
   const tieneIcono = icono => Boolean(usuario?.iconosDesbloqueados?.[icono.id] || usuario?.iconoUrl === icono.url);
+  const tutorialPaso = Number(usuario?.tutorialPaso || 0);
+  const tutorialCompraActiva = tutorialActivo && tutorialPaso === 3;
   const rotacion = cicloComercio(ahora);
   const comprasRotacion = usuario?.comercio?.compras?.[rotacion.key] || {};
   const productoComprado = producto => Boolean(comprasRotacion[producto.id]);
   const productosDisponibles = [
-    { id: 'cartas_3', temporada: 't1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 3, cantidadLabel: 'x3', precio: 180 },
-    { id: 'diamantes_25', temporada: 't1', tipo: 'diamantes', icon: 'diamond', nombre: 'Diamantes', cantidad: 25, cantidadLabel: 'x25', precio: 450 },
-    { id: 'exp_125', temporada: 't1', tipo: 'exp', icon: 'trending-up', nombre: 'Experiencia', cantidad: 125, cantidadLabel: '+125', precio: 320 },
+    { id: 'cartas_3', temporada: 't1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 3, cantidadLabel: 'x3', precio: 360 },
+    { id: 'diamantes_25', temporada: 't1', tipo: 'diamantes', icon: 'diamond', nombre: 'Diamantes', cantidad: 25, cantidadLabel: 'x25', precio: 900 },
+    { id: 'exp_125', temporada: 't1', tipo: 'exp', icon: 'trending-up', nombre: 'Experiencia', cantidad: 125, cantidadLabel: '+125', precio: 640 },
     ...catalogoIconos.length > 0 ? (catalogoIconos
       .filter(icono => contenidoDisponible(icono.temporada || 't1', temporadaActual) && (!tieneIcono(icono) || comprasRotacion[`icono_${icono.id}`]))
       .sort((a, b) => numeroTemporada(b.temporada || 't1') - numeroTemporada(a.temporada || 't1'))
-      .slice(0, 3).map(icono => ({ id: `icono_${icono.id}`, temporada: icono.temporada || 't1', tipo: 'icono', icon: 'face', nombre: 'Icono especial', cantidadLabel: 'x1', precio: 600, icono, imagen: { uri: icono.url } }))) : [],
-    ...(!tieneSkin('halcont2') || comprasRotacion.halcont2 ? [{ id: 'halcont2', temporada: 't1', tipo: 'skin', skinId: 'halcont2', icon: 'checkroom', nombre: 'Skin Halcón T2', cantidadLabel: 'x1', precio: 1000, imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png') }] : []),
+      .slice(0, 3).map(icono => ({ id: `icono_${icono.id}`, temporada: icono.temporada || 't1', tipo: 'icono', icon: 'face', nombre: 'Icono especial', cantidadLabel: 'x1', precio: 1200, icono, imagen: { uri: icono.url } }))) : [],
+    ...(!tieneSkin('halcont2') || comprasRotacion.halcont2 ? [{ id: 'halcont2', temporada: 't1', tipo: 'skin', skinId: 'halcont2', icon: 'checkroom', nombre: 'Skin Halcón T2', cantidadLabel: 'x1', precio: 2000, imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png') }] : []),
   ];
   const productosRelleno = [
-    { id: 'cartas_8', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 8, cantidadLabel: 'x8', precio: 430 },
-    { id: 'diamantes_10', tipo: 'diamantes', icon: 'diamond', nombre: 'Diamantes', cantidad: 10, cantidadLabel: 'x10', precio: 210 },
-    { id: 'cartas_1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Carta universal', cantidad: 1, cantidadLabel: 'x1', precio: 70 },
+    { id: 'cartas_8', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 8, cantidadLabel: 'x8', precio: 860 },
+    { id: 'diamantes_10', tipo: 'diamantes', icon: 'diamond', nombre: 'Diamantes', cantidad: 10, cantidadLabel: 'x10', precio: 420 },
+    { id: 'cartas_1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Carta universal', cantidad: 1, cantidadLabel: 'x1', precio: 140 },
   ];
-  // Durante el tutorial la tienda funciona como una demostración guiada:
-  // solo se ofrece una Carta universal y el saldo inicial alcanza para ella.
+  // Durante el tutorial solo se ofrece el paquete especial de 3 cartas y
+  // únicamente mientras el tutorial está detenido en el paso del comerciante.
+  // Después de comprarlo, el paso avanza y la tienda queda sin compras.
   const productos = tutorialActivo
-    ? [productosRelleno.find(producto => producto.id === 'cartas_1')]
+    ? (tutorialCompraActiva ? [{ ...productosDisponibles.find(producto => producto.id === 'cartas_3'), precio: 120 }] : [])
     : [...productosDisponibles, ...productosRelleno].slice(0, 6);
 
   const comprarProducto = async producto => {
     if (comprando) return;
     const uid = auth.currentUser?.uid;
     if (!uid) return;
-    if (tutorialActivo && producto.id !== 'cartas_1') return;
+    if (tutorialActivo && (!tutorialCompraActiva || producto.id !== 'cartas_3')) return;
     setComprando(true);
     try {
       await runTransaction(db, async transaction => {

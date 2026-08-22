@@ -305,7 +305,6 @@ export default function App() {
             if (uid) await updateDoc(doc(db, 'usuarios', uid), {
               tutorial: 'si',
               tutorialPaso: 0,
-              tutorialSolicitudEnviada: true,
               chicles: increment(2),
             }).catch(() => {});
             setTutorialActivo(false);

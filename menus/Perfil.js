@@ -266,6 +266,7 @@ const Perfil = ({ navigation, route }) => {
     setLoading(true);
     setUserData(null);
     if (!targetUid) { setLoading(false); return; }
+    let conexionesActuales = {};
     const unsub = onSnapshot(
       doc(db, 'usuarios', targetUid),
       (snap) => {
@@ -284,7 +285,13 @@ const Perfil = ({ navigation, route }) => {
             nivel: typeof d.nivel === 'number' ? d.nivel : 1,
             exp: typeof d.exp === 'number' ? d.exp : 0,
             racha: typeof d.racha === 'number' ? d.racha : 0,
-            juegos: d.juegos || {},
+            juegos: {
+              ...(d.juegos || {}),
+              conexiones: {
+                ...(d.juegos?.conexiones || {}),
+                ...conexionesActuales,
+              },
+            },
             estado: d.estado || 'activo',
             uid: targetUid,
           });
@@ -300,7 +307,26 @@ const Perfil = ({ navigation, route }) => {
         setLoading(false);
       },
       () => setLoading(false),    );
-    return () => unsub();
+    const unsubConexiones = onSnapshot(
+      doc(db, 'usuarios', targetUid, 'juegos', 'conexiones'),
+      (snap) => {
+        if (!snap.exists()) return;
+        const conexiones = snap.data() || {};
+        conexionesActuales = conexiones;
+        setUserData(previous => previous ? {
+          ...previous,
+          juegos: {
+            ...(previous.juegos || {}),
+            conexiones: {
+              ...(previous.juegos?.conexiones || {}),
+              ...conexiones,
+            },
+          },
+        } : previous);
+      },
+      () => {},
+    );
+    return () => { unsub(); unsubConexiones(); };
   }, [externalUid]);
 
   // Fade in del contenido cuando los datos están listos

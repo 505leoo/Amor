@@ -274,7 +274,6 @@ const TutorialInicio = ({ navigation }) => {
   const { data } = useUserDocument(value => ({ tutorialPaso: value?.tutorialPaso }));
   const [misionesAbiertas, setMisionesAbiertas] = useState(false);
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
-  const [tutorialSolicitudEnviada, setTutorialSolicitudEnviada] = useState(false);
   const paso = Number(data?.tutorialPaso || 0);
   return <View style={styles.container}>
     <Image source={require('../assets/inicio/inicio.png')} style={{ position: 'absolute', width: SCREEN_W, height: IMG_H, top: IMG_TOP }} contentFit="fill" />
@@ -305,9 +304,6 @@ const TutorialInicio = ({ navigation }) => {
       </TouchableOpacity>
       <InventarioModal visible={inventarioAbierto} onClose={() => { setInventarioAbierto(false); actualizarPasoTutorial(auth.currentUser?.uid, 5).catch(() => {}); }} />
     </>}
-    {(paso === 6 || paso === 7) && <View style={styles.tutorialPartnerWrap}>
-      <Pareja navigation={navigation} tutorialSolicitudEnviada={tutorialSolicitudEnviada} onTutorialSolicitud={() => { setTutorialSolicitudEnviada(true); actualizarPasoTutorial(auth.currentUser?.uid, 7).catch(() => {}); }} />
-    </View>}
   </View>;
 };
 
@@ -823,7 +819,6 @@ const styles = StyleSheet.create({
   tutorialMissionButton: { position: 'absolute', left: '50%', bottom: 6, transform: [{ translateX: -30 }], width: 60, height: 48, borderRadius: 8 },
   tutorialMerchantWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: 4 }], zIndex: 200, elevation: 200 },
   tutorialInventoryButton: { position: 'absolute', left: '50%', bottom: 6, transform: [{ translateX: -92 }], width: 60, height: 48, borderRadius: 8 },
-  tutorialPartnerWrap: { position: 'absolute', left: 0, right: 0, bottom: 160, height: 175, zIndex: 210, elevation: 210 },
   tutorialDisabledIcon: { backgroundColor: '#c8c1b5', borderColor: '#b2aa9d' },
   tutorialDisabledButton: { backgroundColor: '#e3ded3', borderColor: '#c9c2b5', opacity: 0.8 },
   tutorialDisabledText: { color: '#999287' },

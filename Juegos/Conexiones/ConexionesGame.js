@@ -654,7 +654,7 @@ export default memo(function ConexionesGame({ navigation }) {
       const grantedStars = Math.max(0, currentStars - previousClaim);
       // La cuantía se deriva del nivel validado, nunca de un valor mutable de
       // la UI que pudiera quedar desactualizado entre dos dispositivos.
-      const earned = grantedStars * (6 + levelId);
+      const earned = grantedStars * (4 + levelId);
       const partidasCompletadas = (Number(remoteGame.partidasCompletadas) || 0) + 1;
       const bonusTipo = partidasCompletadas % 5 === 0
         ? (Math.floor(partidasCompletadas / 5) % 2 === 0 ? 'globos' : 'chicles')

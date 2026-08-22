@@ -126,7 +126,7 @@ function useMisionesNs(lista, nsKey) {
       await updateDoc(userRef, { chicles: increment(mision._chicles) }).catch(() => {});
       setReward({ titulo: mision.titulo, chicles: mision._chicles });
     } else {
-      const mon = mision._monedas ?? 10;
+      const mon = mision._monedas ?? 8;
       await updateDoc(userRef, { dinero: increment(mon) }).catch(() => {});
       setReward({
         titulo: mision.titulo,
@@ -291,7 +291,7 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
     }
     if (tipo === 'exp') return `+${m._exp ?? 5} EXP`;
     if (tipo === 'cartasAnimalitos') return `+${m._cartas ?? 1} cartas`;
-    const n = m._monedas ?? 10;
+    const n = m._monedas ?? 8;
     return `+${n} 🪙`;
   };
 
