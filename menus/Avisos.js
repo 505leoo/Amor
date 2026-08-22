@@ -7,6 +7,7 @@ import { auth } from '../firebaseConfig';
 // PRIORIDAD: toda tarjeta nueva debe incluir titulo, descripcion/texto y fecha (YYYY-MM-DD).
 // La fecha alimenta el badge relativo y la fecha completa de la vista detallada.
 const ADMIN_EMAIL = 'admin@gmail.com';
+const FECHA_CORTE_INDICADOR = '2026-08-21';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 
 const obtenerPartesFecha = fecha => {
@@ -33,12 +34,15 @@ const textoFechaCompleta = fecha => {
 const SECCIONES = [
   { id: 'temporadas', titulo: 'Temporadas', descripcion: 'Nuevas aventuras y caminos por descubrir.', icono: 'event', tarjetas: [{ id: 'temporada-1', titulo: 'Temporada activa', texto: 'Descubre el nuevo camino de Menta.', fecha: '2026-08-20', detalle: 'Una nueva temporada llega con desafíos, recompensas y pequeñas historias para acompañarte durante tus partidas. Revisa las novedades y prepara todo para no perderte ninguna actividad.' }] },
   { id: 'eventos', titulo: 'Eventos', descripcion: 'Actividades especiales para compartir y disfrutar.', icono: 'celebration', tarjetas: [{ id: 'evento-1', titulo: 'Evento especial', texto: 'Hay una nueva actividad para disfrutar.', fecha: '2026-08-20', detalle: 'Durante este evento podrás participar en actividades especiales y encontrar sorpresas preparadas por Menta. Estate atento a las fechas y disfruta cada momento.' }] },
-  { id: 'novedades', titulo: 'Novedades', descripcion: 'Noticias y cambios importantes de Menta.', icono: 'new-releases', tarjetas: [{ id: 'novedad-1', titulo: 'Novedades de Menta', texto: 'Pronto conocerás todas las mejoras.', fecha: '2026-08-20', detalle: 'Aquí aparecerán las noticias importantes, las mejoras recientes y todas esas pequeñas cosas que hacen que Menta se sienta cada vez más completa.' }] },
+  { id: 'novedades', titulo: 'Novedades', descripcion: 'Noticias y cambios importantes de Menta.', icono: 'new-releases', tarjetas: [
+    { id: 'actualizacion-1-0-2-a-1-0-4', titulo: 'Actualización General', texto: 'Arreglamos varias cosas para que Amor funcione mejor.', fecha: '2026-08-21', detalle: 'En esta actualización arreglamos varios problemas: ahora el tutorial avanza correctamente después de reclamar recompensas; el Comerciante entrega 3 cartas y se bloquea cuando corresponde; mejorar a Halcón funciona con las monedas y cartas correctas; las misiones y los juegos entregan recompensas más equilibradas; el nivel y la barra de EXP del perfil se muestran correctamente; las actualizaciones de la app llegan a producción; el menú de pareja carga mejor, muestra quién está conectado de verdad y no enseña personas que ya tienen pareja; también mejoramos las temporadas, los avisos y varias pantallas para que todo sea más claro y estable. La versión cambió de la 1.0.2 a la 1.0.4.' },
+    { id: 'novedad-1', titulo: 'Novedades de Menta', texto: 'Pronto conocerás todas las mejoras.', fecha: '2026-08-20', detalle: 'Aquí aparecerán las noticias importantes, las mejoras recientes y todas esas pequeñas cosas que hacen que Menta se sienta cada vez más completa.' },
+  ] },
   { id: 'mantenimiento', titulo: 'Mantenimiento', descripcion: 'Avisos sobre pausas y ajustes del juego.', icono: 'construction', tarjetas: [{ id: 'mantenimiento-1', titulo: 'Todo en orden', texto: 'Te avisaremos antes de cualquier pausa.', fecha: '2026-08-20', detalle: 'Cuando haya una pausa programada o un ajuste importante, encontrarás aquí la información necesaria para saber qué ocurre y cuándo volverá todo a la normalidad.' }] },
   { id: 'comunidad', titulo: 'Comunidad', descripcion: 'Mensajes para crecer juntos dentro de Menta.', icono: 'groups', tarjetas: [{ id: 'comunidad-1', titulo: 'Noticias de la comunidad', texto: 'Menta también crece contigo.', fecha: '2026-08-20', detalle: 'Este espacio reúne mensajes, celebraciones y novedades que nacen junto a la comunidad. Gracias por ser parte de este rincón y ayudarlo a crecer.' }] },
 ];
 
-export const AVISOS_REVISION = SECCIONES.flatMap(seccion => seccion.tarjetas.map(tarjeta => `${seccion.id}:${tarjeta.id}:${tarjeta.fecha}`)).join('|');
+export const AVISOS_REVISION = SECCIONES.flatMap(seccion => seccion.tarjetas.filter(tarjeta => tarjeta.fecha >= FECHA_CORTE_INDICADOR).map(tarjeta => `${seccion.id}:${tarjeta.id}:${tarjeta.fecha}`)).join('|');
 
 export const AvisosModal = ({ visible, onClose }) => {
   const { width: screenWidth } = useWindowDimensions();
@@ -64,6 +68,18 @@ export const AvisosModal = ({ visible, onClose }) => {
     onClose();
   };
 
+  const marcarAvisoLeido = async (grupo, tarjeta) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const clave = `${grupo.id}:${tarjeta.id}:${tarjeta.fecha}`;
+    const revisionAnterior = await AsyncStorage.getItem(`indicador_avisos_${uid}`).catch(() => '');
+    const clavesVigentes = new Set(AVISOS_REVISION.split('|').filter(Boolean));
+    const conocidas = new Set(String(revisionAnterior || '').split('|').filter(item => clavesVigentes.has(item)));
+    conocidas.add(clave);
+    await AsyncStorage.setItem(`indicador_avisos_${uid}`, [...conocidas].join('|')).catch(() => {});
+    if (avisoPendiente?.seccionId === grupo.id && avisoPendiente?.tarjetaId === tarjeta.id) setAvisoPendiente(null);
+  };
+
   useEffect(() => {
     if (!visible) return undefined;
     setPagina(0);
@@ -83,7 +99,7 @@ export const AvisosModal = ({ visible, onClose }) => {
       const conocidas = new Set(String(revisionAnterior || '').split('|').filter(Boolean));
       let pendiente = null;
       for (const grupo of SECCIONES) {
-        const tarjeta = grupo.tarjetas.find(item => !conocidas.has(`${grupo.id}:${item.id}:${item.fecha}`));
+        const tarjeta = grupo.tarjetas.find(item => item.fecha >= FECHA_CORTE_INDICADOR && !conocidas.has(`${grupo.id}:${item.id}:${item.fecha}`));
         if (tarjeta) {
           pendiente = { seccionId: grupo.id, tarjetaId: tarjeta.id };
           break;
@@ -139,7 +155,7 @@ export const AvisosModal = ({ visible, onClose }) => {
               }}>
                 <View style={[styles.page, { width: gridWidth }]}>
                   <View style={styles.list}>
-                    {(paginas[pagina] || []).map(aviso => { const bloqueado = textoFechaRelativa(aviso.fecha).startsWith('En ') && !usuarioEsAdmin; return <Animated.View key={aviso.id} style={{ opacity: fade }}><TouchableOpacity disabled={bloqueado} activeOpacity={0.78} onPress={() => !bloqueado && setAvisoSeleccionado(aviso)} style={[styles.item, { width: tileWidth, height: 90 }, bloqueado && styles.itemDisabled]}>
+                    {(paginas[pagina] || []).map(aviso => { const bloqueado = textoFechaRelativa(aviso.fecha).startsWith('En ') && !usuarioEsAdmin; return <Animated.View key={aviso.id} style={{ opacity: fade }}><TouchableOpacity disabled={bloqueado} activeOpacity={0.78} onPress={async () => { if (!bloqueado) { await marcarAvisoLeido(seccion, aviso); setAvisoSeleccionado(aviso); } }} style={[styles.item, { width: tileWidth, height: 90 }, bloqueado && styles.itemDisabled]}>
                       <View style={[styles.itemTime, bloqueado && styles.itemTimeDisabled]}><Text style={[styles.itemTimeText, bloqueado && styles.itemDisabledText]}>{textoFechaRelativa(aviso.fecha)}</Text></View>
                       {avisoPendiente?.seccionId === seccion.id && avisoPendiente?.tarjetaId === aviso.id && <View style={styles.routeDotCard} />}
                       <MaterialIcons name={seccion.icono} size={19} color={bloqueado ? '#aebbc4' : '#5d89ab'} style={styles.itemIcon} />

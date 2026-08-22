@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { auth, db } from '../firebaseConfig';
 
 // Configuración global editable desde Firestore:
 // colección: Temporada · documento: actual · campo: Temporada = "t1" | "t2" | ...
@@ -8,14 +8,22 @@ let temporada = 't1';
 let iniciada = false;
 const listeners = new Set();
 
+const ADMINS_DEBUG = new Set(['admin@gmail.com', 'admin1@gmail.com']);
+export const temporadaParaUsuario = (datos = {}, email = auth.currentUser?.email) => {
+  const esAdminDebug = ADMINS_DEBUG.has(String(email || '').trim().toLowerCase());
+  const valor = esAdminDebug
+    ? (datos.DebugTemporada || datos.Temporada || datos.temporadaActual || 't1')
+    : (datos.Temporada || datos.temporadaActual || 't1');
+  return typeof valor === 'string' ? valor.toLowerCase() : 't1';
+};
+
 const iniciar = () => {
   if (iniciada) return;
   iniciada = true;
   console.log('[Temporada] Escuchando Temporada/actual');
   onSnapshot(doc(db, 'Temporada', 'actual'), snap => {
     const datos = snap.data() || {};
-    const valor = datos.Temporada || datos.temporadaActual || 't1';
-    temporada = typeof valor === 'string' ? valor.toLowerCase() : 't1';
+    temporada = temporadaParaUsuario(datos);
     console.log('[Temporada] Firestore respondió', { existe: snap.exists(), datos, temporada });
     listeners.forEach(listener => listener(temporada));
   }, error => {

@@ -25,7 +25,7 @@ export default memo(function PanelPerfil({ navigation }) {
   const [avatarUri, setAvatarUri] = useState(avatarInicial);
   const [profileLoaded, setProfileLoaded] = useState(Boolean(datosIniciales));
   const profileReveal = useRef(new Animated.Value(datosIniciales ? 1 : 0)).current;
-  const [nivel, setNivel] = useState(1 + Math.floor(expInicial / 125));
+  const [nivel, setNivel] = useState(1 + Math.floor(expInicial / 100));
   const [exp, setExp] = useState(expInicial);
   const perfilYaVisible = useRef(Boolean(datosIniciales));
 
@@ -36,7 +36,7 @@ export default memo(function PanelPerfil({ navigation }) {
     setAvatarUri(d.avatarUri || ICONO_DEFAULT);
     const currentExp = typeof d.exp === 'number' ? d.exp : 0;
     setExp(currentExp);
-    setNivel(1 + Math.floor(currentExp / 125));
+    setNivel(1 + Math.floor(currentExp / 100));
     setProfileLoaded(true);
   }, [loaded, userData]);
 
@@ -72,7 +72,7 @@ export default memo(function PanelPerfil({ navigation }) {
               <G><Path d="M 18 30 C 8 22 2 15 2 10 C 2 5 5 2 9 2 C 12 2 14.5 3.5 18 7 C 21.5 3.5 24 2 27 2 C 31 2 34 5 34 10 C 34 15 28 22 18 30 Z" fill="url(#perfilHeartReal)" /><Path d="M 9 4 Q 11 2 13 5 Q 11.5 1 9 2 C 5 2 3 4.5 3 8" fill="#ffffff" opacity="0.5" /><Ellipse cx="11" cy="7" rx="3" ry="3.5" fill="#ffffff" opacity="0.35" /><SvgText x="18" y="20" fontSize="14" fontWeight="bold" fill="#ffffff" textAnchor="middle" dominantBaseline="middle">{String(nivel)}</SvgText></G>
             </Svg>
           </View>
-          <View style={styles.profileLevelTrack}><View style={[styles.profileLevelFill, { width: `${Math.round((exp % 125) / 125 * 100)}%` }]} /></View>
+              <View style={styles.profileLevelTrack}><View style={[styles.profileLevelFill, { width: `${Math.round((exp % 100) / 100 * 100)}%` }]} /></View>
         </View>
       </Animated.View>
       <Text style={styles.profileArrow}>›</Text>

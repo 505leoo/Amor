@@ -47,6 +47,7 @@ import Anuncios from './components/Anuncios';
 import Tutorial from './components/Tutorial';
 import { ReporteSemanal } from './components/ReporteSemanal';
 import { reporteId, semanaActual } from './components/ReporteSemanal';
+import { temporadaParaUsuario } from './hooks/useTemporadaActual';
 
 export default function App() {
   const [loading, setLoading]           = useState(true);
@@ -156,8 +157,12 @@ export default function App() {
       try {
         const temporadaSnap = await getDoc(doc(db, 'Temporada', 'actual'));
         const datos = temporadaSnap.data() || {};
-        temporada = String(datos.Temporada || datos.temporadaActual || 't1').toLowerCase();
-        if (!temporadaSnap.exists()) await setDoc(doc(db, 'Temporada', 'actual'), { Temporada: 't1', creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() });
+        temporada = temporadaParaUsuario(datos, currentUser.email);
+        if (!temporadaSnap.exists()) {
+          await setDoc(doc(db, 'Temporada', 'actual'), { Temporada: 't1', DebugTemporada: 't1', creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() });
+        } else if (!datos.DebugTemporada) {
+          await updateDoc(doc(db, 'Temporada', 'actual'), { DebugTemporada: 't1' });
+        }
       } catch (error) { console.warn('[App] No se pudo leer la temporada, usando t1', error?.message || error); }
       const temporadaSeleccionada = temporada === 't2' ? 't2' : 't1';
       setTemporadaInicio(temporadaSeleccionada);
@@ -207,7 +212,9 @@ export default function App() {
             if (data.nivel         === undefined) updates.nivel         = 1;
             if (data.exp           === undefined) updates.exp           = 0;
             if (data.racha         === undefined) updates.racha         = 1;
-            if (data.ultimaActividad    === undefined) updates.ultimaActividad    = new Date().toISOString();
+            // Marca la última sesión para que Pareja pueda mostrar un estado
+            // online real, con expiración en lugar de un texto fijo.
+            updates.ultimaActividad = new Date().toISOString();
             if (data.fechaUltimaRacha   === undefined) updates.fechaUltimaRacha   = new Date().toISOString();
             if (Object.keys(updates).length > 0)
               updateDoc(doc(db, 'usuarios', currentUser.uid), updates).catch(() => {});

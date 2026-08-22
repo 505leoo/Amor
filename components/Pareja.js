@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
 import { Animated, View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import Svg, { Path, Defs, LinearGradient, Stop, G, Text as SvgText, Ellipse, Filter, FeGaussianBlur } from 'react-native-svg';
+import Svg, { Path, Rect, Defs, ClipPath, LinearGradient, Stop, G, Text as SvgText, Ellipse, Filter, FeGaussianBlur } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, query, where, deleteDoc } from 'firebase/firestore';
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
@@ -20,6 +20,26 @@ const getUsuariosCacheados = async () => {
 };
 const PAREJA_BACKGROUND = require('../assets/inicio/pareja.png');
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+
+const fechaActividad = valor => {
+  if (!valor) return null;
+  if (typeof valor?.toDate === 'function') return valor.toDate();
+  const fecha = new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+};
+
+const estaConectado = (usuario, ahora) => {
+  const fecha = fechaActividad(usuario?.ultimaActividad);
+  return Boolean(fecha && ahora - fecha.getTime() >= 0 && ahora - fecha.getTime() <= ONLINE_WINDOW_MS);
+};
+
+const IndicadorOnline = ({ visible }) => (
+  <View style={[styles.onlineIndicator, !visible && styles.onlineIndicatorOffline]}>
+    <View style={[styles.onlineDot, !visible && styles.onlineDotOffline]} />
+    <Text style={[styles.onlineText, !visible && styles.onlineTextOffline]}>{visible ? 'Conectado/a' : 'Desconectado/a'}</Text>
+  </View>
+);
 
 const Avatar = memo(({ uri, size = 48 }) => {
   return (
@@ -48,6 +68,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
   const [usuarios, setUsuarios] = useState(() => usuariosCache?.filter(user => user.id !== uidInicial && !user.pareja) || []);
   const [loading, setLoading] = useState(() => !usuariosCache);
   const [solicitudEnviada, setSolicitudEnviada] = useState(false);
+  const [ahora, setAhora] = useState(Date.now());
   const contentReveal = useRef(new Animated.Value(contenidoEnCache ? 1 : 0)).current;
   const contenidoYaVisible = useRef(contenidoEnCache);
   // Una cadena vacía evita que el hook use por error el documento del usuario
@@ -59,6 +80,12 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
   const ultimaParejaData = useRef(datosParejaIniciales ? { id: parejaInicial, ...datosParejaIniciales } : null);
   if (parejaDataActual) ultimaParejaData.current = parejaDataActual;
   const parejaData = parejaDataActual || (ultimaParejaData.current?.id === pareja ? ultimaParejaData.current : null);
+  const progresoNivelPareja = Math.max(0, Math.min(100, Math.round(((Number(parejaData?.exp) || 0) % 100))));
+
+  useEffect(() => {
+    const timer = setInterval(() => setAhora(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (isPaused || !uid || !userLoaded) return;
@@ -175,18 +202,16 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
             <Avatar uri={parejaData.iconoUrl || parejaData.photoURL} size={32} />
             <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
               <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{parejaData.nombre}</Text>
-              <View style={styles.onlineIndicator}>
-                <View style={styles.onlineDot} />
-                <Text style={styles.onlineText}>Conectado/a</Text>
-              </View>
+              <IndicadorOnline visible={estaConectado(parejaData, ahora)} />
             </TouchableOpacity>
           </View>
           <Text style={styles.partnerLoveTitle}>Nivel de pareja</Text>
           <View style={styles.partnerLoveBar}>
             <Svg width="120" height="24" viewBox="0 0 140 28">
-              <Defs><LinearGradient id="partnerGrad" x1="0%" y1="0%" x2="0%" y2="100%"><Stop offset="0%" stopColor="#e8dcc8" /><Stop offset="100%" stopColor="#dcd0bb" /></LinearGradient><LinearGradient id="partnerHeart" x1="0%" y1="0%" x2="0%" y2="100%"><Stop offset="0%" stopColor="#ff5a8f" /><Stop offset="50%" stopColor="#ff6b9d" /><Stop offset="100%" stopColor="#d9577f" /></LinearGradient></Defs>
+              <Defs><LinearGradient id="partnerGrad" x1="0%" y1="0%" x2="0%" y2="100%"><Stop offset="0%" stopColor="#e8dcc8" /><Stop offset="100%" stopColor="#dcd0bb" /></LinearGradient><LinearGradient id="partnerHeart" x1="0%" y1="0%" x2="0%" y2="100%"><Stop offset="0%" stopColor="#ff5a8f" /><Stop offset="50%" stopColor="#ff6b9d" /><Stop offset="100%" stopColor="#d9577f" /></LinearGradient><ClipPath id="partnerTrackClip"><Path d="M 20 4 L 135 4 Q 138 4 138 14 Q 138 24 135 24 L 20 24 Q 17 24 17 14 Q 17 4 20 4 Z" /></ClipPath></Defs>
               <Path d="M 20 4 L 135 4 Q 138 4 138 14 Q 138 24 135 24 L 20 24 Q 17 24 17 14 Q 17 4 20 4 Z" fill="url(#partnerGrad)" stroke="#c9b8a0" strokeWidth="1.5" />
-              <G transform="translate(-2, -2)"><Path d="M 18 30 C 8 22 2 15 2 10 C 2 5 5 2 9 2 C 12 2 14.5 3.5 18 7 C 21.5 3.5 24 2 27 2 C 31 2 34 5 34 10 C 34 15 28 22 18 30 Z" fill="url(#partnerHeart)" /><Path d="M 9 4 Q 11 2 13 5 Q 11.5 1 9 2 C 5 2 3 4.5 3 8" fill="#ffffff" opacity="0.5" /><Ellipse cx="11" cy="7" rx="3" ry="3.5" fill="#ffffff" opacity="0.35" /><SvgText x="18" y="20" fontSize="12" fontWeight="bold" fill="#ffffff" textAnchor="middle" dominantBaseline="middle">{String(1 + Math.floor((parejaData.exp || 0) / 125))}</SvgText></G>
+              <Rect x="17" y="4" width={121 * (progresoNivelPareja / 100)} height="20" fill="#df477e" clipPath="url(#partnerTrackClip)" />
+              <G transform="translate(-2, -2)"><Path d="M 18 30 C 8 22 2 15 2 10 C 2 5 5 2 9 2 C 12 2 14.5 3.5 18 7 C 21.5 3.5 24 2 27 2 C 31 2 34 5 34 10 C 34 15 28 22 18 30 Z" fill="url(#partnerHeart)" /><Path d="M 9 4 Q 11 2 13 5 Q 11.5 1 9 2 C 5 2 3 4.5 3 8" fill="#ffffff" opacity="0.5" /><Ellipse cx="11" cy="7" rx="3" ry="3.5" fill="#ffffff" opacity="0.35" /><SvgText x="18" y="20" fontSize="12" fontWeight="bold" fill="#ffffff" textAnchor="middle" dominantBaseline="middle">{String(1 + Math.floor((parejaData.exp || 0) / 100))}</SvgText></G>
             </Svg>
           </View>
           <TouchableOpacity style={styles.verPerfilBtn} onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.8}>
@@ -209,10 +234,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
                 <Avatar uri={item.iconoUrl || item.photoURL} size={32} />
                 <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: item.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
                   <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{item.nombre}</Text>
-                  {index === 0 && <View style={styles.onlineIndicator}>
-                    <View style={styles.onlineDot} />
-                    <Text style={styles.onlineText}>Conectado/a</Text>
-                  </View>}
+                  <IndicadorOnline visible={estaConectado(item, ahora)} />
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.addBtn, styles.addBtnHidden, enviados[item.id] && styles.addBtnSent]} onPress={() => !enviados[item.id] && enviarInvitacion(item)} disabled={!!enviados[item.id]}>
                   <Text style={styles.addBtnText}>+</Text>
@@ -309,13 +331,16 @@ const styles = StyleSheet.create({
   parejaNameStyle: { width: 'auto', fontSize: 9, fontFamily: 'Globo', color: '#d9577f', fontWeight: '700', letterSpacing: 0.3 },
   parejaInfoContainer: { flex: 1, marginLeft: 2 },
   onlineIndicator: { flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 2, gap: 4 },
+  onlineIndicatorOffline: { opacity: 0.72 },
   onlineDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#4CAF50',
   },
+  onlineDotOffline: { backgroundColor: '#aaa49a' },
   onlineText: { fontSize: 9, color: '#4CAF50', fontFamily: 'Globo', fontWeight: '500' },
+  onlineTextOffline: { color: '#aaa49a' },
   addBtnHidden: { display: 'none' },
   addBtn: {
     width: 22,
