@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
 import { Asset } from 'expo-asset';
+import * as Updates from 'expo-updates';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebaseConfig';
 import { doc, getDoc, collection, getDocs, query, limit, updateDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
@@ -61,6 +62,20 @@ export default function App() {
   const toastRef = useRef(null);
   const userRef = useRef(null);
   const loadingRef = useRef(null);
+
+  useEffect(() => {
+    // El cliente de desarrollo usa Metro y no debe aplicar OTA de producción.
+    if (__DEV__ || !Updates.isEnabled) return undefined;
+    let activo = true;
+    Updates.checkForUpdateAsync()
+      .then(async ({ isAvailable }) => {
+        if (!activo || !isAvailable) return;
+        await Updates.fetchUpdateAsync();
+        if (activo) await Updates.reloadAsync();
+      })
+      .catch(() => {});
+    return () => { activo = false; };
+  }, []);
 
   useEffect(() => { global.showToast = (opts) => toastRef.current?.show(opts); }, []);
 
