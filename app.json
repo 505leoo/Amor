@@ -97,7 +97,8 @@
       "eas": {
         "projectId": "1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec"
       },
-      "expo-navigation-bar": {}
+      "expo-navigation-bar": {},
+      "updateVersion": "1.0.4"
     },
     "owner": "leitof7"
   }

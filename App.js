@@ -60,23 +60,48 @@ export default function App() {
   const [tipoAnuncio, setTipoAnuncio] = useState('reporte');
   const [eventosAnuncio, setEventosAnuncio] = useState(['reporte']);
   const [tutorialActivo, setTutorialActivo] = useState(false);
+  const [estadoActualizacion, setEstadoActualizacion] = useState('checking');
+  const [versionActualizacion, setVersionActualizacion] = useState(null);
   const toastRef = useRef(null);
   const userRef = useRef(null);
   const loadingRef = useRef(null);
 
   useEffect(() => {
-    // El cliente de desarrollo usa Metro y no debe aplicar OTA de producción.
-    if (__DEV__ || !Updates.isEnabled) return undefined;
+    // El cliente de desarrollo usa Metro y no debe consultar OTA de producción.
+    if (__DEV__ || !Updates.isEnabled) {
+      setEstadoActualizacion('unavailable');
+      return undefined;
+    }
     let activo = true;
-    Updates.checkForUpdateAsync()
-      .then(async ({ isAvailable }) => {
-        if (!activo || !isAvailable) return;
-        await Updates.fetchUpdateAsync();
-        if (activo) await Updates.reloadAsync();
+    Promise.race([
+      Updates.checkForUpdateAsync(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('update-check-timeout')), 6000)),
+    ])
+      .then(({ isAvailable, manifest }) => {
+        if (!activo) return;
+        const version = manifest?.extra?.expoClient?.extra?.updateVersion
+          || manifest?.extra?.updateVersion
+          || manifest?.metadata?.updateVersion
+          || null;
+        setVersionActualizacion(version);
+        setEstadoActualizacion(isAvailable ? 'available' : 'unavailable');
       })
-      .catch(() => {});
+      .catch(() => { if (activo) setEstadoActualizacion('error'); });
     return () => { activo = false; };
   }, []);
+
+  const instalarActualizacion = useCallback(async () => {
+    if (estadoActualizacion === 'downloading') return;
+    setEstadoActualizacion('downloading');
+    try {
+      await Updates.fetchUpdateAsync();
+      await Updates.reloadAsync();
+    } catch (error) {
+      console.warn('[Updates] No se pudo instalar la actualización', error?.message || error);
+      setEstadoActualizacion('error');
+      global.showToast?.({ type: 'error', text: 'No pudimos actualizar. Puedes volver a intentarlo más tarde.' });
+    }
+  }, [estadoActualizacion]);
 
   useEffect(() => { global.showToast = (opts) => toastRef.current?.show(opts); }, []);
 
@@ -157,7 +182,7 @@ export default function App() {
       try {
         const temporadaSnap = await getDoc(doc(db, 'Temporada', 'actual'));
         const datos = temporadaSnap.data() || {};
-        temporada = temporadaParaUsuario(datos, currentUser.email);
+        temporada = temporadaParaUsuario(datos, currentUser?.email);
         if (!temporadaSnap.exists()) {
           await setDoc(doc(db, 'Temporada', 'actual'), { Temporada: 't1', DebugTemporada: 't1', creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() });
         } else if (!datos.DebugTemporada) {
@@ -230,6 +255,10 @@ export default function App() {
         }).catch(() => {});
       } else {
         userRef.current = null;
+        setTutorialActivo(false);
+        currentScreenRef.current = 'login';
+        setScreenParams({});
+        setCurrentScreen('login');
       }
       setAuthChecked(true);
       setLoading(false);
@@ -258,6 +287,10 @@ export default function App() {
 
           {currentScreen === 'intro' && (
               <Intro
+                updateStatus={estadoActualizacion}
+                updateVersion={versionActualizacion}
+                onAcceptUpdate={instalarActualizacion}
+                onDeclineUpdate={() => setEstadoActualizacion('declined')}
                 onComplete={() => {
                 if (!userRef.current) {
                   currentScreenRef.current = 'login';
@@ -351,7 +384,7 @@ export default function App() {
           {currentScreen === 'librotemp1'      && <LibroTemp1       navigation={navigation} route={{ params: screenParams }} />}
           {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} mode={screenParams?.mode} />}
           {currentScreen === 'canjear'          && <Canjear          navigation={navigation} />}
-          {currentScreen === 'comerciante'      && <Comerciante      navigation={navigation} />}
+          {currentScreen === 'comerciante'      && <Comerciante      navigation={navigation} temporada={screenParams?.temporada} />}
           {currentScreen === 'adminCodigos'      && <AdminCodigos     navigation={navigation} />}
           {currentScreen === 'iconos'             && <Iconos           navigation={navigation} />}
           {currentScreen === 'pase'               && <Pase             navigation={navigation} />}

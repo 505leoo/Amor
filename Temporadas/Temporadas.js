@@ -26,6 +26,8 @@ const Temporadas = ({ navigation }) => {
   const [seleccionada, setSeleccionada] = useState(1);
   const [modal, setModal] = useState(null);
   const [tienePareja, setTienePareja] = useState(null); // null = cargando
+  const correoActual = auth.currentUser?.email?.trim().toLowerCase();
+  const esAdminPreview = correoActual === 'admin@gmail.com' || correoActual === 'admin1@gmail.com';
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -47,7 +49,7 @@ const Temporadas = ({ navigation }) => {
       <StatusBar hidden />
       <TabButtons onExit={() => navigation?.navigate?.('main')} customAddButton={<View />} />
 
-      {tienePareja === false && (
+      {tienePareja === false && !esAdminPreview && (
         <View style={s.bloqueado}>
           <Text style={s.bloqueadoEmoji}>🔒</Text>
           <Text style={s.bloqueadoTitulo}>Necesitás una pareja</Text>

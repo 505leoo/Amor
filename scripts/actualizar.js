@@ -56,6 +56,11 @@ function run() {
     if (fs.existsSync(appJsonPath)) {
       const app = readJSON(appJsonPath);
       if (app.expo) {
+        // Este dato viaja dentro del manifiesto OTA y permite que la versión
+        // instalada muestre qué versión nueva está disponible antes de bajarla.
+        app.expo.extra = app.expo.extra || {};
+        app.expo.extra.updateVersion = newVersion;
+
         if (useAppRuntime) {
           // Publish using the runtime already in app.json
           explicitRuntime = app.expo.runtimeVersion || explicitRuntime;
@@ -72,9 +77,14 @@ function run() {
           console.log(`Synced app.json runtimeVersion -> ${newVersion} (from --sync-runtime)`);
         } else {
           console.log('Not modifying app.json.runtimeVersion (default safe behavior). Use --sync-runtime or --runtime to change it.');
+          writeJSON(appJsonPath, app);
         }
       }
     }
+
+    // El primer git add ocurre antes del cambio de versión; añadimos estos
+    // archivos otra vez para que el commit publicado incluya los números nuevos.
+    execSync('git add package.json app.json', { stdio: 'inherit' });
 
     // commit the version bump (unless --no-commit)
     const noCommit = process.argv.includes('--no-commit');

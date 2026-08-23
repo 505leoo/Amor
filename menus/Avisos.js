@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth } from '../firebaseConfig';
@@ -35,6 +35,7 @@ const SECCIONES = [
   { id: 'temporadas', titulo: 'Temporadas', descripcion: 'Nuevas aventuras y caminos por descubrir.', icono: 'event', tarjetas: [{ id: 'temporada-1', titulo: 'Temporada activa', texto: 'Descubre el nuevo camino de Menta.', fecha: '2026-08-20', detalle: 'Una nueva temporada llega con desafíos, recompensas y pequeñas historias para acompañarte durante tus partidas. Revisa las novedades y prepara todo para no perderte ninguna actividad.' }] },
   { id: 'eventos', titulo: 'Eventos', descripcion: 'Actividades especiales para compartir y disfrutar.', icono: 'celebration', tarjetas: [{ id: 'evento-1', titulo: 'Evento especial', texto: 'Hay una nueva actividad para disfrutar.', fecha: '2026-08-20', detalle: 'Durante este evento podrás participar en actividades especiales y encontrar sorpresas preparadas por Menta. Estate atento a las fechas y disfruta cada momento.' }] },
   { id: 'novedades', titulo: 'Novedades', descripcion: 'Noticias y cambios importantes de Menta.', icono: 'new-releases', tarjetas: [
+    { id: 'actualizacion-1-0-5', titulo: 'Tus Animalitos brillan más que nunca', texto: 'Animalitos, trajes y temporadas tienen una nueva forma de disfrutarse.', fecha: '2026-08-23', detalle: '¡La versión 1.0.5 ya está aquí! Renovamos por completo la colección de Animalitos para que sea más bonita, ordenada y fácil de entender. Ahora puedes ver tus animalitos en un catálogo, conocer su rareza y temporada, revisar sus habilidades, consultar sus recompensas y mejorar cada uno con sus propias cartas. También existen cartas universales, que sirven como ayuda cuando te faltan cartas de un animal. El Comerciante ahora ofrece cartas únicamente de los animalitos que ya desbloqueaste, mientras que la experiencia se consigue jugando y mejorando a tus compañeros. El vestidor también cambió: los trajes aparecen en un catálogo horizontal de dos filas, cada uno tiene una rareza con su propio color y los que todavía no conseguiste se muestran bloqueados. Además, organizamos mejor los eventos de cada temporada y agregamos accesos especiales para revisar cómo se ven sus contenidos. Son muchos cambios, pero la idea es sencilla: que coleccionar, vestir y mejorar a tus animalitos sea más claro, divertido y especial.' },
     { id: 'actualizacion-1-0-2-a-1-0-4', titulo: 'Actualización General', texto: 'Arreglamos varias cosas para que Amor funcione mejor.', fecha: '2026-08-21', detalle: 'En esta actualización arreglamos varios problemas: ahora el tutorial avanza correctamente después de reclamar recompensas; el Comerciante entrega 3 cartas y se bloquea cuando corresponde; mejorar a Halcón funciona con las monedas y cartas correctas; las misiones y los juegos entregan recompensas más equilibradas; el nivel y la barra de EXP del perfil se muestran correctamente; las actualizaciones de la app llegan a producción; el menú de pareja carga mejor, muestra quién está conectado de verdad y no enseña personas que ya tienen pareja; también mejoramos las temporadas, los avisos y varias pantallas para que todo sea más claro y estable. La versión cambió de la 1.0.2 a la 1.0.4.' },
     { id: 'novedad-1', titulo: 'Novedades de Menta', texto: 'Pronto conocerás todas las mejoras.', fecha: '2026-08-20', detalle: 'Aquí aparecerán las noticias importantes, las mejoras recientes y todas esas pequeñas cosas que hacen que Menta se sienta cada vez más completa.' },
   ] },
@@ -42,7 +43,12 @@ const SECCIONES = [
   { id: 'comunidad', titulo: 'Comunidad', descripcion: 'Mensajes para crecer juntos dentro de Menta.', icono: 'groups', tarjetas: [{ id: 'comunidad-1', titulo: 'Noticias de la comunidad', texto: 'Menta también crece contigo.', fecha: '2026-08-20', detalle: 'Este espacio reúne mensajes, celebraciones y novedades que nacen junto a la comunidad. Gracias por ser parte de este rincón y ayudarlo a crecer.' }] },
 ];
 
-export const AVISOS_REVISION = SECCIONES.flatMap(seccion => seccion.tarjetas.filter(tarjeta => tarjeta.fecha >= FECHA_CORTE_INDICADOR).map(tarjeta => `${seccion.id}:${tarjeta.id}:${tarjeta.fecha}`)).join('|');
+export const AVISOS_CLAVES = SECCIONES.flatMap(seccion => seccion.tarjetas.filter(tarjeta => tarjeta.fecha >= FECHA_CORTE_INDICADOR).map(tarjeta => `${seccion.id}:${tarjeta.id}:${tarjeta.fecha}`));
+export const AVISOS_REVISION = AVISOS_CLAVES.join('|');
+export const hayAvisosPendientes = revisionAnterior => {
+  const conocidas = new Set(String(revisionAnterior || '').split('|').filter(Boolean));
+  return AVISOS_CLAVES.some(clave => !conocidas.has(clave));
+};
 
 export const AvisosModal = ({ visible, onClose }) => {
   const { width: screenWidth } = useWindowDimensions();
@@ -73,7 +79,7 @@ export const AvisosModal = ({ visible, onClose }) => {
     if (!uid) return;
     const clave = `${grupo.id}:${tarjeta.id}:${tarjeta.fecha}`;
     const revisionAnterior = await AsyncStorage.getItem(`indicador_avisos_${uid}`).catch(() => '');
-    const clavesVigentes = new Set(AVISOS_REVISION.split('|').filter(Boolean));
+    const clavesVigentes = new Set(AVISOS_CLAVES);
     const conocidas = new Set(String(revisionAnterior || '').split('|').filter(item => clavesVigentes.has(item)));
     conocidas.add(clave);
     await AsyncStorage.setItem(`indicador_avisos_${uid}`, [...conocidas].join('|')).catch(() => {});
@@ -144,9 +150,11 @@ export const AvisosModal = ({ visible, onClose }) => {
             </View> : avisoSeleccionado ? <View style={styles.detail}>
               <Text style={styles.detailTitle}>{avisoSeleccionado.titulo}</Text>
               <View style={styles.detailRule} />
-              <Text style={styles.detailText}>{avisoSeleccionado.detalle || avisoSeleccionado.texto}</Text>
-              <Text style={styles.detailDate}>{textoFechaCompleta(avisoSeleccionado.fecha)}</Text>
-              <Text style={styles.detailSignature}>- Administración de Amor.</Text>
+              <ScrollView style={styles.detailScroll} contentContainerStyle={styles.detailScrollContent} showsVerticalScrollIndicator>
+                <Text style={styles.detailText}>{avisoSeleccionado.detalle || avisoSeleccionado.texto}</Text>
+                <Text style={styles.detailDate}>{textoFechaCompleta(avisoSeleccionado.fecha)}</Text>
+                <Text style={styles.detailSignature}>- Administración de Amor.</Text>
+              </ScrollView>
             </View> : <View style={styles.carousel}>
               <View style={styles.touchArea} onStartShouldSetResponder={() => true} onResponderGrant={({ nativeEvent }) => { swipeStart.current = nativeEvent.pageY; }} onResponderRelease={({ nativeEvent }) => {
                 const distancia = nativeEvent.pageY - swipeStart.current;
@@ -194,9 +202,11 @@ const styles = StyleSheet.create({
   sectionRowText: { color: '#476982', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
   sectionRowDescription: { color: '#6b8aa1', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '700', marginTop: 1 },
   routeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#d94b4b', marginRight: 7 },
-  detail: { height: 215, paddingHorizontal: 24, paddingTop: 27, alignItems: 'stretch' },
+  detail: { height: 215, paddingHorizontal: 24, paddingTop: 18, paddingBottom: 6, alignItems: 'stretch' },
   detailTitle: { color: '#405e76', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', textAlign: 'center' },
-  detailRule: { height: 1, backgroundColor: '#bdd8e9', marginVertical: 12 },
+  detailRule: { height: 1, backgroundColor: '#bdd8e9', marginVertical: 9 },
+  detailScroll: { flex: 1 },
+  detailScrollContent: { paddingBottom: 16 },
   detailText: { color: '#5f7d94', fontFamily: 'Delius', fontSize: 8, lineHeight: 12, fontWeight: '700', textAlign: 'left' },
   detailDate: { color: '#6b8aa1', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '800', marginTop: 18, textAlign: 'left' },
   detailSignature: { color: '#476982', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', marginTop: 9, textAlign: 'right' },

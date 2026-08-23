@@ -15,6 +15,9 @@ import { actualizarPasoTutorial } from './components/Tutorial';
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const COMERCIO_W = Math.min(SCREEN_W * 0.58, SCREEN_H * 0.45);
 const COMERCIO_IMAGE = require('./assets/inicio/comercio.png');
+const CARTAS_POR_ANIMAL = [
+  { id: 'halcon', nombre: 'Halcón', temporada: 't1', rareza: 'Común', color: '#a9722f', fondo: '#f3e5c8', borde: '#c69a5b', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
+];
 
 const tiempoRestanteCredito = (vencimientoMs, ahora) => {
   const restante = Number(vencimientoMs) - ahora;
@@ -43,8 +46,9 @@ const cicloComercio = (ahoraMs = Date.now()) => {
   };
 };
 
-export default function Comerciante({ navigation }) {
-  const temporadaActual = useTemporadaActual();
+export default function Comerciante({ navigation, temporada }) {
+  const temporadaActualHook = useTemporadaActual();
+  const temporadaActual = temporada || temporadaActualHook;
   const { registrarProgreso } = useMisiones();
   const [credito, setCredito] = useState(null);
   const [monedas, setMonedas] = useState(0);
@@ -57,6 +61,7 @@ export default function Comerciante({ navigation }) {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState(null);
   const [confirmarSaldar, setConfirmarSaldar] = useState(false);
+  const [animalitosDesbloqueados, setAnimalitosDesbloqueados] = useState([]);
   const [productosFadeAnim] = useState(new Animated.Value(0));
   const tutorialActivo = usuario?.tutorial === 'no';
 
@@ -80,6 +85,17 @@ export default function Comerciante({ navigation }) {
       setUsuario(data);
       if (data.comercio) setDoc(doc(db, 'usuarios', uid, 'comercio', 'estado'), data.comercio, { merge: true }).catch(() => {});
     });
+  }, []);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return undefined;
+    return onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+      setAnimalitosDesbloqueados(snapshot.docs.filter(animal => {
+        const data = animal.data() || {};
+        return data.desbloqueado || Number(data.nivel) > 0 || Number(data.cartas ?? data.copias) > 0;
+      }).map(animal => animal.id));
+    }, () => setAnimalitosDesbloqueados([]));
   }, []);
 
   useEffect(() => {
@@ -162,10 +178,32 @@ export default function Comerciante({ navigation }) {
   const rotacion = cicloComercio(ahora);
   const comprasRotacion = usuario?.comercio?.compras?.[rotacion.key] || {};
   const productoComprado = producto => Boolean(comprasRotacion[producto.id]);
+  const animalEstaDesbloqueado = animal => animalitosDesbloqueados.includes(animal.id)
+    || Boolean(usuario?.animalitos?.[animal.id]?.desbloqueado)
+    || usuario?.animalito === animal.id
+    || (animal.id === 'halcon' && Boolean(usuario?.halconDesbloqueado));
+  const cartasAnimalesDisponibles = CARTAS_POR_ANIMAL
+    .filter(animal => animalEstaDesbloqueado(animal) && contenidoDisponible(animal.temporada || 't1', temporadaActual))
+    .map(animal => ({
+      id: `cartas_${animal.id}_3`,
+      temporada: animal.temporada || 't1',
+      tipo: 'cartasAnimal',
+      animalId: animal.id,
+      icon: 'style',
+      nombre: `Cartas de ${animal.nombre}`,
+      cantidad: 3,
+      cantidadLabel: 'x3',
+      precio: 280,
+      imagen: animal.imagen,
+      colorAnimal: animal.color,
+      fondoAnimal: animal.fondo,
+      bordeAnimal: animal.borde,
+      rareza: animal.rareza,
+    }));
   const productosDisponibles = [
     { id: 'cartas_3', temporada: 't1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 3, cantidadLabel: 'x3', precio: 360 },
+    ...cartasAnimalesDisponibles,
     { id: 'diamantes_25', temporada: 't1', tipo: 'diamantes', icon: 'diamond', nombre: 'Diamantes', cantidad: 25, cantidadLabel: 'x25', precio: 900 },
-    { id: 'exp_125', temporada: 't1', tipo: 'exp', icon: 'trending-up', nombre: 'Experiencia', cantidad: 125, cantidadLabel: '+125', precio: 640 },
     ...catalogoIconos.length > 0 ? (catalogoIconos
       .filter(icono => contenidoDisponible(icono.temporada || 't1', temporadaActual) && (!tieneIcono(icono) || comprasRotacion[`icono_${icono.id}`]))
       .sort((a, b) => numeroTemporada(b.temporada || 't1') - numeroTemporada(a.temporada || 't1'))
@@ -198,6 +236,8 @@ export default function Comerciante({ navigation }) {
         const comercioRef = doc(db, 'usuarios', uid, 'comercio', 'estado');
         const comercioSnap = await transaction.get(comercioRef);
         const comercio = comercioSnap.exists() ? (comercioSnap.data() || {}) : (data.comercio || {});
+        const animalRef = producto.tipo === 'cartasAnimal' ? doc(db, 'usuarios', uid, 'animalitos', producto.animalId) : null;
+        const animalSnap = animalRef ? await transaction.get(animalRef) : null;
         const precio = vencido ? Math.ceil(producto.precio * 1.2) : producto.precio;
         const compras = comercio.compras || {};
         const comprasActuales = compras[rotacion.key] || {};
@@ -205,8 +245,14 @@ export default function Comerciante({ navigation }) {
         if ((data.dinero || 0) < precio) throw new Error('monedas');
         const update = { dinero: data.dinero - precio };
         if (producto.tipo === 'cartasAnimalitos') update.cartasAnimalitos = (data.cartasAnimalitos || 0) + producto.cantidad;
+        if (producto.tipo === 'cartasAnimal') {
+          const animalData = animalSnap?.exists() ? (animalSnap.data() || {}) : (data.animalitos?.[producto.animalId] || {});
+          const desbloqueado = Boolean(animalData.desbloqueado || Number(animalData.nivel) > 0 || data.animalito === producto.animalId || (producto.animalId === 'halcon' && data.halconDesbloqueado));
+          if (!desbloqueado) throw new Error('animal_bloqueado');
+          const cartasActuales = Math.max(0, Number(animalData.cartas ?? animalData.copias ?? 0) || 0);
+          transaction.set(animalRef, { desbloqueado: true, cartas: cartasActuales + producto.cantidad, copias: cartasActuales + producto.cantidad }, { merge: true });
+        }
         if (producto.tipo === 'diamantes') update.diamantes = (data.diamantes ?? data.diamante ?? 0) + producto.cantidad;
-        if (producto.tipo === 'exp') update.exp = (data.exp || 0) + producto.cantidad;
         if (producto.tipo === 'skin') {
           if (data.skinsDesbloqueadas?.halcon?.[producto.skinId] || data.skin === producto.skinId) throw new Error('poseido');
           update.skinsDesbloqueadas = { ...(data.skinsDesbloqueadas || {}), halcon: { ...(data.skinsDesbloqueadas?.halcon || {}), [producto.skinId]: true } };
@@ -234,7 +280,7 @@ export default function Comerciante({ navigation }) {
     <View style={styles.container}>
       <StatusBar hidden />
       <RoomBackground />
-      <TabButtons onExit={() => navigation?.navigate?.('main')} customAddButton={<View />} />
+      <TabButtons onExit={() => navigation?.navigate?.(temporada ? `temporada${temporada.slice(1)}` : 'main')} customAddButton={<View />} />
       <View style={styles.comercioLayout}>
         <View style={styles.comercioLayer} pointerEvents="none">
           <Image
@@ -252,7 +298,7 @@ export default function Comerciante({ navigation }) {
             <View style={styles.comercioIntroIcon}><MaterialIcons name="storefront" size={20} color="#76552f" /></View>
             <View>
               <Text style={styles.comercioIntroTitle}>PRODUCTOS DE MENTITA</Text>
-              <Text style={styles.comercioIntroText}>{temporadaActual.toUpperCase()} · Renueva en {rotacion.texto}</Text>
+              <Text style={styles.comercioIntroText}>{temporada ? `${temporadaActual.toUpperCase()} Debug` : temporadaActual.toUpperCase()} · Renueva en {rotacion.texto}</Text>
             </View>
           </View>
           <View style={styles.productosLista}>
@@ -261,14 +307,18 @@ export default function Comerciante({ navigation }) {
                 const precio = vencido ? Math.ceil(producto.precio * 1.2) : producto.precio;
                 const comprado = productoComprado(producto);
                 const esVisual = producto.tipo === 'skin' || producto.tipo === 'icono';
+                const esCartaAnimal = producto.tipo === 'cartasAnimal';
                 return (
-                  <TouchableOpacity key={producto.id} style={[styles.producto, (monedas < precio || comprando) && !comprado && styles.productoBloqueado, comprado && styles.productoComprado]} onPress={() => setProductoSeleccionado(producto)} disabled={comprando || comprado} activeOpacity={comprado ? 1 : 0.75}>
+                  <TouchableOpacity key={producto.id} style={[styles.producto, esCartaAnimal && styles.productoAnimal, esCartaAnimal && { backgroundColor: producto.fondoAnimal, borderColor: producto.bordeAnimal }, (monedas < precio || comprando) && !comprado && styles.productoBloqueado, comprado && styles.productoComprado]} onPress={() => setProductoSeleccionado(producto)} disabled={comprando || comprado} activeOpacity={comprado ? 1 : 0.75}>
                     <View style={[styles.productoIcono, producto.imagen && styles.productoIconoVisual]}>
-                      {producto.imagen
-                        ? <View style={styles.productoMarco}><Image source={producto.imagen} style={styles.productoImagen} contentFit={producto.tipo === 'icono' ? 'cover' : 'contain'} cachePolicy="memory-disk" /></View>
+                      {esCartaAnimal
+                        ? <View style={[styles.productoSimboloAnimal, { backgroundColor: producto.colorAnimal, borderColor: producto.bordeAnimal }]}><MaterialIcons name="style" size={12} color="#fffbe9" /></View>
+                        : producto.imagen
+                        ? <View style={[styles.productoMarco, esCartaAnimal && styles.productoMarcoAnimal]}><Image source={producto.imagen} style={styles.productoImagen} contentFit={producto.tipo === 'icono' ? 'cover' : 'contain'} cachePolicy="memory-disk" />{esCartaAnimal && <View style={styles.productoCartaMarca}><Text style={styles.productoCartaMarcaTexto}>▣</Text></View>}</View>
                         : <MaterialIcons name={producto.icon} size={16} color="#a56b16" />}
                     </View>
                     <Text style={[styles.productoNombre, esVisual && styles.productoNombreVisual]}>{producto.tipo === 'icono' ? 'Icono' : producto.tipo === 'skin' ? 'Traje' : producto.nombre}</Text>
+                    {esCartaAnimal && <><Text style={styles.productoTemporada}>{producto.temporada.toUpperCase()}</Text><Text style={styles.productoRareza}>{producto.rareza}</Text></>}
                     {producto.cantidadLabel && <Text style={styles.productoCantidad}>{producto.cantidadLabel}</Text>}
                     {comprado ? <View style={styles.productoEstadoComprado}><Text style={styles.productoEstadoTexto}>✓</Text></View> : <View style={[styles.productoPrecio, vencido && styles.productoPrecioConRecargo]}><Text style={styles.moneda}>🪙</Text><Text style={styles.productoPrecioTexto}>{precio}</Text></View>}
                   </TouchableOpacity>
@@ -327,9 +377,9 @@ export default function Comerciante({ navigation }) {
           <TouchableOpacity style={styles.compraCerrarFondo} activeOpacity={1} onPress={() => setProductoSeleccionado(null)} />
           {productoSeleccionado && (() => {
             const precio = vencido ? Math.ceil(productoSeleccionado.precio * 1.2) : productoSeleccionado.precio;
-            const descripcion = productoSeleccionado.tipo === 'cartasAnimalitos' ? 'Un paquete de cartas universales para mejorar cualquier animalito que tengas.'
+            const descripcion = productoSeleccionado.tipo === 'cartasAnimalitos' ? 'Un paquete de cartas universales que completa las cartas que le falten a cualquier animalito.'
+              : productoSeleccionado.tipo === 'cartasAnimal' ? `Cartas propias de ${productoSeleccionado.nombre.replace('Cartas de ', '')}. Se usan primero al mejorar este animalito.`
               : productoSeleccionado.tipo === 'diamantes' ? 'Un paquete de diamantes para conseguir recompensas y objetos especiales.'
-              : productoSeleccionado.tipo === 'exp' ? 'Experiencia para subir el nivel de tu perfil y avanzar más rápido.'
               : productoSeleccionado.tipo === 'skin' ? 'Un traje exclusivo que podrás equipar a tu Halcón desde el selector de skins.'
               : 'Un icono nuevo para personalizar tu perfil y hacerlo único.';
             return <View style={styles.compraTarjeta}>
@@ -397,10 +447,17 @@ const styles = StyleSheet.create({
   comercioIntroText: { color: '#88642b', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '700', marginTop: 1 },
   productosLista: { width: 214, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 5, marginTop: 7 },
   producto: { width: 68, height: 70, alignItems: 'center', justifyContent: 'center', padding: 2, borderRadius: 10, backgroundColor: '#f3e7c8', borderWidth: 1, borderColor: '#d7b46a', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5 },
+  productoAnimal: { shadowColor: '#6e4b25', shadowOpacity: 0.26 },
   productoIcono: { width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ead2a0' },
   productoIconoVisual: { overflow: 'visible', backgroundColor: 'transparent' },
   productoMarco: { width: 27, height: 27, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff8e2', borderWidth: 1.5, borderColor: '#bf9142', shadowColor: '#6e4d21', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.24, shadowRadius: 3, elevation: 4, transform: [{ translateY: -1 }] },
+  productoMarcoAnimal: { backgroundColor: '#f6ffe7', borderColor: '#79a34e' },
+  productoSimboloAnimal: { width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center', borderWidth: 1, shadowColor: '#40562f', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.22, shadowRadius: 2, elevation: 3 },
   productoImagen: { width: 23, height: 23, borderRadius: 5 },
+  productoCartaMarca: { position: 'absolute', right: -5, bottom: -4, width: 13, height: 15, borderRadius: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d9c17a', borderWidth: 1, borderColor: '#92743c', zIndex: 4 },
+  productoCartaMarcaTexto: { color: '#fff8dc', fontSize: 8, lineHeight: 10, fontWeight: '900' },
+  productoTemporada: { position: 'absolute', top: 4, left: 5, color: '#8b653b', fontFamily: 'Delius', fontSize: 4.8, fontWeight: '900' },
+  productoRareza: { position: 'absolute', top: 3, right: 4, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 5, backgroundColor: '#82ad58', color: '#fffbe8', fontFamily: 'Delius', fontSize: 4.2, fontWeight: '900', overflow: 'hidden' },
   productoNombre: { color: '#76552f', fontFamily: 'Delius', fontSize: 4.4, lineHeight: 5, fontWeight: '900', textAlign: 'center', marginTop: 2 },
   productoNombreVisual: { transform: [{ translateY: 1 }] },
   productoCantidad: { color: '#8d6024', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', marginTop: 1 },

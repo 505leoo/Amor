@@ -113,6 +113,14 @@ class NotificationSystem {
     }
   }
 
+  clearNotificationListeners() {
+    if (this._notifListener) {
+      this._notifListener.remove?.();
+      this._notifListener = null;
+    }
+    this.expoPushToken = null;
+  }
+
   // Notificar desconexión del usuario
   async notifyUserOffline() {
     try {

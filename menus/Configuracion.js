@@ -3,104 +3,18 @@ import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View, useWindowDim
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth } from '../firebaseConfig';
+import { signOut } from 'firebase/auth';
+import NotificationSystem from '../utils/NotificationSystem';
 
 const SECCIONES = [
-  {
-    id: 'sonido',
-    titulo: 'Sonido',
-    icono: 'volume-up',
-    color: '#7ca6c2',
-    opciones: [
-      { id: 'musica', titulo: 'Música', icon: 'music-note', defecto: true, desc: 'Ambientación sonora relajante durante tu juego.' },
-      { id: 'efectos', titulo: 'Efectos', icon: 'audiotrack', defecto: true, desc: 'Sonidos de clics, recompensas y acciones.' },
-      { id: 'notif-sonido', titulo: 'Notificaciones', icon: 'notifications-active', defecto: true, desc: 'Alertas sonoras para mensajes y regalos.' },
-      { id: 'vibracion', titulo: 'Vibración', icon: 'vibration', defecto: true, desc: 'Retroalimentación háptica en interacciones.' },
-    ],
-  },
-  {
-    id: 'visual',
-    titulo: 'Visual',
-    icono: 'palette',
-    color: '#a87840',
-    opciones: [
-      { id: 'animaciones', titulo: 'Animaciones', icon: 'animation', defecto: true, desc: 'Efectos visuales y transiciones suaves.' },
-      { id: 'particulas', titulo: 'Partículas', icon: 'bubble-chart', defecto: true, desc: 'Confeti y efectos de celebración bonitos.' },
-      { id: 'brillo', titulo: 'Modo nocturno', icon: 'dark-mode', defecto: false, desc: 'Reduce la intensidad del brillo nocturno.' },
-      { id: 'sombras', titulo: 'Sombras', icon: 'filter-list', defecto: true, desc: 'Efectos de sombra para mayor profundidad.' },
-    ],
-  },
-  {
-    id: 'notificaciones',
-    titulo: 'Notificaciones',
-    icono: 'notifications',
-    color: '#d94b4b',
-    opciones: [
-      { id: 'avisos-temporada', titulo: 'Temporadas', icon: 'event', defecto: true, desc: 'Notificaciones de nuevas temporadas.' },
-      { id: 'regalos', titulo: 'Regalos', icon: 'card-giftcard', defecto: true, desc: 'Alertas cuando recibes regalos y monedas.' },
-      { id: 'recompensas-diarias', titulo: 'Recordatorio', icon: 'today', defecto: false, desc: 'Recordatorio para reclamar tu recompensa.' },
-      { id: 'amigos-online', titulo: 'Amigos', icon: 'person-add', defecto: false, desc: 'Notifica cuando tus amigos se conectan.' },
-      { id: 'eventos-proximos', titulo: 'Eventos', icon: 'schedule', defecto: true, desc: 'Recordatorio antes de eventos especiales.' },
-    ],
-  },
-  {
-    id: 'privacidad',
-    titulo: 'Privacidad',
-    icono: 'lock',
-    color: '#5d89ab',
-    opciones: [
-      { id: 'perfil-publico', titulo: 'Perfil visible', icon: 'person', defecto: true, desc: 'Permite que otros vean tu perfil.' },
-      { id: 'aceptar-regalos', titulo: 'Recibir regalos', icon: 'card-giftcard', defecto: true, desc: 'Permite que te envíen regalos.' },
-      { id: 'estadisticas', titulo: 'Compartir datos', icon: 'analytics', defecto: true, desc: 'Ayuda a mejorar el juego anónimamente.' },
-      { id: 'modo-incognito', titulo: 'Modo incógnito', icon: 'visibility-off', defecto: false, desc: 'No aparecer en ránkings de jugadores.' },
-    ],
-  },
-  {
-    id: 'accesibilidad',
-    titulo: 'Accesibilidad',
-    icono: 'accessibility',
-    color: '#6da160',
-    opciones: [
-      { id: 'texto-grande', titulo: 'Texto grande', icon: 'text-fields', defecto: false, desc: 'Aumenta el tamaño de fuentes.' },
-      { id: 'contraste-alto', titulo: 'Contraste', icon: 'contrast', defecto: false, desc: 'Colores más intensos para mejor visibilidad.' },
-      { id: 'reductor-movimiento', titulo: 'Menos movimiento', icon: 'gps-off', defecto: false, desc: 'Minimiza animaciones para comodidad.' },
-      { id: 'subtitulos', titulo: 'Subtítulos', icon: 'closed-caption', defecto: false, desc: 'Muestra texto para diálogos y efectos.' },
-    ],
-  },
-  {
-    id: 'experiencia',
-    titulo: 'Experiencia',
-    icono: 'sports-esports',
-    color: '#c99d42',
-    opciones: [
-      { id: 'dificultad-facil', titulo: 'Modo fácil', icon: 'trending-down', defecto: false, desc: 'Reduce la dificultad de juegos.' },
-      { id: 'hints', titulo: 'Pistas', icon: 'lightbulb', defecto: true, desc: 'Muestra ayudas durante juegos.' },
-      { id: 'tutoriales', titulo: 'Tutoriales', icon: 'school', defecto: true, desc: 'Vuelve a ver guías de nuevas funciones.' },
-      { id: 'puntuaciones', titulo: 'Puntuaciones', icon: 'leaderboard', defecto: true, desc: 'Guarda y comparte tus mejores resultados.' },
-    ],
-  },
-  {
-    id: 'sistema',
-    titulo: 'Sistema',
-    icono: 'storage',
-    color: '#8d6024',
-    opciones: [
-      { id: 'auto-update', titulo: 'Auto-actualizar', icon: 'cloud-download', defecto: true, desc: 'Descarga actualizaciones con WiFi.' },
-      { id: 'cache-agresivo', titulo: 'Caché', icon: 'storage', defecto: true, desc: 'Guarda recursos para cargas rápidas.' },
-      { id: 'logs', titulo: 'Diagnóstico', icon: 'bug-report', defecto: true, readonly: true, desc: 'Envía reportes para mejorar.' },
-    ],
-  },
-  {
-    id: 'sobre',
-    titulo: 'Información',
-    icono: 'info',
-    color: '#b07a43',
-    opciones: [
-      { id: 'version', titulo: 'Versión v2.5.0', icon: 'code', defecto: false, readonly: true, desc: 'Última actualización 20 ago 2026.' },
-      { id: 'soporte', titulo: 'Soporte', icon: 'help-outline', defecto: false, readonly: true, desc: 'Contacta con el equipo de Menta.' },
-      { id: 'creditos', titulo: 'Créditos', icon: 'groups', defecto: false, readonly: true, desc: 'Conoce al equipo detrás de Amor.' },
-      { id: 'licencia', titulo: 'Términos', icon: 'description', defecto: false, readonly: true, desc: 'Lee términos de servicio.' },
-    ],
-  },
+  { id: 'cuenta', titulo: 'Cuenta', icono: 'person', color: '#5d89ab', opciones: [
+    { id: 'cerrar-sesion', titulo: 'Cerrar sesión', icon: 'logout', readonly: true, action: 'logout', desc: 'Cierra tu sesión en este dispositivo.' },
+    { id: 'borrar-preferencias', titulo: 'Restablecer preferencias', icon: 'restart-alt', readonly: true, action: 'reset', desc: 'Borra solo tus preferencias guardadas y vuelve a los valores iniciales.' },
+  ] },
+  { id: 'informacion', titulo: 'Información', icono: 'info', color: '#b07a43', opciones: [
+    { id: 'version', titulo: 'Versión 1.0.4', icon: 'code', readonly: true, desc: 'Versión actual de Amor. Las actualizaciones se reciben automáticamente en producción.' },
+    { id: 'soporte', titulo: 'Soporte', icon: 'help-outline', readonly: true, desc: 'Si encontrás un error, contáselo a la persona que administra la app.' },
+  ] },
 ];
 
 export const ConfiguracionModal = ({ visible, onClose }) => {
@@ -166,6 +80,25 @@ export const ConfiguracionModal = ({ visible, onClose }) => {
   const toggleOpcion = (opcionId) => {
     const nuevaConfig = { ...configuraciones, [opcionId]: !configuraciones[opcionId] };
     guardarConfig(nuevaConfig);
+  };
+
+  const ejecutarAccion = async accion => {
+    const uid = auth.currentUser?.uid;
+    if (accion === 'logout') {
+      const usuarioId = auth.currentUser?.uid;
+      cerrarConfiguracion();
+      await NotificationSystem.clearPushTokenForUser(usuarioId);
+      await NotificationSystem.notifyUserOffline();
+      NotificationSystem.clearNotificationListeners();
+      await signOut(auth).catch(() => {});
+      return;
+    }
+    if (accion === 'reset' && uid) {
+      await AsyncStorage.removeItem(`config_${uid}`).catch(() => {});
+      const valoresIniciales = {};
+      SECCIONES.forEach(sec => sec.opciones.forEach(opt => { valoresIniciales[opt.id] = Boolean(opt.defecto); }));
+      setConfiguraciones(valoresIniciales);
+    }
   };
 
   const cerrarConfiguracion = () => {
@@ -243,9 +176,14 @@ export const ConfiguracionModal = ({ visible, onClose }) => {
                   </View>
                 )}
                 {opcion.readonly && (
-                  <View style={[styles.detailInfo, { backgroundColor: seccion.color + '08', borderColor: seccion.color + '20' }]}>
+                  opcion.action ? (
+                    <TouchableOpacity style={[styles.actionButton, { backgroundColor: seccion.color, borderColor: seccion.color }]} onPress={() => ejecutarAccion(opcion.action)} activeOpacity={0.8}>
+                      <MaterialIcons name={opcion.icon} size={17} color="#fff8dc" />
+                      <Text style={styles.actionButtonText}>{opcion.action === 'logout' ? 'Cerrar sesión' : 'Restablecer preferencias'}</Text>
+                    </TouchableOpacity>
+                  ) : <View style={[styles.detailInfo, { backgroundColor: seccion.color + '08', borderColor: seccion.color + '20' }]}>
                     <MaterialIcons name="info-outline" size={16} color={seccion.color} />
-                    <Text style={[styles.detailInfoText, { color: seccion.color }]}>Solo lectura</Text>
+                    <Text style={[styles.detailInfoText, { color: seccion.color }]}>Información</Text>
                   </View>
                 )}
               </View>
@@ -322,6 +260,8 @@ const styles = StyleSheet.create({
   switch: { marginLeft: 8 },
   detailInfo: { flexDirection: 'row', alignItems: 'center', marginTop: 8, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, borderWidth: 1.5 },
   detailInfoText: { fontFamily: 'Delius', fontSize: 7.5, fontWeight: '700', marginLeft: 8 },
+  actionButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 12, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 11, borderWidth: 1.5 },
+  actionButtonText: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 8, fontWeight: '900', marginLeft: 7 },
 
   carousel: { height: 215, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   touchArea: { width: '100%', height: 215, alignItems: 'center', justifyContent: 'center' },

@@ -1,112 +1,25 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Animated } from 'react-native';
+import React, { useRef, useEffect } from 'react';
+import { View, StyleSheet, StatusBar, TouchableOpacity, Text } from 'react-native';
 import { Image } from 'expo-image';
-import Svg, { Defs, LinearGradient, Stop, Circle, Ellipse } from 'react-native-svg';
+import { MaterialIcons } from '@expo/vector-icons';
 import TabButtons from '../../components/TabButtons';
 import Loading from '../../components/Loading';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../../firebaseConfig';
-
-const ChicleSvg = ({ size = 110 }) => {
-  const R = size / 2 - 8;
-  const cx = size / 2;
-  return (
-    <Svg width={size} height={size}>
-      <Defs>
-        <LinearGradient id="capGrad" x1="0" y1="0" x2="1" y2="1">
-          <Stop offset="0%"  stopColor="#c4a0f5" />
-          <Stop offset="50%" stopColor="#ff8fa8" />
-          <Stop offset="100%" stopColor="#f5c842" />
-        </LinearGradient>
-        <LinearGradient id="capGlow" x1="0.5" y1="0" x2="0.5" y2="1">
-          <Stop offset="0%"   stopColor="#fff" stopOpacity="0.5" />
-          <Stop offset="100%" stopColor="#fff" stopOpacity="0" />
-        </LinearGradient>
-      </Defs>
-      <Circle cx={cx} cy={cx} r={R + 10} fill="rgba(196,160,245,0.12)" />
-      <Circle cx={cx} cy={cx} r={R + 5}  fill="rgba(255,143,168,0.18)" />
-      <Circle cx={cx} cy={cx} r={R} fill="url(#capGrad)" />
-      <Circle cx={cx} cy={cx} r={R} fill="url(#capGlow)" />
-      <Circle cx={cx} cy={cx} r={R} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
-      <Circle cx={cx} cy={cx} r={R + 4} fill="none" stroke="rgba(196,160,245,0.4)" strokeWidth={1} strokeDasharray="5 4" />
-      <Ellipse cx={cx - R * 0.28} cy={cx - R * 0.28} rx={R * 0.38} ry={R * 0.2} fill="rgba(255,255,255,0.38)" />
-      <Ellipse cx={cx - R * 0.1}  cy={cx - R * 0.5}  rx={R * 0.13} ry={R * 0.07} fill="rgba(255,255,255,0.22)" />
-    </Svg>
-  );
-};
-
-const EventCard = ({ onPress }) => (
-  <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={styles.evBase}>
-    <Image
-      source={require('../../assets/temporadas/libro/Temporada1/Historia/eventohis1.png')}
-      style={styles.evImg}
-      contentFit="contain"
-      cachePolicy="memory"
-    />
-  </TouchableOpacity>
-);
+import Eventos from '../../menus/Eventos';
 
 const Temporada1 = ({ navigation }) => {
-  const floatAnim = useRef(new Animated.Value(0)).current;
-  const halconAnim = useRef(new Animated.Value(0)).current;
-  const [halconDesbloqueado, setHalconDesbloqueado] = useState(false);
-  const [progreso, setProgreso] = useState(0);
   const loadingRef = useRef(null);
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    if (!uid) { loadingRef.current?.fadeOut(); return; }
-    const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
-      if (snap.exists()) setHalconDesbloqueado(!!snap.data().halconDesbloqueado);
-      loadingRef.current?.fadeOut();
-    });
-    const unsubH = onSnapshot(doc(db, 'Historias', uid), snap => {
-      if (!snap.exists()) return;
-      const t1 = snap.data().temporada1 || {};
-      setProgreso(Object.values(t1).filter(Boolean).length);
-    });
-    return () => { unsub(); unsubH(); };
-  }, []);
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, { toValue: -3, duration: 2200, useNativeDriver: true }),
-        Animated.timing(floatAnim, { toValue: 0,  duration: 2200, useNativeDriver: true }),
-      ])
-    ).start();
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(halconAnim, { toValue: -5, duration: 1800, useNativeDriver: true }),
-        Animated.timing(halconAnim, { toValue: 0,  duration: 1800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-
+  useEffect(() => { loadingRef.current?.fadeOut(); }, []);
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <Image
-        source={require('../../assets/temporadas/libro/Temporada1/fondo1.png')}
-        style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
-        contentFit="cover"
-        cachePolicy="memory"
-      />
+      <Image source={require('../../assets/temporadas/libro/Temporada1/fondo1.png')} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} contentFit="cover" cachePolicy="memory" />
       <TabButtons onExit={() => navigation?.navigate?.('temporadas')} customAddButton={<View />} />
-      {halconDesbloqueado && (
-        <Animated.View style={[styles.halconWrap, { transform: [{ translateY: halconAnim }] }]}>
-          <Image
-            source={require('../../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png')}
-            style={styles.halcon}
-            contentFit="contain"
-            cachePolicy="memory"
-          />
-        </Animated.View>
-      )}
-      <EventCard onPress={() => navigation?.navigate?.('historia1')} />
-      <TouchableOpacity style={styles.capsulaBtn} onPress={() => navigation?.navigate?.('capsula1')}>
-        <ChicleSvg size={62} />
+      <TouchableOpacity style={styles.comercianteBtn} activeOpacity={0.75} onPress={() => navigation?.navigate?.('comerciante', { temporada: 't1' })}>
+        <View style={styles.comercianteIcon}><MaterialIcons name="storefront" size={19} color="#f4fff0" /></View>
+        <View style={styles.comercianteInfo}><Text style={styles.comercianteTitle}>COMERCIANTE</Text><Text style={styles.comercianteSub}>Intercambia objetos</Text></View>
+        <MaterialIcons name="chevron-right" size={21} color="#466a50" />
       </TouchableOpacity>
+      <Eventos navigation={navigation} temporada="t1" soloEvento />
       <Loading ref={loadingRef} />
     </View>
   );
@@ -114,32 +27,8 @@ const Temporada1 = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  halconWrap: {
-    position: 'absolute',
-    bottom: '18%',
-    left: '55%',
-  },
-  halcon: { width: 80, height: 80 },
-
-  capsulaBtn: {
-    position: 'absolute',
-    bottom: '1%',
-    right: '1%',
-    zIndex: 10,
-  },
-
-  evBase: {
-    position: 'absolute',
-    width: 200,
-    height: 260,
-    top: '50%',
-    marginTop: -130,
-    left: 70,
-  },
-  evImg: {
-    width: '100%',
-    height: '100%',
-  },
+  comercianteBtn: { position: 'absolute', bottom: '24%', left: 28, transform: [{ translateY: -37 }], width: 150, height: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, borderRadius: 8, backgroundColor: '#dce9dc', borderWidth: 1, borderColor: '#a8c4a9', shadowColor: '#405744', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 7, elevation: 9, zIndex: 20 },
+  comercianteIcon: { width: 26, height: 26, borderRadius: 6, backgroundColor: '#6f9876', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#eff9e9' },
+  comercianteInfo: { flex: 1, marginLeft: 6 }, comercianteTitle: { color: '#3f6348', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900' }, comercianteSub: { color: '#56745c', fontFamily: 'Delius', fontSize: 6, fontWeight: '700' },
 });
-
 export default Temporada1;

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Animated, StatusBar, Image as RNImage } from 'react-native';
+import { View, Text, StyleSheet, Animated, StatusBar, Image as RNImage, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Asset } from 'expo-asset';
 import { doc, getDoc, collection, getDocs, query, limit } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
-const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, temporada = 't1' }) => {
+const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, temporada = 't1', updateStatus = 'unavailable', updateVersion = null, onAcceptUpdate, onDeclineUpdate }) => {
   const temporadaInicial = temporada;
   const fondoTemporada = temporadaInicial;
   const fondoLocal = fondoTemporada === 't2'
@@ -24,11 +24,21 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
   const progressAnimRef = useRef(null);
   const sequenceStartedRef = useRef(false);
   const completedRef = useRef(false);
+  const sequenceFinishedRef = useRef(false);
+  const updateStatusRef = useRef(updateStatus);
   const containerFade = useRef(new Animated.Value(0)).current;
   const [showContent, setShowContent] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('');
 
   const gradientColors = ['transparent', 'transparent', 'transparent'];
+
+  useEffect(() => {
+    updateStatusRef.current = updateStatus;
+    if (sequenceFinishedRef.current && ['unavailable', 'declined', 'error'].includes(updateStatus) && !completedRef.current) {
+      completedRef.current = true;
+      onComplete();
+    }
+  }, [updateStatus, onComplete]);
 
   const preloadLocalAssets = async () => {
     await Asset.loadAsync([
@@ -140,7 +150,8 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
       
       setLoadingStatus('Preparando interfaz...');
       await new Promise(resolve => setTimeout(resolve, 300));
-      if (!completedRef.current) {
+      sequenceFinishedRef.current = true;
+      if (!completedRef.current && ['unavailable', 'declined', 'error'].includes(updateStatusRef.current)) {
         completedRef.current = true;
         onComplete();
       }
@@ -148,7 +159,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
 
     startSequence();
     const fallbackTimer = setTimeout(() => {
-      if (!completedRef.current) {
+      if (!completedRef.current && ['unavailable', 'declined', 'error'].includes(updateStatusRef.current)) {
         completedRef.current = true;
         console.warn('[Intro] Salida de emergencia: finalizando intro');
         onComplete();
@@ -200,6 +211,33 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
         
         <Text style={styles.loadingText}>{loadingStatus}</Text>
       </LinearGradient>
+      <Modal visible={updateStatus === 'available' || updateStatus === 'downloading'} transparent animationType="fade" statusBarTranslucent>
+        <View style={styles.updateOverlay}>
+          <View style={styles.updateCard}>
+            <View style={styles.updateSparkle}><Text style={styles.updateSparkleText}>✦</Text></View>
+            <Text style={styles.updateEyebrow}>UNA SORPRESA PARA USTEDES</Text>
+            <Text style={styles.updateTitle}>¡Hay una nueva versión!</Text>
+            {updateVersion && <View style={styles.updateVersionBadge}><Text style={styles.updateVersionText}>VERSIÓN {updateVersion}</Text></View>}
+            <Text style={styles.updateDescription}>Preparamos nuevas mejoras con mucho cariño para que su rinconcito se sienta más bonito, cómodo y especial. ¿Quieren descubrirlas ahora?</Text>
+            {updateStatus === 'downloading' ? (
+              <View style={styles.updateLoading}>
+                <ActivityIndicator color="#fff8dc" size="small" />
+                <Text style={styles.updateLoadingText}>Preparando la actualización...</Text>
+              </View>
+            ) : (
+              <View style={styles.updateActions}>
+                <TouchableOpacity style={styles.updateLaterButton} onPress={onDeclineUpdate} activeOpacity={0.8}>
+                  <Text style={styles.updateLaterText}>Más tarde</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.updateNowButton} onPress={onAcceptUpdate} activeOpacity={0.85}>
+                  <Text style={styles.updateNowText}>Actualizar ahora</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+            <Text style={styles.updateHint}>La app se abrirá de nuevo al terminar.</Text>
+          </View>
+        </View>
+      </Modal>
     </Animated.View>
   );
 };
@@ -310,6 +348,23 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  updateOverlay: { flex: 1, backgroundColor: 'rgba(46, 25, 27, 0.72)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  updateCard: { width: '86%', maxWidth: 430, alignItems: 'center', paddingHorizontal: 28, paddingTop: 24, paddingBottom: 19, borderRadius: 24, backgroundColor: '#fff7e8', borderWidth: 3, borderColor: '#e8b77d', shadowColor: '#351b19', shadowOffset: { width: 0, height: 9 }, shadowOpacity: 0.45, shadowRadius: 15, elevation: 24 },
+  updateSparkle: { width: 43, height: 43, marginTop: -47, marginBottom: 10, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#df7f75', borderWidth: 3, borderColor: '#ffe9bd' },
+  updateSparkleText: { color: '#fff8dc', fontSize: 23, fontWeight: '900' },
+  updateEyebrow: { color: '#b26b62', fontSize: 8, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
+  updateTitle: { color: '#75483e', fontSize: 22, fontWeight: '900', textAlign: 'center' },
+  updateVersionBadge: { marginTop: 8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, backgroundColor: '#f5dfbd', borderWidth: 1, borderColor: '#e3bd86' },
+  updateVersionText: { color: '#a25f56', fontSize: 8, fontWeight: '900', letterSpacing: 1.1 },
+  updateDescription: { maxWidth: 350, color: '#8b685d', fontSize: 11, lineHeight: 17, fontWeight: '600', textAlign: 'center', marginTop: 9 },
+  updateActions: { width: '100%', flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 18 },
+  updateLaterButton: { minWidth: 112, height: 39, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#f2dfc7', borderWidth: 1, borderColor: '#dbb994' },
+  updateLaterText: { color: '#8a6558', fontSize: 11, fontWeight: '900' },
+  updateNowButton: { minWidth: 151, height: 39, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#dc7b71', borderWidth: 1, borderColor: '#bd625b', shadowColor: '#9c514b', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 4, elevation: 4 },
+  updateNowText: { color: '#fff9e9', fontSize: 11, fontWeight: '900' },
+  updateLoading: { height: 39, minWidth: 245, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 18, borderRadius: 13, backgroundColor: '#dc7b71' },
+  updateLoadingText: { color: '#fff9e9', fontSize: 10, fontWeight: '800' },
+  updateHint: { color: '#aa8879', fontSize: 7.5, fontWeight: '700', marginTop: 11 },
 
 });
 

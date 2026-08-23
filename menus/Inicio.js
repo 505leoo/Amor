@@ -15,11 +15,11 @@ import { auth, db } from '../firebaseConfig';
 import { collection, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useUserDocument } from '../hooks/useUserDocument';
-import { useTemporadaActual } from '../hooks/useTemporadaActual';
 import { BuzonModal } from './Buzon';
-import { AvisosModal, AVISOS_REVISION } from './Avisos';
+import { AvisosModal, hayAvisosPendientes } from './Avisos';
 import { RecompensasModal } from './Recompensas';
 import { ConfiguracionModal } from './Configuracion';
+import Eventos from './Eventos';
 import { actualizarPasoTutorial } from '../components/Tutorial';
 import MisionesDiarias from '../components/MisionesDiarias';
 import { InventarioModal } from './Inventario';
@@ -29,41 +29,6 @@ const OverlayContext = createContext(false);
 export const useOverlayActive = () => useContext(OverlayContext);
 
 const REGALO_SEGUNDOS = 2 * 60;
-// El evento de historia siempre aparece primero. Si la temporada no tiene uno,
-// el tablero muestra solamente su evento normal.
-const EVENTOS_POR_TEMPORADA = {
-  t1: {
-    historia: null,
-    evento: {
-      id: 'chicles', titulo: 'CHICLES', destino: 'capsula1',
-      descripcion: 'Resuelve misiones, completa el camino compartiendo chicles.',
-      imagen: require('../assets/inicio/eventos/eventochicle.png'),
-    },
-  },
-  t2: {
-    historia: {
-      id: 'kitty', titulo: 'VIDEITOS', destino: 'kitty',
-      descripcion: 'Mirá videitos de Hello Kitty y sus amigos, preparados para compartir un ratito lindo.',
-      imagen: require('../assets/inicio/eventos/eventokitty.png'),
-      tema: 'blanco',
-    },
-    evento: {
-      id: 'paleta', titulo: 'GLOBOS', destino: 'paleta',
-      descripcion: 'Una aventura entre globos te espera. Completa sus desafíos y consigue recompensas.',
-      imagen: require('../assets/inicio/eventos/eventoglobo.png'),
-      tema: 'carmesi',
-    },
-  },
-};
-
-const obtenerEventosDeTemporada = temporada => {
-  const configuracion = EVENTOS_POR_TEMPORADA[temporada] || EVENTOS_POR_TEMPORADA.t1;
-  return [
-    configuracion.historia && { ...configuracion.historia, esHistoria: true },
-    configuracion.evento && { ...configuracion.evento, esHistoria: false },
-  ].filter(Boolean);
-};
-
 // ─── Recompensas diarias ────────────────────────────────────────────────────
 // Hook useRecompensaDiaria maneja:
 // - Verificación de fecha al entrar
@@ -459,7 +424,6 @@ const QuickMenu = memo(() => {
   const ultimaInvitacionRef = useRef(0);
   const ultimoRegaloRef = useRef(0);
   const vistoBuzonRef = useRef(null);
-  const puedeAbrirConfiguracion = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -478,7 +442,7 @@ const QuickMenu = memo(() => {
       actualizarBuzon();
     });
     AsyncStorage.getItem(avisosKey).then(valor => {
-      if (activo) setAvisosNuevos(valor !== AVISOS_REVISION);
+      if (activo) setAvisosNuevos(hayAvisosPendientes(valor));
     });
     AsyncStorage.getItem(`indicador_recompensas_${uid}`).then(valor => {
       if (activo) {
@@ -545,8 +509,8 @@ const QuickMenu = memo(() => {
   return <>
     <View style={styles.quickMenu}>
       {items.map((item, index) => <React.Fragment key={item.id}>
-        <TouchableOpacity style={[styles.quickItem, item.id === 'configuracion' && !puedeAbrirConfiguracion && styles.quickItemDisabled]} disabled={item.id === 'configuracion' && !puedeAbrirConfiguracion} onPress={() => item.id === 'buzon' ? abrirBuzon() : item.id === 'actualizaciones' ? abrirAvisos() : item.id === 'recompensas' ? abrirRecompensas() : item.id === 'configuracion' ? setConfiguracionAbierta(true) : setSeccionActiva(item.id)} activeOpacity={0.7} accessibilityLabel={item.label}>
-          <MaterialIcons name={item.icon} size={17} color={item.id === 'configuracion' && !puedeAbrirConfiguracion ? '#aaa49a' : '#76552f'} />
+        <TouchableOpacity style={styles.quickItem} onPress={() => item.id === 'buzon' ? abrirBuzon() : item.id === 'actualizaciones' ? abrirAvisos() : item.id === 'recompensas' ? abrirRecompensas() : item.id === 'configuracion' ? setConfiguracionAbierta(true) : setSeccionActiva(item.id)} activeOpacity={0.7} accessibilityLabel={item.label}>
+          <MaterialIcons name={item.icon} size={17} color="#76552f" />
           {item.id === 'buzon' && buzonNuevo && <View style={styles.unreadDot} />}
           {item.id === 'actualizaciones' && avisosNuevos && <View style={styles.unreadDot} />}
           {item.id === 'recompensas' && recompensasNuevas && <View style={styles.unreadDot} />}
@@ -593,10 +557,6 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
       setNivelJuego(Number.isFinite(snap.data()?.nivel) ? snap.data().nivel : 1);
     }, () => setNivelJuego(1));
   }, []);
-  const temporadaActual = useTemporadaActual();
-  const eventos = obtenerEventosDeTemporada(temporadaActual);
-  const [eventoActivo, setEventoActivo] = useState(0);
-  const eventoSwipeStart = useRef(null);
   const [overlayActive, setOverlayActive] = useState(false);
   const [comercianteNuevo, setComercianteNuevo] = useState(false);
   const [misionesAbiertas, setMisionesAbiertas] = useState(false);
@@ -642,10 +602,6 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   }, [onReady]);
 
   useEffect(() => {
-    setEventoActivo(0);
-  }, [temporadaActual]);
-
-  useEffect(() => {
     if (openReporteSemanal) {
       setReporteSemanalAbierto(true);
       setOverlayActive(true);
@@ -655,11 +611,6 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   const cerrarReporteSemanal = () => {
     setReporteSemanalAbierto(false);
     setOverlayActive(false);
-  };
-
-  const eventoActual = eventos[eventoActivo] || eventos[0];
-  const navegarAlEvento = () => {
-    if (eventoActual) navigation?.navigate(eventoActual.destino, { from: 'main' });
   };
 
   if (tutorialActivo) return <TutorialInicio navigation={navigation} />;
@@ -717,39 +668,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
         </View>
         <MisionesDiarias externo abierto={misionesAbiertas} onCerrar={() => setMisionesAbiertas(false)} />
         <InventarioModal visible={inventarioAbierto} onClose={() => setInventarioAbierto(false)} />
-        <View style={styles.eventoWrap}>
-          <View
-            style={styles.eventoBtn}
-            onStartShouldSetResponder={() => true}
-            onResponderGrant={({ nativeEvent }) => { eventoSwipeStart.current = nativeEvent.pageX; }}
-            onResponderRelease={({ nativeEvent }) => {
-              const distancia = nativeEvent.pageX - eventoSwipeStart.current;
-              if (Math.abs(distancia) > 25 && eventos.length > 1) {
-                setEventoActivo(actual => (actual + 1) % eventos.length);
-              } else navegarAlEvento();
-              eventoSwipeStart.current = null;
-            }}
-            accessibilityRole="button"
-            accessibilityLabel={`Ver evento ${eventoActual?.titulo || ''}`}
-          >
-            {eventoActual?.imagen ? (
-              <Image source={eventoActual.imagen} style={styles.eventoImagen} contentFit="cover" cachePolicy="memory-disk" />
-            ) : (
-              <View style={styles.eventoPlaceholder} />
-            )}
-            <View style={styles.eventoInfo} pointerEvents="none">
-              {eventoActual?.esHistoria && eventoActual?.mostrarTipo && <Text style={styles.eventoTipo}>EVENTO DE HISTORIA</Text>}
-              <Text style={[styles.eventoTitulo, eventoActual?.tema === 'blanco' && styles.eventoTituloBlanco, eventoActual?.tema === 'carmesi' && styles.eventoTituloCarmesi]}>{eventoActual?.titulo}</Text>
-              <Text style={[styles.eventoDescripcion, eventoActual?.tema === 'blanco' && styles.eventoDescripcionBlanco, eventoActual?.tema === 'carmesi' && styles.eventoDescripcionCarmesi]}>{eventoActual?.descripcion}</Text>
-            </View>
-          </View>
-          <TouchableOpacity style={styles.eventoVerBtn} activeOpacity={0.75} onPress={navegarAlEvento} accessibilityLabel="Ver evento">
-            <Text style={styles.eventoVer}>VER EVENTO</Text>
-          </TouchableOpacity>
-          {eventos.length > 1 && <View style={styles.eventoIndicadores} pointerEvents="none">
-            {eventos.map((evento, index) => <View key={evento.id} style={[styles.eventoIndicador, eventoActivo === index && styles.eventoIndicadorActivo]} />)}
-          </View>}
-        </View>
+        <Eventos navigation={navigation} soloEvento />
         <View style={styles.temporadasQuickWrap}>
           <TouchableOpacity style={[styles.temporadasQuickBtn, !puedeAbrirColeccion && styles.temporadasQuickDisabled]} hitSlop={6} activeOpacity={0.75} onPress={() => puedeAbrirColeccion && navigation?.navigate('temporadas')} disabled={!puedeAbrirColeccion}>
             <View style={[styles.temporadasQuickIcon, !puedeAbrirColeccion && styles.temporadasQuickIconDisabled]}><MaterialIcons name="event" size={20} color={puedeAbrirColeccion ? '#fff8dc' : '#aaa49a'} /></View>
@@ -828,7 +747,6 @@ const styles = StyleSheet.create({
   temporadasQuickTextDisabled: { color: '#999287' },
   accesoInicioText: { color: '#76552f', fontFamily: 'Delius', fontSize: 6.2, fontWeight: '900', marginTop: 1 },
   quickItem: { width: 27, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
-  quickItemDisabled: { backgroundColor: '#e3ded3', opacity: 0.8 },
   unreadDot: { position: 'absolute', top: 2, right: 2, width: 7, height: 7, borderRadius: 4, backgroundColor: '#d94b4b', borderWidth: 1, borderColor: '#f1e1bd' },
   unreadDotVerde: { position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: '#4c9e61', borderWidth: 1, borderColor: '#dce9dc' },
   quickDivider: { color: '#b88a48', fontSize: 17, lineHeight: 20, fontWeight: '400', opacity: 0.8 },
@@ -892,23 +810,6 @@ const styles = StyleSheet.create({
   canjearIcon: { width: 26, height: 26, borderRadius: 6, backgroundColor: '#80557f', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f3e8ed' },
   canjearInfo: { flex: 1, marginLeft: 6 },
   canjearSubtext: { color: '#704b6b', fontFamily: 'Delius', fontSize: 6, fontWeight: '700', marginTop: 0 },
-  eventoWrap: { position: 'absolute', left: 14, bottom: 12, zIndex: 10 },
-  eventoBtn: { width: 217, height: 100, borderRadius: 12, overflow: 'hidden', backgroundColor: '#f1e1bd', borderWidth: 5, borderColor: '#dfcf9b', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.32, shadowRadius: 8, elevation: 12 },
-  eventoImagen: { width: '100%', height: '100%' },
-  eventoPlaceholder: { flex: 1, backgroundColor: '#efd3dd' },
-  eventoInfo: { position: 'absolute', top: 5, left: 8, right: 8, alignItems: 'center' },
-  eventoTipo: { color: '#a36b42', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '900', letterSpacing: 0.7, marginBottom: 1 },
-  eventoTitulo: { color: '#ff57a0', fontFamily: 'Delius', fontSize: 11.5, fontWeight: '900', letterSpacing: 0.6, textShadowColor: 'rgba(255, 248, 220, 0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
-  eventoTituloBlanco: { color: '#684052', textShadowColor: 'rgba(255, 248, 235, 0.8)', textShadowRadius: 2 },
-  eventoDescripcion: { width: 156, color: '#b45c86', fontFamily: 'Delius', fontSize: 6.8, lineHeight: 8, fontWeight: '700', textAlign: 'center', marginTop: 2 },
-  eventoDescripcionBlanco: { color: '#8b5a68', textShadowColor: 'rgba(255, 248, 235, 0.72)', textShadowRadius: 2 },
-  eventoTituloCarmesi: { color: '#fff0c9', textShadowColor: 'rgba(92, 18, 39, 0.72)', textShadowRadius: 3 },
-  eventoDescripcionCarmesi: { color: '#f8d9ae', textShadowColor: 'rgba(92, 18, 39, 0.7)', textShadowRadius: 3 },
-  eventoVerBtn: { position: 'absolute', top: 60, alignSelf: 'center', paddingHorizontal: 10, paddingVertical: 2, borderRadius: 9, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 8 },
-  eventoVer: { color: '#76552f', fontFamily: 'Delius', fontSize: 8.2, fontWeight: '900', letterSpacing: 0.5, textShadowColor: 'rgba(255, 248, 220, 0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
-  eventoIndicadores: { position: 'absolute', bottom: 8, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6, zIndex: 30, elevation: 30 },
-  eventoIndicador: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(255, 248, 220, 0.72)', borderWidth: 1, borderColor: 'rgba(92, 57, 49, 0.36)', shadowColor: '#4f2631', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.65, shadowRadius: 2, elevation: 3 },
-  eventoIndicadorActivo: { width: 14, backgroundColor: '#fff8dc', shadowOpacity: 0.9, shadowRadius: 3, elevation: 5 },
   temporadasQuickWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: -47 }], zIndex: 200, elevation: 200 },
   comercianteQuickWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: 4 }], zIndex: 200, elevation: 200 },
   temporadasQuickBtn: { width: 150, height: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, borderRadius: 8, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 7, elevation: 9 },
