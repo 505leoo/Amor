@@ -41,7 +41,7 @@ const MoneyStrip = ({ userMoney, diamantes, cartasUniversales }) => (
   </View>
 );
 
-const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles, chicleIcono }) => {
+const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles, chicleIcono, showResources = true }) => {
   const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
   const [dineroInterno, setDineroInterno] = useState(null);
   const [diamantesInternos, setDiamantesInternos] = useState(0);
@@ -49,8 +49,9 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
 
   // Leer dinero desde Firestore si no se pasa como prop
   useEffect(() => {
+    if (!showResources) return undefined;
     const uid = auth.currentUser?.uid;
-    if (!uid) return;
+    if (!uid) return undefined;
     const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
       if (!snap.exists()) return;
       const data = snap.data() || {};
@@ -59,7 +60,7 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
       setCartasInternas(data.cartasAnimalitos ?? 0);
     });
     return () => unsub();
-  }, []);
+  }, [showResources]);
 
   const moneyFinal = userMoney !== undefined ? userMoney : dineroInterno;
 
@@ -95,9 +96,9 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
           <View style={styles.exitInner}><MaterialIcons name="close" size={15} color="#76502d" /></View>
         </View>
       </TouchableOpacity>
-      <MoneyStrip userMoney={moneyFinal} diamantes={diamantesInternos} cartasUniversales={cartasInternas} />
+      {showResources && <MoneyStrip userMoney={moneyFinal} diamantes={diamantesInternos} cartasUniversales={cartasInternas} />}
 
-      {isAdmin && <View style={styles.rightButtons} pointerEvents="auto">
+      {isAdmin && showResources && <View style={styles.rightButtons} pointerEvents="auto">
         {customAddButton ? customAddButton : (
           <TouchableOpacity onPress={onAddSticker} activeOpacity={0.7} style={styles.touchable}>
             <LinearGradient colors={['#4CAF50', '#45a049']} style={styles.addButton}>

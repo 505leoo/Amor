@@ -81,7 +81,7 @@ function ChicleMision({ titulo, monedas, chicles, globos, exp, cartas, size = 18
 // ── Hook genérico para misiones con namespace propio en Firestore ─────────────
 // Usado tanto por eventos como por instancias globales con instanceKey.
 // La clave en Firestore es: misiones_diarias/{diaKey}/{uid}_{nsKey}
-function useMisionesNs(lista, nsKey) {
+function useMisionesNs(lista, nsKey, enabled = true) {
   const uid = auth.currentUser?.uid;
   const [progreso, setProgreso]     = useState({});
   const [reclamados, setReclamados] = useState([]);
@@ -94,7 +94,7 @@ function useMisionesNs(lista, nsKey) {
   };
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !enabled) return undefined;
     const ref = doc(db, 'misiones_diarias', getDiaKey());
     const unsub = onSnapshot(ref, snap => {
       const data = snap.exists() ? (snap.data()[`${uid}_${nsKey}`] || {}) : {};
@@ -102,7 +102,7 @@ function useMisionesNs(lista, nsKey) {
       setReclamados(data.reclamados || []);
     });
     return () => unsub();
-  }, [uid, nsKey]);
+  }, [enabled, uid, nsKey]);
 
   const getEstado = (mision) => {
     const actual = progreso[mision.campo] ?? 0;
@@ -174,20 +174,22 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
   // ── Misiones del contexto global (para pasarlas al hook de namespace) ────
   const misionesGlobales = ctx.misiones ?? [];
 
+  const esEvento    = !!misionesEvento && !!eventoKey;
+  const esInstance  = !esEvento && !!instanceKey;
+
   // ── Modo evento independiente ─────────────────────────────────────────────
   const eventoData = useMisionesEvento(
     misionesEvento ?? [],
-    eventoKey ?? '__none__'
+    eventoKey ?? '__none__',
+    esEvento,
   );
 
   // ── Modo global con namespace propio (instanceKey) ────────────────────────
   const instanceData = useMisionesNs(
     misionesGlobales,
-    instanceKey ?? '__global__'
+    instanceKey ?? '__global__',
+    esInstance,
   );
-
-  const esEvento    = !!misionesEvento && !!eventoKey;
-  const esInstance  = !esEvento && !!instanceKey;
 
   // Seleccionar fuente de datos según modo
   const misiones   = esEvento   ? misionesEvento              : misionesGlobales;
@@ -211,12 +213,13 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
 
   const totalMisiones = misiones?.length ?? 5;
 
-  const [open, setOpen]       = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const initiallyOpen = Boolean(externo && abierto);
+  const [open, setOpen]       = useState(initiallyOpen);
+  const [mounted, setMounted] = useState(initiallyOpen);
   const [tiempoReset, setTiempoReset] = useState('');
   const [paginaMision, setPaginaMision] = useState(0);
-  const slideAnim    = useRef(new Animated.Value(300)).current;
-  const backdropAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim    = useRef(new Animated.Value(initiallyOpen ? 0 : 300)).current;
+  const backdropAnim = useRef(new Animated.Value(initiallyOpen ? 1 : 0)).current;
 
   // ── Contador de reinicio — calcula tiempo hasta medianoche del servidor ───
   useEffect(() => {
@@ -244,6 +247,8 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
   }, [open]);
 
   useEffect(() => {
+    slideAnim.stopAnimation();
+    backdropAnim.stopAnimation();
     if (open) {
       setMounted(true);
       Animated.parallel([
@@ -254,9 +259,13 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
       Animated.parallel([
         Animated.timing(slideAnim,    { toValue: 300, useNativeDriver: true, duration: 200 }),
         Animated.timing(backdropAnim, { toValue: 0,   useNativeDriver: true, duration: 200 }),
-      ]).start(() => setMounted(false));
+      ]).start(({ finished }) => { if (finished) setMounted(false); });
     }
-  }, [open]);
+    return () => {
+      slideAnim.stopAnimation();
+      backdropAnim.stopAnimation();
+    };
+  }, [backdropAnim, open, slideAnim]);
 
   useEffect(() => {
     if (externo) setOpen(abierto);

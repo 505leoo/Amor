@@ -370,6 +370,7 @@ const Perfil = ({ navigation, route }) => {
         onExit={() => navigation?.navigate(soloLectura ? 'main' : 'main')}
         userMoney={soloLectura ? undefined : (userData?.dinero ?? 0)}
         onAddSticker={soloLectura ? undefined : () => navigation?.navigate?.('coleccion')}
+        showResources={!soloLectura}
       />
 
       <View style={s.center}>

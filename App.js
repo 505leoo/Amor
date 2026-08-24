@@ -260,7 +260,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    NavigationBar.setVisibilityAsync('hidden');
+    NavigationBar.setVisibilityAsync('hidden').catch(() => {});
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       let temporada = 't1';

@@ -79,7 +79,6 @@ export const MusicProvider = ({ children, onVisualClick }) => {
   const comenzarToque = event => {
     const touch = event.nativeEvent;
     toqueInicial.current = { x: touch.pageX, y: touch.pageY, at: Date.now() };
-    onVisualClick?.(touch.pageX || 0, touch.pageY || 0);
   };
   const terminarToque = event => {
     const inicio = toqueInicial.current;
@@ -88,6 +87,7 @@ export const MusicProvider = ({ children, onVisualClick }) => {
     const touch = event.nativeEvent;
     const distancia = Math.hypot((touch.pageX || 0) - inicio.x, (touch.pageY || 0) - inicio.y);
     if (distancia <= 10 && Date.now() - inicio.at <= 700) {
+      onVisualClick?.(touch.pageX || inicio.x, touch.pageY || inicio.y);
       reproducirClick();
     }
   };
