@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
-import { auth } from '../firebaseConfig';
+import { auth, functions } from '../firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
 import { gameColors, gamePanel } from '../theme/gameTheme';
 
 // PRIORIDAD: toda tarjeta nueva debe incluir titulo, descripcion/texto y fecha (YYYY-MM-DD).
@@ -10,6 +11,11 @@ import { gameColors, gamePanel } from '../theme/gameTheme';
 const ADMIN_EMAIL = 'admin@gmail.com';
 const FECHA_CORTE_INDICADOR = '2026-08-21';
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const MENSAJES_COMUNIDAD = [
+  { titulo: '¡Un lote especial apareció!', cuerpo: 'Ardilla llegó con recompensas exclusivas. Entra a Amor y descubre el nuevo Lote Bosque Dorado.' },
+  { titulo: 'Tu próxima aventura te espera', cuerpo: 'Hay nuevas actividades y premios esperando por ti. Vuelve a Amor y continúa jugando.' },
+  { titulo: '¡Amor tiene una sorpresa!', cuerpo: 'Algo bonito acaba de llegar a Amor. Entra ahora para descubrirlo antes que nadie.' },
+];
 
 const obtenerPartesFecha = fecha => {
   const [anio, mes, dia] = String(fecha).split('-').map(Number);
@@ -35,13 +41,13 @@ const textoFechaCompleta = fecha => {
 const SECCIONES = [
   { id: 'temporadas', titulo: 'Temporadas', descripcion: 'Nuevas aventuras y caminos por descubrir.', icono: 'event', tarjetas: [{ id: 'temporada-1', titulo: 'Temporada activa', texto: 'Descubre el nuevo camino de Menta.', fecha: '2026-08-20', detalle: 'Una nueva temporada llega con desafíos, recompensas y pequeñas historias para acompañarte durante tus partidas. Revisa las novedades y prepara todo para no perderte ninguna actividad.' }] },
   { id: 'eventos', titulo: 'Eventos', descripcion: 'Actividades especiales para compartir y disfrutar.', icono: 'celebration', tarjetas: [{ id: 'evento-1', titulo: 'Evento especial', texto: 'Hay una nueva actividad para disfrutar.', fecha: '2026-08-20', detalle: 'Durante este evento podrás participar en actividades especiales y encontrar sorpresas preparadas por Menta. Estate atento a las fechas y disfruta cada momento.' }] },
-  { id: 'novedades', titulo: 'Novedades', descripcion: 'Noticias y cambios importantes de Menta.', icono: 'new-releases', tarjetas: [
+  { id: 'novedades', titulo: 'Novedades', descripcion: 'Noticias y cambios importantes de Amor.', icono: 'new-releases', tarjetas: [
     { id: 'actualizacion-1-0-5', titulo: 'Tus Animalitos brillan más que nunca', texto: 'Animalitos, trajes y temporadas tienen una nueva forma de disfrutarse.', fecha: '2026-08-23', detalle: '¡La versión 1.0.5 ya está aquí! Renovamos por completo la colección de Animalitos para que sea más bonita, ordenada y fácil de entender. Ahora puedes ver tus animalitos en un catálogo, conocer su rareza y temporada, revisar sus habilidades, consultar sus recompensas y mejorar cada uno con sus propias cartas. También existen cartas universales, que sirven como ayuda cuando te faltan cartas de un animal. El Comerciante ahora ofrece cartas únicamente de los animalitos que ya desbloqueaste, mientras que la experiencia se consigue jugando y mejorando a tus compañeros. El vestidor también cambió: los trajes aparecen en un catálogo horizontal de dos filas, cada uno tiene una rareza con su propio color y los que todavía no conseguiste se muestran bloqueados. Además, organizamos mejor los eventos de cada temporada y agregamos accesos especiales para revisar cómo se ven sus contenidos. Son muchos cambios, pero la idea es sencilla: que coleccionar, vestir y mejorar a tus animalitos sea más claro, divertido y especial.' },
     { id: 'actualizacion-1-0-2-a-1-0-4', titulo: 'Actualización General', texto: 'Arreglamos varias cosas para que Amor funcione mejor.', fecha: '2026-08-21', detalle: 'En esta actualización arreglamos varios problemas: ahora el tutorial avanza correctamente después de reclamar recompensas; el Comerciante entrega 3 cartas y se bloquea cuando corresponde; mejorar a Halcón funciona con las monedas y cartas correctas; las misiones y los juegos entregan recompensas más equilibradas; el nivel y la barra de EXP del perfil se muestran correctamente; las actualizaciones de la app llegan a producción; el menú de pareja carga mejor, muestra quién está conectado de verdad y no enseña personas que ya tienen pareja; también mejoramos las temporadas, los avisos y varias pantallas para que todo sea más claro y estable. La versión cambió de la 1.0.2 a la 1.0.4.' },
-    { id: 'novedad-1', titulo: 'Novedades de Menta', texto: 'Pronto conocerás todas las mejoras.', fecha: '2026-08-20', detalle: 'Aquí aparecerán las noticias importantes, las mejoras recientes y todas esas pequeñas cosas que hacen que Menta se sienta cada vez más completa.' },
+    { id: 'novedad-1', titulo: 'Novedades de Amor', texto: 'Pronto conocerás todas las mejoras.', fecha: '2026-08-20', detalle: 'Aquí aparecerán las noticias importantes, las mejoras recientes y todas esas pequeñas cosas que hacen que Amor se sienta cada vez más completa.' },
   ] },
   { id: 'mantenimiento', titulo: 'Mantenimiento', descripcion: 'Avisos sobre pausas y ajustes del juego.', icono: 'construction', tarjetas: [{ id: 'mantenimiento-1', titulo: 'Todo en orden', texto: 'Te avisaremos antes de cualquier pausa.', fecha: '2026-08-20', detalle: 'Cuando haya una pausa programada o un ajuste importante, encontrarás aquí la información necesaria para saber qué ocurre y cuándo volverá todo a la normalidad.' }] },
-  { id: 'comunidad', titulo: 'Comunidad', descripcion: 'Mensajes para crecer juntos dentro de Menta.', icono: 'groups', tarjetas: [{ id: 'comunidad-1', titulo: 'Noticias de la comunidad', texto: 'Menta también crece contigo.', fecha: '2026-08-20', detalle: 'Este espacio reúne mensajes, celebraciones y novedades que nacen junto a la comunidad. Gracias por ser parte de este rincón y ayudarlo a crecer.' }] },
+  { id: 'comunidad', titulo: 'Comunidad', descripcion: 'Mensajes para crecer juntos dentro de Amor.', icono: 'groups', tarjetas: [{ id: 'comunidad-1', titulo: 'Noticias de la comunidad', texto: 'Amor también crece contigo.', fecha: '2026-08-20', detalle: 'Este espacio reúne mensajes, celebraciones y novedades que nacen junto a la comunidad. Gracias por ser parte de este rincón y ayudarlo a crecer.' }] },
 ];
 
 export const AVISOS_CLAVES = SECCIONES.flatMap(seccion => seccion.tarjetas.filter(tarjeta => tarjeta.fecha >= FECHA_CORTE_INDICADOR).map(tarjeta => `${seccion.id}:${tarjeta.id}:${tarjeta.fecha}`));
@@ -57,6 +63,11 @@ export const AvisosModal = ({ visible, onClose }) => {
   const [seccionActiva, setSeccionActiva] = useState(null);
   const [avisoSeleccionado, setAvisoSeleccionado] = useState(null);
   const [avisoPendiente, setAvisoPendiente] = useState(null);
+  const [tituloComunidad, setTituloComunidad] = useState(MENSAJES_COMUNIDAD[0].titulo);
+  const [cuerpoComunidad, setCuerpoComunidad] = useState(MENSAJES_COMUNIDAD[0].cuerpo);
+  const [enviandoComunidad, setEnviandoComunidad] = useState(false);
+  const [proximoEnvio, setProximoEnvio] = useState(0);
+  const [relojComunidad, setRelojComunidad] = useState(Date.now());
   const usuarioEsAdmin = auth.currentUser?.email?.toLowerCase() === ADMIN_EMAIL;
   const swipeStart = useRef(null);
   const fade = useRef(new Animated.Value(0)).current;
@@ -127,6 +138,37 @@ export const AvisosModal = ({ visible, onClose }) => {
     return undefined;
   }, [seccionActiva]);
 
+  useEffect(() => {
+    if (!visible || seccionActiva !== 'comunidad' || !usuarioEsAdmin) return undefined;
+    let activo = true;
+    httpsCallable(functions, 'adminCommunityBroadcast')({ action: 'status' }).then(result => {
+      if (activo) setProximoEnvio(Number(result.data?.nextAllowedAt) || 0);
+    }).catch(() => {});
+    const interval = setInterval(() => setRelojComunidad(Date.now()), 1000);
+    return () => { activo = false; clearInterval(interval); };
+  }, [visible, seccionActiva, usuarioEsAdmin]);
+
+  const esperaComunidad = Math.max(0, proximoEnvio - relojComunidad);
+  const textoEspera = esperaComunidad > 0
+    ? `${Math.floor(esperaComunidad / 60000)}m ${Math.floor((esperaComunidad % 60000) / 1000)}s`
+    : null;
+  const enviarComunidad = async () => {
+    if (enviandoComunidad || esperaComunidad > 0 || !tituloComunidad.trim() || !cuerpoComunidad.trim()) return;
+    setEnviandoComunidad(true);
+    try {
+      const result = await httpsCallable(functions, 'adminCommunityBroadcast')({ action: 'send', title: tituloComunidad, body: cuerpoComunidad });
+      setProximoEnvio(Number(result.data?.nextAllowedAt) || Date.now() + 3600000);
+      setRelojComunidad(Date.now());
+      global.showToast?.({ type: 'success', text1: 'Aviso enviado a la comunidad', text2: `${Number(result.data?.sent) || 0} dispositivos alcanzados` });
+    } catch (error) {
+      const next = Number(error?.details?.nextAllowedAt || error?.customData?.details?.nextAllowedAt) || 0;
+      if (next) setProximoEnvio(next);
+      global.showToast?.({ type: 'error', text1: 'No pudimos enviar el aviso', text2: next ? 'Todavía debes esperar un poco.' : 'Inténtalo nuevamente.' });
+    } finally {
+      setEnviandoComunidad(false);
+    }
+  };
+
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent presentationStyle="overFullScreen" onRequestClose={cerrarAvisos}>
       <View style={styles.overlay}>
@@ -135,7 +177,7 @@ export const AvisosModal = ({ visible, onClose }) => {
           <View style={[styles.card, { width: modalWidth }]}>
             <View style={styles.header}>
               <View style={styles.headerIcon}><MaterialIcons name="notifications-none" size={23} color="#fff8dc" /></View>
-              <View style={styles.headerInfo}><Text style={styles.title}>{seccion?.titulo || 'AVISOS'}</Text><Text style={styles.subtitle}>NOVEDADES DE MENTA</Text></View>
+              <View style={styles.headerInfo}><Text style={styles.title}>{seccion?.titulo || 'AVISOS'}</Text><Text style={styles.subtitle}>NOVEDADES DE AMOR</Text></View>
               {seccionActiva && <TouchableOpacity style={styles.back} onPress={() => avisoSeleccionado ? setAvisoSeleccionado(null) : setSeccionActiva(null)} hitSlop={8}><MaterialIcons name="arrow-back" size={17} color="#405e76" /></TouchableOpacity>}
               <TouchableOpacity style={styles.close} onPress={cerrarAvisos} hitSlop={8}><MaterialIcons name="close" size={18} color="#76552f" /></TouchableOpacity>
             </View>
@@ -157,6 +199,12 @@ export const AvisosModal = ({ visible, onClose }) => {
                 <Text style={styles.detailDate}>{textoFechaCompleta(avisoSeleccionado.fecha)}</Text>
                 <Text style={styles.detailSignature}>- Administración de Amor.</Text>
               </ScrollView>
+            </View> : usuarioEsAdmin && seccionActiva === 'comunidad' ? <View style={styles.communityAdmin}>
+              <View style={styles.communityAdminHeader}><View style={styles.communityAdminIcon}><MaterialIcons name="campaign" size={17} color="#fff6d7" /></View><View><Text style={styles.communityAdminTitle}>MENSAJE PARA TODOS</Text><Text style={styles.communityAdminSubtitle}>Disponible una vez por hora</Text></View></View>
+              <View style={styles.communityTemplates}>{MENSAJES_COMUNIDAD.map((mensaje, index) => <TouchableOpacity key={mensaje.titulo} style={[styles.communityTemplate, tituloComunidad === mensaje.titulo && styles.communityTemplateActive]} onPress={() => { setTituloComunidad(mensaje.titulo); setCuerpoComunidad(mensaje.cuerpo); }}><Text style={styles.communityTemplateText}>{index === 0 ? '🌰 Lote' : index === 1 ? '✨ Regreso' : '🎁 Sorpresa'}</Text></TouchableOpacity>)}</View>
+              <TextInput style={styles.communityTitleInput} value={tituloComunidad} onChangeText={setTituloComunidad} maxLength={60} placeholder="Título de la notificación" placeholderTextColor="#9a8b79" />
+              <TextInput style={styles.communityBodyInput} value={cuerpoComunidad} onChangeText={setCuerpoComunidad} maxLength={180} multiline placeholder="Escribe un mensaje bonito…" placeholderTextColor="#9a8b79" />
+              <TouchableOpacity style={[styles.communitySend, (enviandoComunidad || esperaComunidad > 0) && styles.communitySendDisabled]} disabled={enviandoComunidad || esperaComunidad > 0} onPress={enviarComunidad}><MaterialIcons name={textoEspera ? 'schedule' : 'send'} size={13} color="#fff8df" /><Text style={styles.communitySendText}>{enviandoComunidad ? 'ENVIANDO…' : textoEspera ? `DISPONIBLE EN ${textoEspera}` : 'ENVIAR A TODA LA COMUNIDAD'}</Text></TouchableOpacity>
             </View> : <View style={styles.carousel}>
               <View style={styles.touchArea} onStartShouldSetResponder={() => true} onResponderGrant={({ nativeEvent }) => { swipeStart.current = nativeEvent.pageY; }} onResponderRelease={({ nativeEvent }) => {
                 const distancia = nativeEvent.pageY - swipeStart.current;
@@ -218,9 +266,9 @@ const styles = StyleSheet.create({
   list: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', columnGap: 6, rowGap: 6 },
   item: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6, paddingVertical: 5, borderRadius: 9, backgroundColor: '#dfeef8', borderWidth: 1, borderColor: '#bdd8e9' },
   itemDisabled: { backgroundColor: '#d7dde1', borderColor: '#c3cbd0' },
-  itemIcon: { marginBottom: 3 },
-  itemTitle: { width: '100%', color: '#476982', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', textAlign: 'center' },
-  itemText: { width: '100%', color: '#6b8aa1', fontFamily: 'Delius', fontSize: 5.2, lineHeight: 6, fontWeight: '700', marginTop: 3, textAlign: 'center' },
+  itemIcon: { marginBottom: 5 },
+  itemTitle: { width: '100%', color: '#476982', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', textAlign: 'center', transform: [{ translateY: 2 }] },
+  itemText: { width: '100%', color: '#6b8aa1', fontFamily: 'Delius', fontSize: 5.2, lineHeight: 6, fontWeight: '700', marginTop: 4, textAlign: 'center', transform: [{ translateY: 2 }] },
   itemTime: { position: 'absolute', top: 5, right: 5, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6, backgroundColor: '#bdd8e9' },
   itemTimeText: { color: '#476982', fontFamily: 'Delius', fontSize: 4.8, fontWeight: '900' },
   routeDotCard: { position: 'absolute', top: 5, left: 5, width: 7, height: 7, borderRadius: 4, backgroundColor: '#d94b4b', borderWidth: 1, borderColor: '#edf5fb' },
@@ -230,4 +278,13 @@ const styles = StyleSheet.create({
   indicators: { position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', gap: 6 },
   indicator: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#7ca6c2', borderWidth: 1, borderColor: '#edf5fb' },
   indicatorActive: { height: 15, backgroundColor: '#5d89ab' },
+  communityAdmin: { height: 215, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 8 },
+  communityAdminHeader: { height: 29, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  communityAdminIcon: { width: 25, height: 25, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5d89ab' },
+  communityAdminTitle: { color: '#476982', fontFamily: 'Delius', fontSize: 8, fontWeight: '900', letterSpacing: 0.7, transform: [{ translateY: 2 }] }, communityAdminSubtitle: { color: '#7ca0b8', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '700', marginTop: 2 },
+  communityTemplates: { height: 27, flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 3 },
+  communityTemplate: { height: 22, paddingHorizontal: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e4edf2', borderWidth: 1, borderColor: '#cadce7' }, communityTemplateActive: { backgroundColor: '#cfe4f1', borderColor: '#6f9dbb' }, communityTemplateText: { color: '#52748c', fontFamily: 'Delius', fontSize: 6, fontWeight: '900' },
+  communityTitleInput: { height: 27, paddingHorizontal: 9, paddingTop: 4, paddingBottom: 2, borderRadius: 8, color: '#405e76', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', backgroundColor: '#f7f1df', borderWidth: 1, borderColor: '#d8cba9' },
+  communityBodyInput: { height: 52, marginTop: 5, paddingHorizontal: 9, paddingTop: 8, paddingBottom: 4, borderRadius: 8, color: '#526b7c', fontFamily: 'Delius', fontSize: 6.3, lineHeight: 8, fontWeight: '700', textAlignVertical: 'top', backgroundColor: '#f7f1df', borderWidth: 1, borderColor: '#d8cba9' },
+  communitySend: { alignSelf: 'center', minWidth: 190, height: 28, marginTop: 6, paddingHorizontal: 12, borderRadius: 10, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5d89ab', borderWidth: 1, borderColor: '#476982' }, communitySendDisabled: { opacity: 0.58 }, communitySendText: { color: '#fff8df', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.45 },
 });

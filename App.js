@@ -44,6 +44,7 @@ import Juegos from './Juegos/Juegos';
 import ConexionesGame from './Juegos/Conexiones/ConexionesGame';
 import Comerciante from './Comerciante';
 import Anuncios from './components/Anuncios';
+import Lotes from './Lotes';
 import Tutorial from './components/Tutorial';
 import { ReporteSemanal } from './components/ReporteSemanal';
 import { reporteId, semanaActual } from './components/ReporteSemanal';
@@ -55,7 +56,7 @@ const KNOWN_SCREENS = new Set([
   'intro', 'anuncios', 'login', 'register', 'main', 'reporteSemanal', 'coleccion', 'tienda',
   'perfil', 'buzon', 'trofeos', 'menu', 'pistas', 'temporadas', 'temporada1', 'temporada2',
   'kitty', 'paleta', 'historia1', 'capsula1', 'librotemp1', 'animalitos', 'canjear',
-  'comerciante', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones',
+  'comerciante', 'lotes', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones',
 ]);
 
 export default function App() {
@@ -66,8 +67,8 @@ export default function App() {
   const [isConnected, setIsConnected]   = useState(true);
   const [inicioReady, setInicioReady]   = useState(false);
   const [temporadaInicio, setTemporadaInicio] = useState('t1');
-  const [tipoAnuncio, setTipoAnuncio] = useState('reporte');
-  const [eventosAnuncio, setEventosAnuncio] = useState(['reporte']);
+  const [tipoAnuncio, setTipoAnuncio] = useState('lotes');
+  const [eventosAnuncio, setEventosAnuncio] = useState(['lotes']);
   const [tutorialActivo, setTutorialActivo] = useState(false);
   const [estadoActualizacion, setEstadoActualizacion] = useState('checking');
   const [versionActualizacion, setVersionActualizacion] = useState(null);
@@ -411,13 +412,13 @@ export default function App() {
                     const reportes = reporteSnap.data()?.reportes || {};
                     completo = Boolean(reportes[userRef.current.uid]);
                   }
-                  setTipoAnuncio(completo ? 'fechas' : 'reporte');
-                  setEventosAnuncio(completo ? ['fechas'] : ['reporte', 'fechas']);
+                  setTipoAnuncio('lotes');
+                  setEventosAnuncio(completo ? ['lotes', 'fechas'] : ['lotes', 'reporte', 'fechas']);
                   currentScreenRef.current = 'anuncios';
                   setCurrentScreen('anuncios');
                 })().catch(() => {
-                  setTipoAnuncio('reporte');
-                  setEventosAnuncio(['reporte', 'fechas']);
+                  setTipoAnuncio('lotes');
+                  setEventosAnuncio(['lotes', 'reporte', 'fechas']);
                   currentScreenRef.current = 'anuncios';
                   setCurrentScreen('anuncios');
                 });
@@ -436,6 +437,10 @@ export default function App() {
               evento={tipoAnuncio}
               eventosDisponibles={eventosAnuncio}
               onOpen={(evento) => {
+                if (evento === 'lotes') {
+                  navigation.navigate('lotes', { animalId: 'ardilla' });
+                  return;
+                }
                 if (evento !== 'reporte') return;
                 currentScreenRef.current = 'reporteSemanal';
                 setScreenParams({});
@@ -482,6 +487,7 @@ export default function App() {
           {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} mode={screenParams?.mode} />}
           {currentScreen === 'canjear'          && <Canjear          navigation={navigation} />}
           {currentScreen === 'comerciante'      && <Comerciante      navigation={navigation} temporada={screenParams?.temporada} />}
+          {currentScreen === 'lotes'             && <Lotes           navigation={navigation} animalId={screenParams?.animalId} />}
           {currentScreen === 'adminCodigos'      && <AdminCodigos     navigation={navigation} />}
           {currentScreen === 'iconos'             && <Iconos           navigation={navigation} />}
           {currentScreen === 'pase'               && <Pase             navigation={navigation} />}

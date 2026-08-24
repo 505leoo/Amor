@@ -6,6 +6,10 @@ import { auth } from '../firebaseConfig';
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+const ICONO_ARDILLA = require('../assets/inicio/iconos/icono-ardilla-bellota.png');
+const resolverAvatar = data => data?.iconoLocalId === 'ardilla_bellota'
+  ? ICONO_ARDILLA
+  : data?.iconoUrl || data?.photoURL || ICONO_DEFAULT;
 const numeroSeguro = value => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -14,12 +18,12 @@ const numeroSeguro = value => {
 export default memo(function PanelPerfil({ navigation }) {
   const datosIniciales = getCachedUserData(auth.currentUser?.uid);
   const nombreInicial = datosIniciales?.datosCompletos?.nombre || datosIniciales?.nombre || auth.currentUser?.displayName || 'amigo';
-  const avatarInicial = datosIniciales?.iconoUrl || datosIniciales?.photoURL || ICONO_DEFAULT;
+  const avatarInicial = resolverAvatar(datosIniciales);
   const expInicial = numeroSeguro(datosIniciales?.exp);
   const { data: userData, loaded } = useUserDocument(
     data => ({
       nombre: data?.datosCompletos?.nombre || data?.nombre,
-      avatarUri: data?.iconoUrl || data?.photoURL || ICONO_DEFAULT,
+      avatarUri: resolverAvatar(data),
       exp: data?.exp,
     }),
     undefined,

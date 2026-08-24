@@ -212,6 +212,92 @@ exports.sendPushyNotification = functions.https.onCall(
       }
     });
 
+// Mensajes globales de Comunidad. La identidad, el cooldown y los destinatarios
+// se validan en servidor; el cliente únicamente presenta el compositor.
+exports.adminCommunityBroadcast = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Inicia sesión.");
+  const email = String(request.auth.token.email || "").trim().toLowerCase();
+  if (email !== "admin@gmail.com") {
+    throw new HttpsError("permission-denied", "Solo Administración puede enviar avisos.");
+  }
+
+  const db = admin.firestore();
+  const stateRef = db.collection("configuracion").doc("comunidad_broadcast");
+  const now = Date.now();
+  const cooldownMs = 60 * 60 * 1000;
+  const action = String((request.data || {}).action || "status");
+  const stateSnap = await stateRef.get();
+  const state = stateSnap.data() || {};
+  const lastSentMs = Number(state.lastSentMs) || 0;
+  const nextAllowedAt = lastSentMs + cooldownMs;
+  if (action === "status") {
+    return {ok: true, nextAllowedAt, lastTitle: state.lastTitle || null};
+  }
+  if (action !== "send") throw new HttpsError("invalid-argument", "Acción inválida.");
+
+  const title = String(request.data.title || "").trim().replace(/\s+/g, " ");
+  const body = String(request.data.body || "").trim().replace(/\s+/g, " ");
+  if (title.length < 4 || title.length > 60 || body.length < 10 || body.length > 180) {
+    throw new HttpsError("invalid-argument", "Revisa el título y el mensaje.");
+  }
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(stateRef);
+    const current = snap.data() || {};
+    const currentLast = Number(current.lastSentMs) || 0;
+    const sendingUntil = Number(current.sendingUntil) || 0;
+    if (now < currentLast + cooldownMs) {
+      throw new HttpsError("resource-exhausted", "Debes esperar antes de otro aviso.", {nextAllowedAt: currentLast + cooldownMs});
+    }
+    if (now < sendingUntil) {
+      throw new HttpsError("aborted", "Ya hay un envío en curso.");
+    }
+    tx.set(stateRef, {sendingUntil: now + 2 * 60 * 1000, sendingBy: request.auth.uid}, {merge: true});
+  });
+
+  try {
+    const users = await db.collection("usuarios").get();
+    const tokens = [...new Set(users.docs.map((userDoc) => {
+      const data = userDoc.data() || {};
+      return data.MyPushyToken || data.pushyToken || null;
+    }).filter(Boolean))];
+    const apiSecret = process.env.PUSHY_API_SECRET;
+    if (!apiSecret) throw new HttpsError("failed-precondition", "Pushy no está configurado.");
+    let sent = 0;
+    for (let index = 0; index < tokens.length; index += 1000) {
+      const registrationIds = tokens.slice(index, index + 1000);
+      const response = await fetch(`https://api.pushy.me/push?api_key=${apiSecret}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          registration_ids: registrationIds,
+          notification: {title, body},
+          data: {title, message: body, type: "community_broadcast"},
+          collapse_key: `community-${now}`,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(`Pushy broadcast error: ${JSON.stringify(result)}`);
+      sent += registrationIds.length;
+    }
+    await stateRef.set({
+      lastSentMs: now,
+      lastTitle: title,
+      lastBody: body,
+      lastSentBy: request.auth.uid,
+      lastRecipientCount: sent,
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      sendingUntil: 0,
+    }, {merge: true});
+    return {ok: true, sent, nextAllowedAt: now + cooldownMs};
+  } catch (error) {
+    await stateRef.set({sendingUntil: 0}, {merge: true}).catch(() => {});
+    if (error instanceof HttpsError) throw error;
+    logger.error("[CommunityBroadcast] Error", error);
+    throw new HttpsError("internal", "No se pudo enviar el aviso.");
+  }
+});
+
 // ─── Crédito de Menta ──────────────────────────────────────────────────────
 // Las monedas y las fechas se calculan en el servidor, no en el cliente.
 const MENTA_PRESTAMOS = [250, 500, 1000];

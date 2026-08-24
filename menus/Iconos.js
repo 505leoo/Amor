@@ -21,6 +21,15 @@ const ICONO_DEFAULT = {
   url: null,
   source: require('../assets/inicio/iconos/icono1.jpg'),
 };
+const ICONO_ARDILLA = {
+  id: 'ardilla_bellota',
+  nombre: 'ardilla_bellota',
+  url: null,
+  local: true,
+  source: require('../assets/inicio/iconos/icono-ardilla-bellota.png'),
+  seccion: 'animales',
+  temporada: 't1',
+};
 
 const SECCIONES = ['temporada', 'evento', 'animales'];
 const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', animales: '🐾 Animalito' };
@@ -231,14 +240,15 @@ const ListaUnificada = ({ porSeccion, sinSeccion, gestion, activoId, iconoSelecc
         <View key={fi} style={s.fila}>
           {fila.map(({ ic, esUltimoDeSec }) => (
             (() => {
-              const bloqueado = !gestion && ic.id !== ICONO_DEFAULT_ID && !iconosDesbloqueados?.[ic.id] && iconoSeleccionado !== ic.url;
+              const valorSeleccion = ic.local ? ic.id : ic.url;
+              const bloqueado = !gestion && ic.id !== ICONO_DEFAULT_ID && !iconosDesbloqueados?.[ic.id] && iconoSeleccionado !== valorSeleccion;
               return (
             <IconoItem
               key={ic.id}
               ic={ic}
               gestion={gestion}
               activo={activoId === ic.id}
-              seleccionado={!gestion && iconoSeleccionado === ic.url}
+              seleccionado={!gestion && iconoSeleccionado === valorSeleccion}
               bloqueado={bloqueado}
               separador={esUltimoDeSec}
               onPress={() => gestion
@@ -282,7 +292,7 @@ const Iconos = ({ navigation }) => {
     if (!uid) return undefined;
     return onSnapshot(doc(db, 'usuarios', uid), snap => {
       const data = snap.data() || {};
-      setIconoSeleccionado(data.iconoUrl || null);
+      setIconoSeleccionado(data.iconoLocalId || data.iconoUrl || null);
       if (data.iconoUrl === undefined) {
         updateDoc(doc(db, 'usuarios', uid), { iconoUrl: null }, { merge: true }).catch(() => {});
       }
@@ -301,14 +311,18 @@ const Iconos = ({ navigation }) => {
   const cargarIconoUsuario = async () => {
     try {
       const snap = await getDoc(doc(db, 'usuarios', auth.currentUser.uid));
-      if (snap.exists()) setIconoSeleccionado(snap.data().iconoUrl || null);
+      if (snap.exists()) setIconoSeleccionado(snap.data().iconoLocalId || snap.data().iconoUrl || null);
     } catch (e) { console.error('Error al cargar icono usuario:', e); }
   };
 
   const handleSeleccionar = async (ic) => {
     try {
-      const valor = ic.id === ICONO_DEFAULT_ID ? null : ic.url;
-      await updateDoc(doc(db, 'usuarios', auth.currentUser.uid), { iconoUrl: valor });
+      const esLocal = Boolean(ic.local);
+      const valor = ic.id === ICONO_DEFAULT_ID ? null : esLocal ? ic.id : ic.url;
+      await updateDoc(doc(db, 'usuarios', auth.currentUser.uid), {
+        iconoUrl: esLocal ? null : valor,
+        iconoLocalId: esLocal ? ic.id : null,
+      });
       setIconoSeleccionado(valor);
       global.showToast?.({ message: 'Icono actualizado', type: 'success' });
     } catch (e) { console.error('Error al seleccionar icono:', e); }
@@ -408,6 +422,7 @@ const Iconos = ({ navigation }) => {
     acc[sec] = sortByNombre(iconos.filter(ic => ic.seccion === sec));
     return acc;
   }, {});
+  porSeccion.animales = [...porSeccion.animales, ICONO_ARDILLA];
   const sinSeccion = [ICONO_DEFAULT, ...sortByNombre(iconos.filter(ic => !ic.seccion || !SECCIONES.includes(ic.seccion)))];
 
   return (

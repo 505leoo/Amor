@@ -1,15 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import Svg, { Polygon, Circle, Ellipse, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
+import Svg, { Circle, Ellipse, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { db, auth } from '../firebaseConfig';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-
-const STRIP_H = 29;
-const STRIP_W = 96;
-const TIP = 13;
 
 const ChicleSvg = () => (
   <Svg width={16} height={16}>
@@ -27,42 +22,41 @@ const ChicleSvg = () => (
 
 const fmt = (n) => Number(n || 0).toLocaleString('es-MX');
 
-const MoneyStrip = ({ userMoney, chicles, chicleIcono }) => (
+const MoneyStrip = ({ userMoney, diamantes, cartasUniversales }) => (
   <View style={styles.moneyStripWrap}>
-    <Svg width={STRIP_W + TIP} height={STRIP_H} style={StyleSheet.absoluteFill}>
-      <Polygon
-        points={`0,0 ${STRIP_W},0 ${STRIP_W + TIP},${STRIP_H / 2} ${STRIP_W},${STRIP_H} 0,${STRIP_H}`}
-        fill="#c084a0"
-      />
-    </Svg>
-    <Text style={[styles.moneyStripText, { marginLeft: 10 }]}>🪙</Text>
-    <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(userMoney)}</Text>
-    {chicles != null && (
-      <>
-        {chicleIcono
-          ? <View style={{ marginLeft: 2 }}>{chicleIcono}</View>
-          : <Text style={[styles.moneyStripText, { fontSize: 12 }]}>🎈</Text>
-        }
-        <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(chicles)}</Text>
-      </>
-    )}
+    <View style={styles.resourceItem}>
+      <Text style={styles.moneyCoin}>🪙</Text>
+      <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(userMoney)}</Text>
+    </View>
+    <View style={styles.resourceDivider} />
+    <View style={styles.resourceItem}>
+      <MaterialIcons name="diamond" size={12} color="#32b9d5" />
+      <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(diamantes)}</Text>
+    </View>
+    <View style={styles.resourceDivider} />
+    <View style={styles.resourceItem}>
+      <MaterialIcons name="style" size={13} color="#8858bd" />
+      <Text style={styles.moneyStripText} numberOfLines={1}>{fmt(cartasUniversales)}</Text>
+    </View>
   </View>
 );
 
 const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles, chicleIcono }) => {
   const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
-  const [open, setOpen] = useState(false);
-  const slideAnim = useRef(new Animated.Value(-130)).current;
   const [dineroInterno, setDineroInterno] = useState(null);
+  const [diamantesInternos, setDiamantesInternos] = useState(0);
+  const [cartasInternas, setCartasInternas] = useState(0);
 
   // Leer dinero desde Firestore si no se pasa como prop
   useEffect(() => {
-    if (userMoney !== undefined) return;
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
       if (!snap.exists()) return;
-      setDineroInterno(snap.data().dinero ?? 0);
+      const data = snap.data() || {};
+      setDineroInterno(data.dinero ?? 0);
+      setDiamantesInternos(data.diamantes ?? data.diamante ?? 0);
+      setCartasInternas(data.cartasAnimalitos ?? 0);
     });
     return () => unsub();
   }, []);
@@ -81,22 +75,6 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
     return undefined;
   }, []);
 
-  useEffect(() => {
-    AsyncStorage.getItem('tabButtons_open').then(val => {
-      if (val === 'true') {
-        setOpen(true);
-        slideAnim.setValue(0);
-      }
-    }).catch(() => {});
-  }, []);
-
-  const toggle = () => {
-    const toValue = open ? -130 : 0;
-    Animated.spring(slideAnim, { toValue, useNativeDriver: true, bounciness: 6 }).start();
-    AsyncStorage.setItem('tabButtons_open', String(!open)).catch(() => {});
-    setOpen(!open);
-  };
-
   return (
     <View style={styles.container}>
       {title && (
@@ -105,28 +83,17 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
         </View>
       )}
 
-      {/* Barra lateral izquierda */}
-      <View style={styles.sidebarOuter}>
-        <Animated.View style={[styles.sidebar, { transform: [{ translateX: slideAnim }] }]}>
-          <TouchableOpacity
-            onPress={() => { if (onStopMusic) onStopMusic(); onExit(); }}
-            activeOpacity={0.7}
-            style={styles.touchable}
-          >
-            <LinearGradient colors={['#6c757d', '#5a6268']} style={styles.exitButton}>
-              <Text style={styles.exitText}>Salir</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-          <MoneyStrip userMoney={moneyFinal} chicles={chicles} chicleIcono={chicleIcono} />
-        </Animated.View>
-
-        {/* Pestaña visible siempre */}
-        <TouchableOpacity onPress={toggle} style={styles.tab} activeOpacity={0.8}>
-          <LinearGradient colors={['#6c757d', '#5a6268']} style={styles.tabInner}>
-            <Text style={styles.tabArrow}>{open ? '‹' : '›'}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
+      <TouchableOpacity
+        onPress={() => { if (onStopMusic) onStopMusic(); onExit(); }}
+        activeOpacity={0.75}
+        style={[styles.touchable, styles.exitTouchable]}
+      >
+        <LinearGradient colors={['#f7e9c9', '#e5c58e']} style={styles.exitButton}>
+          <MaterialIcons name="arrow-back-ios-new" size={12} color="#76502d" />
+          <Text style={styles.exitText}>Salir</Text>
+        </LinearGradient>
+      </TouchableOpacity>
+      <MoneyStrip userMoney={moneyFinal} diamantes={diamantesInternos} cartasUniversales={cartasInternas} />
 
       {isAdmin && <View style={styles.rightButtons} pointerEvents="auto">
         {customAddButton ? customAddButton : (
@@ -147,8 +114,7 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    height: 30,
     zIndex: 100,
     pointerEvents: 'box-none',
   },
@@ -156,22 +122,35 @@ const styles = StyleSheet.create({
     pointerEvents: 'auto',
   },
   exitButton: {
-    paddingHorizontal: 35,
-    paddingVertical: 18,
-    borderBottomRightRadius: 25,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 8,
+    height: 32,
+    minWidth: 82,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
+    gap: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderBottomRightRadius: 13,
+    borderWidth: 1.25,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderColor: '#b98b52',
+    shadowColor: '#674523',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.24,
+    shadowRadius: 4,
+    elevation: 14,
   },
+  exitTouchable: { position: 'absolute', top: 0, left: 0 },
   exitText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    color: '#76502d',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
   rightButtons: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
     flexDirection: 'row',
     gap: 8,
   },
@@ -182,53 +161,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sidebarOuter: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    pointerEvents: 'box-none',
-  },
-  sidebar: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    pointerEvents: 'box-none',
-  },
-  tab: {
-    position: 'absolute',
-    left: 0,
-    top: 205,
-    pointerEvents: 'auto',
-    zIndex: 101,
-  },
-  tabInner: {
-    paddingHorizontal: 8,
-    paddingVertical: 22,
-    borderTopRightRadius: 14,
-    borderBottomRightRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 6,
-  },
-  tabArrow: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '700',
-  },
   moneyStripWrap: {
+    position: 'absolute',
+    top: -1,
+    left: 112,
     flexDirection: 'row',
     alignItems: 'center',
-    width: STRIP_W + TIP,
-    height: STRIP_H,
-    marginTop: 10,
-    gap: 3,
+    width: 216,
+    height: 27,
+    paddingHorizontal: 3,
+    borderBottomLeftRadius: 10,
+    borderBottomRightRadius: 10,
+    backgroundColor: '#f1e1bd',
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: '#d0ad70',
+    shadowColor: '#5f4428',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.28,
+    shadowRadius: 5,
+    elevation: 12,
+    zIndex: 102,
   },
+  resourceItem: { flex: 1, height: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingHorizontal: 3 },
+  resourceDivider: { width: 1, height: 14, backgroundColor: 'rgba(164,116,53,0.35)' },
+  moneyCoin: { fontSize: 11 },
   moneyStripText: {
-    color: '#fff',
+    color: '#76552f',
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '900',
     letterSpacing: 0.2,
     flexShrink: 1,
   },

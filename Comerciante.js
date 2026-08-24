@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, StatusBar, Dimensions, TouchableOpacity, Modal, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -48,6 +48,7 @@ const cicloComercio = (ahoraMs = Date.now()) => {
 };
 
 export default function Comerciante({ navigation, temporada }) {
+  const saliendoRef = useRef(false);
   const temporadaActualHook = useTemporadaActual();
   const temporadaActual = temporada || temporadaActualHook;
   const { registrarProgreso } = useMisiones();
@@ -81,6 +82,7 @@ export default function Comerciante({ navigation, temporada }) {
     console.log('[Credito Menta] Montaje comercio', { uid: uid || null });
     if (!uid) return undefined;
     return onSnapshot(doc(db, 'usuarios', uid), snapshot => {
+      if (saliendoRef.current) return;
       const data = snapshot.data() || {};
       setMonedas(Number.isFinite(data.dinero) ? data.dinero : 0);
       setCredito(data.comercio?.mentaCredito || null);
@@ -93,6 +95,7 @@ export default function Comerciante({ navigation, temporada }) {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
     return onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+      if (saliendoRef.current) return;
       const estados = {};
       setAnimalitosDesbloqueados(snapshot.docs.filter(animal => {
         const data = animal.data() || {};
@@ -100,13 +103,14 @@ export default function Comerciante({ navigation, temporada }) {
         return data.desbloqueado === true || (data.desbloqueado !== false && (Number(data.nivel) > 0 || Number(data.cartas ?? data.copias) > 0));
       }).map(animal => animal.id));
       setAnimalitosEstado(estados);
-    }, () => setAnimalitosDesbloqueados([]));
+    }, () => { if (!saliendoRef.current) setAnimalitosDesbloqueados([]); });
   }, []);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
     return onSnapshot(doc(db, 'usuarios', uid, 'comercio', 'estado'), snap => {
+      if (saliendoRef.current) return;
       if (snap.exists()) setUsuario(previous => ({ ...previous, comercio: snap.data() }));
       setCredito(snap.data()?.mentaCredito || null);
     }, () => {});
@@ -114,6 +118,7 @@ export default function Comerciante({ navigation, temporada }) {
 
   useEffect(() => {
     getDocs(collection(db, 'iconos')).then(snap => {
+      if (saliendoRef.current) return;
       setCatalogoIconos(snap.docs.map(icono => ({ id: icono.id, ...icono.data() })));
       // Fade in cuando cargue
       Animated.timing(productosFadeAnim, {
@@ -235,6 +240,13 @@ export default function Comerciante({ navigation, temporada }) {
     ? (tutorialCompraActiva ? [{ ...productosDisponibles.find(producto => producto.id === 'cartas_3'), precio: 120 }] : [])
     : [...productosDisponibles, ...productosRelleno].slice(0, 6);
 
+  const salirComerciante = () => {
+    if (saliendoRef.current) return;
+    saliendoRef.current = true;
+    productosFadeAnim.stopAnimation();
+    navigation?.navigate?.(temporada ? `temporada${temporada.slice(1)}` : 'main');
+  };
+
   const comprarProducto = async producto => {
     if (comprando) return;
     const uid = auth.currentUser?.uid;
@@ -299,7 +311,7 @@ export default function Comerciante({ navigation, temporada }) {
     <View style={styles.container}>
       <StatusBar hidden />
       <RoomBackground />
-      <TabButtons onExit={() => navigation?.navigate?.(temporada ? `temporada${temporada.slice(1)}` : 'main')} customAddButton={<View />} />
+      <TabButtons onExit={salirComerciante} customAddButton={<View />} />
       <View style={styles.comercioLayout}>
         <View style={styles.comercioLayer} pointerEvents="none">
           <Image
@@ -482,7 +494,7 @@ const styles = StyleSheet.create({
   productoCantidad: { color: '#8d6024', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', marginTop: 1 },
   productoPrecio: { flexDirection: 'row', alignItems: 'center', marginTop: 1, paddingHorizontal: 3, paddingVertical: 1, borderRadius: 5, backgroundColor: '#e8d3a3' },
   productoPrecioConRecargo: { backgroundColor: '#eab8b6' },
-  productoBloqueado: { opacity: 0.48 },
+  productoBloqueado: { opacity: 0.72 },
   productoComprado: { backgroundColor: '#dcebd5', borderColor: '#81a976' },
   productoEstadoComprado: { width: 15, height: 15, marginTop: 2, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#6da160', borderWidth: 1, borderColor: '#eaf7df' },
   productoEstadoTexto: { color: '#fff', fontSize: 10, lineHeight: 12, fontWeight: '900' },

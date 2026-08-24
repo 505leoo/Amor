@@ -281,6 +281,7 @@ const Perfil = ({ navigation, route }) => {
             genero: d.genero ?? null,
             photoURL: d.photoURL || null,
             iconoUrl: d.iconoUrl || null,
+            iconoLocalId: d.iconoLocalId || null,
             dinero: typeof d.dinero === 'number' ? d.dinero : 0,
             nivel: typeof d.nivel === 'number' ? d.nivel : 1,
             exp: typeof d.exp === 'number' ? d.exp : 0,
@@ -301,7 +302,7 @@ const Perfil = ({ navigation, route }) => {
             dni: null, correo: soloLectura ? '—' : (user?.email || '—'),
             edad: null, fechaNacimiento: null, genero: null,
             photoURL: null, dinero: 0, nivel: 1, exp: 0, racha: 0, estado: '—', uid: targetUid,
-            iconoUrl: null, juegos: {},
+            iconoUrl: null, iconoLocalId: null, juegos: {},
           });
         }
         setLoading(false);
@@ -344,7 +345,9 @@ const Perfil = ({ navigation, route }) => {
   const d = userData;
   const mastery = topGameFor(d?.juegos);
   const masteryTitle = masteryTitleFor(d?.genero, mastery.nivel);
-  const avatarUri = d?.iconoUrl || d?.photoURL || ICONO_DEFAULT;
+  const avatarUri = d?.iconoLocalId === 'ardilla_bellota'
+    ? require('../assets/inicio/iconos/icono-ardilla-bellota.png')
+    : d?.iconoUrl || d?.photoURL || ICONO_DEFAULT;
 
   const prevAvatarUri = useRef(null);
 
