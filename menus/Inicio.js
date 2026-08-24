@@ -1,11 +1,10 @@
-import React, { useEffect, useRef, memo, useState, createContext, useContext } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, memo, useState, createContext, useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Dimensions, Modal, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { Image } from 'expo-image';
 import LottieView from 'lottie-react-native';
 import { LibroJuegos } from '../components/botones';
-import Guirladas from '../components/Guirladas';
 import Player from '../Player';
 import Pareja from '../components/Pareja';
 import PanelPerfil from '../components/PanelPerfil';
@@ -28,6 +27,19 @@ import * as Haptics from 'expo-haptics';
 
 const OverlayContext = createContext(false);
 export const useOverlayActive = () => useContext(OverlayContext);
+const NOOP = () => {};
+const INICIO_BACKGROUND = require('../assets/inicio/inicio.png');
+const HALCON_IMAGE = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
+const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
+const JUGAR_IMAGE = require('../assets/inicio/jugar.png');
+const selectEstadoInicio = data => ({
+  animalito: data?.animalito || null,
+  halconDesbloqueado: Boolean(data?.halconDesbloqueado),
+  pareja: data?.pareja || null,
+});
+const equalEstadoInicio = (a, b) => a?.animalito === b?.animalito
+  && a?.halconDesbloqueado === b?.halconDesbloqueado
+  && a?.pareja === b?.pareja;
 
 const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
   const pulso = useRef(new Animated.Value(0)).current;
@@ -57,7 +69,6 @@ const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
   );
 });
 
-const REGALO_SEGUNDOS = 2 * 60;
 // ─── Recompensas diarias ────────────────────────────────────────────────────
 // Hook useRecompensaDiaria maneja:
 // - Verificación de fecha al entrar
@@ -72,7 +83,7 @@ const RecompensaCaja = memo(({ dia, esHoy, userData }) => {
     return (
       <View style={[styles.animalitoMiniWrap]}>
         <Image
-          source={require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png')}
+          source={HALCON_IMAGE}
           style={esHoy ? styles.animalitoMiniContainer : styles.animalitoMiniContainerSmall}
           contentFit="contain"
           cachePolicy="memory"
@@ -136,7 +147,7 @@ const CajasRecompensa = memo(({ onOverlayChange, overlayActive }) => {
   
   useEffect(() => {
     onOverlayChange?.(showRecompensaOverlay);
-  }, [showRecompensaOverlay]);
+  }, [onOverlayChange, showRecompensaOverlay]);
   
   if (loading) return null;
   const recompensaDeHoy = getRecompensaDiariaDelDia(diaActual, userData);
@@ -201,7 +212,7 @@ const CajasRecompensa = memo(({ onOverlayChange, overlayActive }) => {
                 {puedeReclamar && !showRecompensaOverlay && (
                   <View style={styles.cajaLottieWrap}>
                     <LottieView
-                      source={require('../assets/Lottie/reward.json')}
+                      source={REWARD_ANIMATION}
                       autoPlay
                       loop
                       style={styles.cajaLottie}
@@ -238,7 +249,7 @@ const CajasRecompensa = memo(({ onOverlayChange, overlayActive }) => {
             <>
               <View style={overlayStyles.animalitoGrandeWrap}>
                 <Image
-                  source={require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png')}
+                  source={HALCON_IMAGE}
                   style={overlayStyles.animalitoGrandeContainer}
                   contentFit="contain"
                   cachePolicy="memory"
@@ -270,9 +281,9 @@ const TutorialInicio = ({ navigation }) => {
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
   const paso = Number(data?.tutorialPaso || 0);
   return <View style={styles.container}>
-    <Image source={require('../assets/inicio/inicio.png')} style={{ position: 'absolute', width: SCREEN_W, height: IMG_H, top: IMG_TOP }} contentFit="fill" />
+    <Image source={INICIO_BACKGROUND} style={styles.backgroundImage} contentFit="fill" cachePolicy="memory-disk" transition={0} />
     <RegaloDaily overlayActive={false} />
-    <CajasRecompensa onOverlayChange={() => {}} overlayActive={false} />
+    <CajasRecompensa onOverlayChange={NOOP} overlayActive={false} />
     {paso >= 1 && <TouchableOpacity style={[styles.changeButton, styles.tutorialChangeButton, paso >= 2 && paso !== 5 && styles.tutorialDisabledButton]} onPress={() => (paso === 1 || paso === 5) && navigation?.navigate('animalitos')} disabled={paso >= 2 && paso !== 5} activeOpacity={0.78}>
       <MaterialIcons name="swap-horiz" size={20} color={paso >= 2 && paso !== 5 ? '#aaa49a' : '#c58b2d'} />
       <Text style={[styles.changeButtonText, paso >= 2 && paso !== 5 && styles.tutorialDisabledText]}>Cambiar</Text>
@@ -442,6 +453,22 @@ const MoneyMenu = memo(() => {
   );
 });
 
+const QUICK_MENU_ITEMS = [
+  {
+    id: 'buzon', icon: 'mail-outline', label: 'Buzón', titulo: 'BUZÓN', texto: 'Aquí aparecerán tus regalos, invitaciones y mensajes especiales.',
+    avisos: [
+      { icon: 'favorite-border', titulo: 'Invitaciones', texto: 'Las invitaciones de pareja llegarán aquí.' },
+      { icon: 'card-giftcard', titulo: 'Regalos', texto: 'Recibe monedas y sorpresas de tus amigos.' },
+      { icon: 'group-add', titulo: 'Amistades', texto: 'Revisa las nuevas solicitudes que recibas.' },
+      { icon: 'campaign', titulo: 'Novedades de Menta', texto: 'Avisos importantes del juego y sus temporadas.' },
+      { icon: 'auto-awesome', titulo: 'Mensajes especiales', texto: 'Tus recompensas y anuncios más bonitos estarán aquí.' },
+    ],
+  },
+  { id: 'actualizaciones', icon: 'notifications-none', label: 'Actualizaciones', titulo: 'NOVEDADES', texto: 'Te avisaremos aquí cuando haya una nueva temporada, evento o mejora.', detalle: 'Todo está al día.' },
+  { id: 'recompensas', icon: 'card-giftcard', label: 'Recompensas', titulo: 'RECOMPENSAS', texto: 'Tus premios diarios y regalos especiales estarán siempre reunidos aquí.', detalle: 'Vuelve mañana por tu próximo regalo.' },
+  { id: 'configuracion', icon: 'settings', label: 'Configuración', titulo: 'CONFIGURACIÓN', texto: 'Ajusta sonidos, animaciones, notificaciones y más preferencias.', detalle: 'Personaliza tu experiencia en Amor.' },
+];
+
 const QuickMenu = memo(() => {
   const [seccionActiva, setSeccionActiva] = useState(null);
   const [buzonAbierto, setBuzonAbierto] = useState(false);
@@ -518,38 +545,24 @@ const QuickMenu = memo(() => {
       await AsyncStorage.setItem(`indicador_recompensas_${uid}`, String(visto));
       global.ultimoRecompensaVisto = { ...(global.ultimoRecompensaVisto || {}), [uid]: visto };
     }
+    setRecompensasNuevas(false);
     setRecompensasAbiertas(true);
   };
-  const items = [
-    {
-      id: 'buzon', icon: 'mail-outline', label: 'Buzón', titulo: 'BUZÓN', texto: 'Aquí aparecerán tus regalos, invitaciones y mensajes especiales.',
-      avisos: [
-        { icon: 'favorite-border', titulo: 'Invitaciones', texto: 'Las invitaciones de pareja llegarán aquí.' },
-        { icon: 'card-giftcard', titulo: 'Regalos', texto: 'Recibe monedas y sorpresas de tus amigos.' },
-        { icon: 'group-add', titulo: 'Amistades', texto: 'Revisa las nuevas solicitudes que recibas.' },
-        { icon: 'campaign', titulo: 'Novedades de Menta', texto: 'Avisos importantes del juego y sus temporadas.' },
-        { icon: 'auto-awesome', titulo: 'Mensajes especiales', texto: 'Tus recompensas y anuncios más bonitos estarán aquí.' },
-      ],
-    },
-    { id: 'actualizaciones', icon: 'notifications-none', label: 'Actualizaciones', titulo: 'NOVEDADES', texto: 'Te avisaremos aquí cuando haya una nueva temporada, evento o mejora.', detalle: 'Todo está al día.' },
-    { id: 'recompensas', icon: 'card-giftcard', label: 'Recompensas', titulo: 'RECOMPENSAS', texto: 'Tus premios diarios y regalos especiales estarán siempre reunidos aquí.', detalle: 'Vuelve mañana por tu próximo regalo.' },
-    { id: 'configuracion', icon: 'settings', label: 'Configuración', titulo: 'CONFIGURACIÓN', texto: 'Ajusta sonidos, animaciones, notificaciones y más preferencias.', detalle: 'Personaliza tu experiencia en Amor.' },
-  ];
-  const seccion = items.find(item => item.id === seccionActiva);
+  const seccion = QUICK_MENU_ITEMS.find(item => item.id === seccionActiva);
 
   return <>
     <View style={styles.quickMenu}>
       <View pointerEvents="none" style={styles.quickMenuAla} />
       <View pointerEvents="none" style={styles.quickMenuPunta} />
       <View pointerEvents="none" style={styles.quickMenuBrillo} />
-      {items.map((item, index) => <React.Fragment key={item.id}>
+      {QUICK_MENU_ITEMS.map((item, index) => <React.Fragment key={item.id}>
         <TouchableOpacity style={styles.quickItem} onPress={() => item.id === 'buzon' ? abrirBuzon() : item.id === 'actualizaciones' ? abrirAvisos() : item.id === 'recompensas' ? abrirRecompensas() : item.id === 'configuracion' ? setConfiguracionAbierta(true) : setSeccionActiva(item.id)} activeOpacity={0.7} accessibilityLabel={item.label}>
           <MaterialIcons name={item.icon} size={17} color="#76552f" />
           {item.id === 'buzon' && buzonNuevo && <View style={styles.unreadDot} />}
           {item.id === 'actualizaciones' && avisosNuevos && <View style={styles.unreadDot} />}
           {item.id === 'recompensas' && recompensasNuevas && <View style={styles.unreadDot} />}
         </TouchableOpacity>
-        {index < items.length - 1 && <View style={styles.quickDivider} />}
+        {index < QUICK_MENU_ITEMS.length - 1 && <View style={styles.quickDivider} />}
       </React.Fragment>)}
     </View>
     <Modal visible={!!seccion} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setSeccionActiva(null)}>
@@ -575,10 +588,10 @@ const QuickMenu = memo(() => {
         </View></View>}
       </View>
     </Modal>
-    <BuzonModal visible={buzonAbierto} onClose={() => setBuzonAbierto(false)} />
-    <AvisosModal visible={avisosAbiertos} onClose={(quedanPendientes) => { setAvisosAbiertos(false); setAvisosNuevos(Boolean(quedanPendientes)); }} />
-    <RecompensasModal visible={recompensasAbiertas} onClose={() => setRecompensasAbiertas(false)} />
-    <ConfiguracionModal visible={configuracionAbierta} onClose={() => setConfiguracionAbierta(false)} />
+    {buzonAbierto && <BuzonModal visible onClose={() => setBuzonAbierto(false)} />}
+    {avisosAbiertos && <AvisosModal visible onClose={(quedanPendientes) => { setAvisosAbiertos(false); setAvisosNuevos(Boolean(quedanPendientes)); }} />}
+    {recompensasAbiertas && <RecompensasModal visible onClose={() => setRecompensasAbiertas(false)} />}
+    {configuracionAbierta && <ConfiguracionModal visible onClose={() => setConfiguracionAbierta(false)} />}
   </>;
 });
 
@@ -592,10 +605,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
       const datosJuego = snap.data() || {};
       setNivelJuego(Number.isFinite(datosJuego.nivel) ? datosJuego.nivel : 1);
       setPartidasCompletadas(Math.max(0, Number(datosJuego.partidasCompletadas) || 0));
-    }, () => {
-      setNivelJuego(1);
-      setPartidasCompletadas(0);
-    });
+    }, error => console.warn('[Inicio] No se pudo actualizar el progreso de Conexiones', error?.message || error));
   }, []);
   const [overlayActive, setOverlayActive] = useState(false);
   const [comercianteNuevo, setComercianteNuevo] = useState(false);
@@ -606,14 +616,13 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   const puedeAbrirColeccion = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
   const { pendientesReclamar } = useMisiones();
   const { data: estadoInicio } = useUserDocument(
-    data => ({ animalito: data?.animalito || null, halconDesbloqueado: Boolean(data?.halconDesbloqueado), pareja: data?.pareja || null }),
+    selectEstadoInicio,
     undefined,
-    (a, b) => a?.animalito === b?.animalito && a?.halconDesbloqueado === b?.halconDesbloqueado && a?.pareja === b?.pareja,
+    equalEstadoInicio,
   );
 
   useEffect(() => {
-    if (pendientesReclamar > 0) setMisionesNuevas(true);
-    else setMisionesNuevas(false);
+    setMisionesNuevas(pendientesReclamar > 0);
   }, [pendientesReclamar]);
 
   useEffect(() => {
@@ -642,9 +651,8 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     return undefined;
   }, []);
 
-  useEffect(() => {
-    onReady?.();
-  }, [onReady]);
+  const onReadyRef = useRef(onReady);
+  useEffect(() => { onReadyRef.current?.(); }, []);
 
   useEffect(() => {
     if (openReporteSemanal) {
@@ -653,12 +661,12 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     }
   }, [openReporteSemanal]);
 
-  const cerrarReporteSemanal = () => {
+  const cerrarReporteSemanal = useCallback(() => {
     setReporteSemanalAbierto(false);
     setOverlayActive(false);
-  };
+  }, []);
 
-  const abrirComerciante = () => {
+  const abrirComerciante = useCallback(() => {
     const uid = auth.currentUser?.uid;
     if (uid) {
       const ahora = new Date();
@@ -670,59 +678,51 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     }
     setComercianteNuevo(false);
     navigation?.navigate('comerciante');
-  };
+  }, [navigation]);
 
-  if (tutorialActivo) return <TutorialInicio navigation={navigation} />;
-
-  const mensajesJuego = [
-    { titulo: 'Continúa jugando', detalle: `Conexiones · Nivel ${nivelJuego}` },
-    { titulo: 'Supera tu mejor marca', detalle: `El nivel ${nivelJuego} todavía puede brillar más.` },
-    { titulo: 'Consigue más estrellas', detalle: 'Una partida perfecta mejora tus premios.' },
-    { titulo: 'Avanza un nivel más', detalle: `Tu próximo desafío es el nivel ${nivelJuego}.` },
-  ];
   const faltanParaBonus = 5 - (partidasCompletadas % 5);
-  const mensajeJuego = faltanParaBonus === 1
-    ? { titulo: 'Una partida para premio extra', detalle: 'La quinta victoria entrega una sorpresa.' }
-    : mensajesJuego[partidasCompletadas % mensajesJuego.length];
-
-  const siguientePaso = !estadoInicio?.animalito
-    ? {
+  const siguientePaso = useMemo(() => {
+    const mensajesJuego = [
+      { titulo: 'Continúa jugando', detalle: `Conexiones · Nivel ${nivelJuego}` },
+      { titulo: 'Supera tu mejor marca', detalle: `El nivel ${nivelJuego} todavía puede brillar más.` },
+      { titulo: 'Consigue más estrellas', detalle: 'Una partida perfecta mejora tus premios.' },
+      { titulo: 'Avanza un nivel más', detalle: `Tu próximo desafío es el nivel ${nivelJuego}.` },
+    ];
+    const mensajeJuego = faltanParaBonus === 1
+      ? { titulo: 'Una partida para premio extra', detalle: 'La quinta victoria entrega una sorpresa.' }
+      : mensajesJuego[partidasCompletadas % mensajesJuego.length];
+    if (!estadoInicio?.animalito) return {
         icono: 'pets', titulo: 'Elige un Animalito', detalle: 'Tu compañero te está esperando.', insignia: 'ELEGIR',
         accion: () => navigation?.navigate('animalitos'),
-      }
-    : misionesNuevas || pendientesReclamar > 0
-      ? {
+      };
+    if (misionesNuevas || pendientesReclamar > 0) return {
           icono: pendientesReclamar > 0 ? 'redeem' : 'assignment',
           titulo: pendientesReclamar > 0 ? `${pendientesReclamar} recompensa${pendientesReclamar === 1 ? '' : 's'} lista${pendientesReclamar === 1 ? '' : 's'}` : 'Revisa tus misiones',
           detalle: pendientesReclamar > 0 ? 'Tu premio ya está preparado.' : 'Completa objetivos y gana premios.',
           insignia: pendientesReclamar > 0 ? 'RECLAMAR' : 'VER',
           accion: () => setMisionesAbiertas(true),
-        }
-      : comercianteNuevo
-        ? {
+        };
+    if (comercianteNuevo) return {
             icono: 'storefront', titulo: 'El Comerciante renovó', detalle: 'Hay nuevos objetos esperando.', insignia: 'NUEVO',
             accion: abrirComerciante,
-          }
-        : {
+          };
+    return {
             icono: 'extension', titulo: mensajeJuego.titulo, detalle: mensajeJuego.detalle, insignia: faltanParaBonus === 1 ? '1 MÁS' : '+5 EXP',
             accion: () => navigation?.navigate('conexiones'),
           };
+  }, [abrirComerciante, comercianteNuevo, estadoInicio?.animalito, faltanParaBonus, misionesNuevas, navigation, nivelJuego, partidasCompletadas, pendientesReclamar]);
+
+  if (tutorialActivo) return <TutorialInicio navigation={navigation} />;
 
   return (
     <OverlayContext.Provider value={overlayActive}>
       <View style={[styles.container, style]}>
         <Image
-          source={require('../assets/inicio/inicio.png')}
-          style={{
-            position: 'absolute',
-            width: SCREEN_W,
-            height: IMG_H,
-            top: IMG_TOP,
-          }}
+          source={INICIO_BACKGROUND}
+          style={styles.backgroundImage}
           contentFit="fill"
           cachePolicy="memory-disk"
         />
-        <Guirladas isPaused={overlayActive} />
         <StatusBar hidden={true} />
         <MoneyMenu />
         <QuickMenu />
@@ -760,8 +760,8 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
             <Text style={[styles.accesoInicioText, !puedeAbrirColeccion && styles.accesoInicioTextDisabled]}>Colección</Text>
           </TouchableOpacity>
         </View>
-        <MisionesDiarias externo abierto={misionesAbiertas} onCerrar={() => setMisionesAbiertas(false)} />
-        <InventarioModal visible={inventarioAbierto} onClose={() => setInventarioAbierto(false)} />
+        {misionesAbiertas && <MisionesDiarias externo abierto onCerrar={() => setMisionesAbiertas(false)} />}
+        {inventarioAbierto && <InventarioModal visible onClose={() => setInventarioAbierto(false)} />}
         <Eventos navigation={navigation} soloEvento />
         <View style={styles.temporadasQuickWrap}>
           <TouchableOpacity style={[styles.temporadasQuickBtn, !puedeAbrirColeccion && styles.temporadasQuickDisabled]} hitSlop={6} activeOpacity={0.75} onPress={() => puedeAbrirColeccion && navigation?.navigate('temporadas')} disabled={!puedeAbrirColeccion}>
@@ -785,7 +785,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
           const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
           navigation?.navigate(isAdmin ? 'juegos' : 'conexiones');
         }}>
-          <Image source={require('../assets/inicio/jugar.png')} style={styles.jugarImagen} contentFit="contain" cachePolicy="memory-disk" transition={0} />
+          <Image source={JUGAR_IMAGE} style={styles.jugarImagen} contentFit="contain" cachePolicy="memory-disk" transition={0} />
           <View style={styles.jugarContenido}>
             <MaterialIcons name="extension" size={21} color="#fff1b8" />
             <View>
@@ -801,6 +801,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
+  backgroundImage: { position: 'absolute', width: SCREEN_W, height: IMG_H, top: IMG_TOP },
   moneyMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   resourcesRow: { position: 'absolute', top: -1, left: '50%', width: 150, height: 24, transform: [{ translateX: -75 }], flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: '#f1e1bd', borderWidth: 1, borderTopWidth: 0, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, zIndex: 220, elevation: 12 },
   diamondMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },

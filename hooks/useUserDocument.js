@@ -8,21 +8,20 @@ const stores = new Map();
 
 const getStore = uid => {
   if (!stores.has(uid)) {
-    stores.set(uid, { data: null, loaded: false, error: null, listeners: new Set(), unsubscribe: null });
+    stores.set(uid, { data: null, loaded: false, error: null, listeners: new Set(), unsubscribe: null, stopTimer: null });
   }
   return stores.get(uid);
 };
 
 const startStore = uid => {
   const store = getStore(uid);
+  if (store.stopTimer) {
+    clearTimeout(store.stopTimer);
+    store.stopTimer = null;
+  }
   if (store.unsubscribe) return store;
   store.unsubscribe = onSnapshot(doc(db, 'usuarios', uid), snapshot => {
     const nextData = snapshot.data() || {};
-    // Firestore puede emitir actualizaciones de metadatos sin cambios de datos.
-    // Evitamos notificar a la interfaz en ese caso.
-    const nextKey = JSON.stringify(nextData);
-    if (store.snapshotKey === nextKey && store.loaded) return;
-    store.snapshotKey = nextKey;
     store.data = nextData;
     store.loaded = true;
     store.error = null;
@@ -33,6 +32,18 @@ const startStore = uid => {
     store.listeners.forEach(listener => listener(store));
   });
   return store;
+};
+
+const releaseStore = store => {
+  if (!store?.unsubscribe || store.listeners.size > 0 || store.stopTimer) return;
+  // Conservamos los datos para una reapertura rápida, pero cerramos listeners
+  // de perfiles que ya no están visibles para no acumular conexiones.
+  store.stopTimer = setTimeout(() => {
+    store.stopTimer = null;
+    if (store.listeners.size > 0 || !store.unsubscribe) return;
+    store.unsubscribe();
+    store.unsubscribe = null;
+  }, 30000);
 };
 
 export const getCachedUserData = uid => {
@@ -62,7 +73,10 @@ export const useUserDocument = (selector = data => data, uidOverride, isEqual = 
       });
     };
     currentStore.listeners.add(listener);
-    return () => currentStore.listeners.delete(listener);
+    return () => {
+      currentStore.listeners.delete(listener);
+      releaseStore(currentStore);
+    };
   }, [uid]);
 
   return { data: state.selected, loaded: Boolean(state.store?.loaded), error: state.store?.error || null, uid };

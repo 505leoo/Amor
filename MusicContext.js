@@ -7,6 +7,7 @@ const UKELELE = require('./assets/sounds/ukelele.mp3');
 const CLICK = require('./assets/sounds/click.mp3');
 const ENTER = require('./assets/sounds/enter.mp3');
 const VOLUMEN_GLOBAL = 0.22;
+const CLICK_COOLDOWN_MS = 600;
 
 export const useMusicPlayer = () => {
   const context = useContext(MusicContext);
@@ -14,7 +15,7 @@ export const useMusicPlayer = () => {
   return context;
 };
 
-export const MusicProvider = ({ children }) => {
+export const MusicProvider = ({ children, onVisualClick }) => {
   const player = useAudioPlayer(UKELELE, { downloadFirst: true, updateInterval: 500 });
   const clickPlayer = useAudioPlayer(CLICK, { downloadFirst: true, updateInterval: 1000 });
   const enterPlayer = useAudioPlayer(ENTER, { downloadFirst: true, updateInterval: 1000 });
@@ -24,6 +25,7 @@ export const MusicProvider = ({ children }) => {
   const appActiva = useRef(AppState.currentState === 'active');
   const entradaReproducida = useRef(false);
   const toqueInicial = useRef(null);
+  const ultimoClick = useRef(0);
 
   useEffect(() => {
     setAudioModeAsync({
@@ -68,12 +70,16 @@ export const MusicProvider = ({ children }) => {
   const reproducir = () => { setHabilitada(true); if (appActiva.current) player.play(); };
   const alternar = () => habilitada ? pausar() : reproducir();
   const reproducirClick = () => {
+    const ahora = Date.now();
+    if (ahora - ultimoClick.current < CLICK_COOLDOWN_MS) return;
+    ultimoClick.current = ahora;
     clickPlayer.seekTo(0).then(() => clickPlayer.play()).catch(() => {});
   };
 
   const comenzarToque = event => {
     const touch = event.nativeEvent;
     toqueInicial.current = { x: touch.pageX, y: touch.pageY, at: Date.now() };
+    onVisualClick?.(touch.pageX || 0, touch.pageY || 0);
   };
   const terminarToque = event => {
     const inicio = toqueInicial.current;
@@ -81,12 +87,22 @@ export const MusicProvider = ({ children }) => {
     if (!inicio) return;
     const touch = event.nativeEvent;
     const distancia = Math.hypot((touch.pageX || 0) - inicio.x, (touch.pageY || 0) - inicio.y);
-    if (distancia <= 10 && Date.now() - inicio.at <= 700) reproducirClick();
+    if (distancia <= 10 && Date.now() - inicio.at <= 700) {
+      reproducirClick();
+    }
   };
 
   return <MusicContext.Provider value={{
     player, status, isPlaying: Boolean(status.playing), enabled: habilitada,
     currentMusicUrl: UKELELE, trackName: 'Ukelele',
     pause: pausar, play: reproducir, toggle: alternar, playClick: reproducirClick,
-  }}><View style={{ flex: 1 }} onTouchStart={comenzarToque} onTouchEnd={terminarToque}>{children}</View></MusicContext.Provider>;
+  }}>
+    <View
+      style={{ flex: 1 }}
+      onTouchStart={comenzarToque}
+      onTouchEnd={terminarToque}
+    >
+      {children}
+    </View>
+  </MusicContext.Provider>;
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useRef } from 'react';
+import React, { useCallback, useEffect, memo, useRef } from 'react';
 import { Animated, View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { useUserDocument } from './hooks/useUserDocument';
@@ -27,7 +27,7 @@ export const SinAnimal = memo(() => (
   </View>
 ));
 
-const PlayerContent = ({ animalito, skin, loading, imageStyle, placeholder, onLoadStart, onLoad, onError }) => {
+const PlayerContent = memo(({ animalito, skin, loading, imageStyle, placeholder, onLoadStart, onLoad, onError }) => {
   const skinsDisponibles = SKINS_POR_ANIMAL[animalito] || {};
   const source = animalito ? (skinsDisponibles[skin || 'default'] ?? skinsDisponibles.default ?? ANIMALITOS[animalito] ?? null) : null;
 
@@ -48,7 +48,7 @@ const PlayerContent = ({ animalito, skin, loading, imageStyle, placeholder, onLo
       )}
     </>
   );
-};
+});
 
 const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, disabled }) => {
   const { data: userData, loaded: userLoaded, uid } = useUserDocument(
@@ -56,35 +56,44 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
     uidProp,
     (a, b) => a?.animalito === b?.animalito && a?.skin === b?.skin,
   );
-  const [animalito, setAnimalito] = useState(null);
-  const [skin, setSkin] = useState('default');
-  const [loading, setLoading] = useState(true);
   const playerReveal = useRef(new Animated.Value(0)).current;
+  const imageLoaded = useRef(false);
+  const animalito = userData?.animalito ?? null;
+  const skin = userData?.skin ?? 'default';
+  const loading = !disabled && Boolean(uid) && !userLoaded;
 
-  const hidePlayer = () => {
+  const hidePlayer = useCallback(() => {
     playerReveal.stopAnimation();
     playerReveal.setValue(0);
-  };
-  const revealPlayer = () => {
+  }, [playerReveal]);
+  const revealPlayer = useCallback(() => {
     Animated.timing(playerReveal, { toValue: 1, duration: 220, useNativeDriver: true }).start();
-  };
+  }, [playerReveal]);
+  const handleLoadStart = useCallback(() => {
+    imageLoaded.current = false;
+    hidePlayer();
+  }, [hidePlayer]);
+  const handleLoad = useCallback(() => {
+    imageLoaded.current = true;
+    revealPlayer();
+  }, [revealPlayer]);
+  const handleError = useCallback(() => {
+    imageLoaded.current = false;
+    hidePlayer();
+  }, [hidePlayer]);
 
   useEffect(() => {
     if (disabled) {
       hidePlayer();
-      setLoading(false);
       return;
     }
-    if (!uid) { hidePlayer(); setLoading(false); return; }
-    if (!userLoaded) { setLoading(true); return; }
-    setAnimalito(userData?.animalito ?? null);
-    setSkin(userData?.skin ?? 'default');
-    setLoading(false);
-  }, [disabled, uid, userLoaded, userData?.animalito, userData?.skin]);
+    if (!uid || !userLoaded) hidePlayer();
+    else if (!animalito || imageLoaded.current) revealPlayer();
+  }, [animalito, disabled, hidePlayer, revealPlayer, uid, userLoaded]);
 
   useEffect(() => {
     if (!loading && !animalito) revealPlayer();
-  }, [animalito, loading]);
+  }, [animalito, loading, revealPlayer]);
 
   return (
     <View style={[styles.container, containerStyle]} pointerEvents="box-none">
@@ -95,9 +104,9 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
           loading={loading}
           imageStyle={imageStyle}
           placeholder={placeholder}
-          onLoadStart={hidePlayer}
-          onLoad={revealPlayer}
-          onError={hidePlayer}
+          onLoadStart={handleLoadStart}
+          onLoad={handleLoad}
+          onError={handleError}
         />
       </Animated.View>
     </View>

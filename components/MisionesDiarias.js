@@ -220,6 +220,7 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
 
   // ── Contador de reinicio — calcula tiempo hasta medianoche del servidor ───
   useEffect(() => {
+    if (!open) return undefined;
     const calcular = () => {
       const ahora     = new Date();
       const manana    = new Date(ahora);
@@ -240,7 +241,7 @@ export default function MisionesDiarias({ icono, misionesEvento, eventoKey, inst
     calcular();
     const interval = setInterval(calcular, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [open]);
 
   useEffect(() => {
     if (open) {

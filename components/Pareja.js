@@ -9,11 +9,14 @@ import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 
 let usuariosCache = null;
 let usuariosRequest = null;
+let usuariosCacheAt = 0;
+const USUARIOS_CACHE_MS = 2 * 60 * 1000;
 const getUsuariosCacheados = async () => {
-  if (usuariosCache) return usuariosCache;
+  if (usuariosCache && Date.now() - usuariosCacheAt < USUARIOS_CACHE_MS) return usuariosCache;
   if (!usuariosRequest) {
     usuariosRequest = getDocs(collection(db, 'usuarios')).then(snap => {
       usuariosCache = snap.docs.map(item => ({ id: item.id, ...item.data() }));
+      usuariosCacheAt = Date.now();
       return usuariosCache;
     }).finally(() => { usuariosRequest = null; });
   }
@@ -148,9 +151,11 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
   const progresoNivelPareja = Math.max(0, Math.min(100, Math.round(((Number(parejaData?.exp) || 0) % 100))));
 
   useEffect(() => {
-    const timer = setInterval(() => setAhora(Date.now()), 30000);
+    if (isPaused) return undefined;
+    setAhora(Date.now());
+    const timer = setInterval(() => setAhora(Date.now()), 60000);
     return () => clearInterval(timer);
-  }, []);
+  }, [isPaused]);
 
   useEffect(() => {
     if (isPaused || !uid || !userLoaded) return;
@@ -182,18 +187,16 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
 
   const enviarSolicitudGeneral = async () => {
     try {
-      // Enviar solicitud general a todos los usuarios disponibles
-      const usuariosSnap = await getDocs(collection(db, 'usuarios'));
-      const promesas = usuariosSnap.docs.map(doc => {
-        if (doc.id !== uid && !doc.data()?.pareja) {
+      // La lista visible ya contiene solo usuarios disponibles; reutilizarla
+      // evita volver a descargar la colección completa al tocar el botón.
+      const promesas = usuarios.map(usuario => {
           return addDoc(collection(db, 'invitaciones_pareja'), {
             de: uid,
-            para: doc.id,
+            para: usuario.id,
             timestamp: serverTimestamp(),
             estado: 'pendiente',
           });
-        }
-      }).filter(Boolean);
+      });
       
       await Promise.all(promesas);
       setSolicitudEnviada(true);

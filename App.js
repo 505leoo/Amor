@@ -14,7 +14,6 @@ import NotificationSystem from './utils/NotificationSystem';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
 import { MisionesProvider } from './MisionesContext';
-import Loading from './components/Loading';
 import Toast from './components/Toast';
 import Intro from './Intro';
 import Login from './pantallas/Login';
@@ -51,6 +50,7 @@ import { reporteId, semanaActual } from './components/ReporteSemanal';
 import { temporadaParaUsuario } from './hooks/useTemporadaActual';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import UpdateModal from './components/UpdateModal';
+import GlobalClickEffect from './components/GlobalClickEffect';
 
 const APP_VERSION = require('./app.json').expo?.extra?.updateVersion
   || require('./app.json').expo?.version
@@ -81,7 +81,7 @@ export default function App() {
   const bootOpacity = useRef(new Animated.Value(1)).current;
   const toastRef = useRef(null);
   const userRef = useRef(null);
-  const loadingRef = useRef(null);
+  const globalClickEffectRef = useRef(null);
   const updateCheckInFlightRef = useRef(false);
   const lastUpdateCheckRef = useRef(0);
   const skippedUpdateRef = useRef(null);
@@ -178,16 +178,6 @@ export default function App() {
 
   useEffect(() => { global.showToast = (opts) => toastRef.current?.show(opts); }, []);
 
-  const ANIMATED_TRANSITIONS = new Set([
-    'main|temporadas', 'temporadas|main',
-    'temporadas|temporada1',
-    'temporada1|historia1', 'historia1|temporada1',
-    'temporada1|capsula1', 'capsula1|temporada1',
-    'temporada1|librotemp1', 'librotemp1|temporada1',
-    'temporadas|temporada2', 'temporada2|temporadas',
-    'main|animalitos', 'animalitos|main',
-  ]);
-
   // navigation estable — useCallback + ref para que nunca cambie de referencia
   // y no cause re-renders en cascada en todos los hijos
   const currentScreenRef = useRef('intro');
@@ -208,24 +198,11 @@ export default function App() {
       global.showToast?.({ type: 'error', text: 'Esa sección todavía no está disponible.' });
       return;
     }
-    const key = `${currentScreenRef.current}|${screenName}`;
-    const doNavigate = () => {
-      if (currentScreenRef.current !== screenName) {
-        navigationHistoryRef.current.push({ screen: currentScreenRef.current, params: screenParamsRef.current });
-        if (navigationHistoryRef.current.length > 20) navigationHistoryRef.current.shift();
-      }
-      showScreen(screenName, params ?? {});
-    };
-
-    if (ANIMATED_TRANSITIONS.has(key) && loadingRef.current) {
-      loadingRef.current.fadeIn(() => {
-        doNavigate();
-        // Pequeño delay para que el nuevo componente monte antes de abrir
-        setTimeout(() => loadingRef.current?.fadeOut(), 80);
-      });
-    } else {
-      doNavigate();
+    if (currentScreenRef.current !== screenName) {
+      navigationHistoryRef.current.push({ screen: currentScreenRef.current, params: screenParamsRef.current });
+      if (navigationHistoryRef.current.length > 20) navigationHistoryRef.current.shift();
     }
+    showScreen(screenName, params ?? {});
   }, [showScreen]);
 
   const goBack = useCallback(() => {
@@ -443,7 +420,7 @@ export default function App() {
       }}>
       <TrofeosProvider>
         <MisionesProvider>
-        <MusicProvider>
+        <MusicProvider onVisualClick={(x, y) => globalClickEffectRef.current?.show(x, y)}>
           <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
 
           {currentScreen !== 'intro' && (
@@ -565,13 +542,13 @@ export default function App() {
           {currentScreen === 'pase'               && <Pase             navigation={navigation} />}
           {currentScreen === 'juegos'             && <Juegos           navigation={navigation} />}
           {currentScreen === 'conexiones'         && <ConexionesGame   navigation={navigation} />}
-          <Loading ref={loadingRef} />
           <Toast ref={toastRef} />
 
         </MusicProvider>
         </MisionesProvider>
       </TrofeosProvider>
       </AppErrorBoundary>
+      <GlobalClickEffect ref={globalClickEffectRef} />
       {bootVisible && <Animated.View pointerEvents="none" style={[styles.bootOverlay, { opacity: bootOpacity }]} />}
     </View>
   );

@@ -44,6 +44,9 @@ const generateBulbs = () => Array.from({ length: BULB_COUNT }).map((_, i) => {
 });
 
 const bulbs = generateBulbs();
+// Todas las bombillas permanecen dibujadas; solo alternamos las auras para
+// reducir a la mitad las animaciones nativas activas y su coste al navegar.
+const animatedBulbs = bulbs.filter((_, index) => index % 2 === 0);
 
 const makePath = () => {
   const pts = Array.from({ length: 80 }).map((_, i) => {
@@ -71,15 +74,14 @@ const BulbGlow = memo(({ x, bulbY, r, delay, minGlow, maxGlow, isPaused }) => {
       return;
     }
 
-    const run = () => {
-      animRef.current = Animated.sequence([
+    animRef.current = Animated.loop(
+      Animated.sequence([
         Animated.delay(delay),
         Animated.timing(opacity, { toValue: maxGlow, duration: CYCLE * 0.42, useNativeDriver: true }),
         Animated.timing(opacity, { toValue: minGlow, duration: CYCLE * 0.58, useNativeDriver: true }),
-      ]);
-      animRef.current.start(() => run());
-    };
-    run();
+      ]),
+    );
+    animRef.current.start();
     
     return () => {
       if (animRef.current) {
@@ -139,7 +141,7 @@ const StaticLayer = memo(() => (
 const Guirladas = memo(({ isPaused }) => (
   <View style={styles.container} pointerEvents="none">
     {/* Auras animadas — Views pequeños, no pantalla completa */}
-    {bulbs.map(b => <BulbGlow key={b.id} {...b} isPaused={isPaused} />)}
+    {animatedBulbs.map(b => <BulbGlow key={b.id} {...b} isPaused={isPaused} />)}
     {/* Cuerda y bombillas estáticas — un solo SVG */}
     <StaticLayer />
   </View>
