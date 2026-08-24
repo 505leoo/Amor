@@ -294,13 +294,14 @@ const Perfil = ({ navigation, route }) => {
               },
             },
             estado: d.estado || 'activo',
+            appVersion: typeof d.appVersion === 'string' && d.appVersion.trim() ? d.appVersion.trim() : null,
             uid: targetUid,
           });
         } else {
           setUserData({
             nombre: soloLectura ? 'Usuario' : (user?.displayName || 'Usuario'),
             dni: null, correo: soloLectura ? '—' : (user?.email || '—'),
-            edad: null, fechaNacimiento: null, genero: null,
+            edad: null, fechaNacimiento: null, genero: null, appVersion: null,
             photoURL: null, dinero: 0, nivel: 1, exp: 0, racha: 0, estado: '—', uid: targetUid,
             iconoUrl: null, iconoLocalId: null, juegos: {},
           });
@@ -417,6 +418,7 @@ const Perfil = ({ navigation, route }) => {
                 <View style={s.dividerH} />
                 <Row label="DOCUMENTO" value={d.dni || '···-···-···'} />
                 <Row label="CORREO" value={d.correo} />
+                <Row label="VERSIÓN DE AMOR" value={d.appVersion ? `v${d.appVersion}` : 'Aún no registrada'} />
                 <View style={s.rowFields}>
                   {d.edad != null && <MiniRow label="EDAD" value={`${d.edad} años`} />}
                   <MiniRow label="SEXO" value={generoCorto(d.genero)} />

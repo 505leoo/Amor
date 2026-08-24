@@ -2,7 +2,7 @@
   "expo": {
     "name": "Amor",
     "slug": "Amor",
-    "version": "1.0.11",
+    "version": "1.0.12",
     "orientation": "landscape",
     "icon": "./assets/16.png",
     "userInterfaceStyle": "light",
@@ -12,7 +12,7 @@
     },
     "updates": {
       "enabled": true,
-      "checkAutomatically": "ON_LOAD",
+      "checkAutomatically": "NEVER",
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec"
     },
@@ -93,7 +93,7 @@
         "projectId": "1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec"
       },
       "expo-navigation-bar": {},
-      "updateVersion": "1.0.11"
+      "updateVersion": "1.0.12"
     },
     "owner": "leitof7"
   }

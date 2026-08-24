@@ -50,6 +50,11 @@ import { ReporteSemanal } from './components/ReporteSemanal';
 import { reporteId, semanaActual } from './components/ReporteSemanal';
 import { temporadaParaUsuario } from './hooks/useTemporadaActual';
 import AppErrorBoundary from './components/AppErrorBoundary';
+import UpdateModal from './components/UpdateModal';
+
+const APP_VERSION = require('./app.json').expo?.extra?.updateVersion
+  || require('./app.json').expo?.version
+  || require('./package.json').version;
 
 const ROOT_SCREENS = new Set(['intro', 'login', 'main']);
 const KNOWN_SCREENS = new Set([
@@ -77,30 +82,86 @@ export default function App() {
   const toastRef = useRef(null);
   const userRef = useRef(null);
   const loadingRef = useRef(null);
+  const updateCheckInFlightRef = useRef(false);
+  const lastUpdateCheckRef = useRef(0);
+  const skippedUpdateRef = useRef(null);
+  const availableUpdateIdentityRef = useRef(null);
+  const updateStatusRef = useRef('checking');
 
   useEffect(() => {
-    // El cliente de desarrollo usa Metro y no debe consultar OTA de producción.
+    updateStatusRef.current = estadoActualizacion;
+  }, [estadoActualizacion]);
+
+  const comprobarActualizacion = useCallback(async ({ force = false } = {}) => {
     if (__DEV__ || !Updates.isEnabled) {
       setEstadoActualizacion('unavailable');
-      return undefined;
+      return;
     }
-    let activo = true;
-    Promise.race([
-      Updates.checkForUpdateAsync(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('update-check-timeout')), 6000)),
-    ])
-      .then(({ isAvailable, manifest }) => {
-        if (!activo) return;
-        const version = manifest?.extra?.expoClient?.extra?.updateVersion
-          || manifest?.extra?.updateVersion
-          || manifest?.metadata?.updateVersion
-          || null;
-        setVersionActualizacion(version);
-        setEstadoActualizacion(isAvailable ? 'available' : 'unavailable');
-      })
-      .catch(() => { if (activo) setEstadoActualizacion('error'); });
-    return () => { activo = false; };
+
+    const ahora = Date.now();
+    if (updateCheckInFlightRef.current || (!force && ahora - lastUpdateCheckRef.current < 15000)) return;
+    if (updateStatusRef.current === 'downloading') return;
+
+    updateCheckInFlightRef.current = true;
+    lastUpdateCheckRef.current = ahora;
+    try {
+      const { isAvailable, manifest } = await Promise.race([
+        Updates.checkForUpdateAsync(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('update-check-timeout')), 12000)),
+      ]);
+      if (!isAvailable) {
+        if (!['available', 'downloading', 'declined'].includes(updateStatusRef.current)) {
+          setEstadoActualizacion('unavailable');
+        }
+        return;
+      }
+
+      const version = manifest?.extra?.expoClient?.extra?.updateVersion
+        || manifest?.extra?.updateVersion
+        || manifest?.metadata?.updateVersion
+        || null;
+      const updateIdentity = manifest?.id || manifest?.updateId || version || manifest?.createdAt || 'available-update';
+      availableUpdateIdentityRef.current = updateIdentity;
+      setVersionActualizacion(version);
+      setEstadoActualizacion(skippedUpdateRef.current === updateIdentity ? 'declined' : 'available');
+      updateStatusRef.current = skippedUpdateRef.current === updateIdentity ? 'declined' : 'available';
+    } catch (error) {
+      console.warn('[Updates] No se pudo comprobar la actualización', error?.message || error);
+      if (!['available', 'downloading', 'declined'].includes(updateStatusRef.current)) {
+        setEstadoActualizacion('error');
+      }
+    } finally {
+      updateCheckInFlightRef.current = false;
+    }
   }, []);
+
+  useEffect(() => {
+    comprobarActualizacion({ force: true });
+    const retryRapido = setTimeout(() => comprobarActualizacion({ force: true }), 10000);
+    const retryPropagacion = setTimeout(() => comprobarActualizacion({ force: true }), 30000);
+    const interval = setInterval(() => {
+      if (AppState.currentState === 'active') comprobarActualizacion();
+    }, 3 * 60 * 1000);
+    const subscription = AppState.addEventListener('change', estado => {
+      if (estado === 'active') comprobarActualizacion({ force: true });
+    });
+    return () => {
+      clearTimeout(retryRapido);
+      clearTimeout(retryPropagacion);
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [comprobarActualizacion]);
+
+  useEffect(() => {
+    if (isConnected) comprobarActualizacion({ force: true });
+  }, [comprobarActualizacion, isConnected]);
+
+  const posponerActualizacion = useCallback(() => {
+    skippedUpdateRef.current = availableUpdateIdentityRef.current || versionActualizacion || 'available-update';
+    updateStatusRef.current = 'declined';
+    setEstadoActualizacion('declined');
+  }, [versionActualizacion]);
 
   const instalarActualizacion = useCallback(async () => {
     if (estadoActualizacion === 'downloading') return;
@@ -295,6 +356,7 @@ export default function App() {
             // Marca la última sesión para que Pareja pueda mostrar un estado
             // online real, con expiración en lugar de un texto fijo.
             updates.ultimaActividad = new Date().toISOString();
+            if (data.appVersion !== APP_VERSION) updates.appVersion = APP_VERSION;
             if (data.fechaUltimaRacha   === undefined) updates.fechaUltimaRacha   = new Date().toISOString();
             if (Object.keys(updates).length > 0)
               updateDoc(currentUserDocRef, updates).catch(() => {});
@@ -305,6 +367,7 @@ export default function App() {
               uid: currentUser.uid,
               correo: currentUser.email || null,
               displayName: currentUser.displayName || 'Usuario',
+              appVersion: APP_VERSION,
               ultimaActividad: new Date().toISOString(),
               fechaUltimaRacha: new Date().toISOString(),
             }, { merge: true }).catch(() => {});
@@ -383,12 +446,21 @@ export default function App() {
         <MusicProvider>
           <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
 
+          {currentScreen !== 'intro' && (
+            <UpdateModal
+              status={estadoActualizacion}
+              version={versionActualizacion}
+              onAccept={instalarActualizacion}
+              onDecline={posponerActualizacion}
+            />
+          )}
+
           {currentScreen === 'intro' && (
               <Intro
                 updateStatus={estadoActualizacion}
                 updateVersion={versionActualizacion}
                 onAcceptUpdate={instalarActualizacion}
-                onDeclineUpdate={() => setEstadoActualizacion('declined')}
+                onDeclineUpdate={posponerActualizacion}
                 onComplete={() => {
                 if (!userRef.current) {
                   currentScreenRef.current = 'login';
