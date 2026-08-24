@@ -115,16 +115,15 @@ function run() {
     // Optional: publish an EAS Update unless --no-publish is provided
     const noPublish = process.argv.includes('--no-publish');
     if (!noPublish) {
-      // allow overriding branch and platform via flags
-      const branchArgIndex = process.argv.indexOf('--branch');
-      const platformArgIndex = process.argv.indexOf('--platform');
-      const publishBranch = (branchArgIndex !== -1 && process.argv[branchArgIndex + 1]) ? process.argv[branchArgIndex + 1] : 'production';
-      const publishPlatform = (platformArgIndex !== -1 && process.argv[platformArgIndex + 1]) ? process.argv[platformArgIndex + 1] : 'android';
-
       try {
-        
-        execSync(`eas update --branch ${publishBranch} --message "${newVersion}" --platform ${publishPlatform}`, { stdio: 'inherit' });
-        
+        // Este comando publica siempre la actualización normal de Android.
+        // --environment evita que las versiones recientes de EAS pregunten
+        // entre production, preview y development; --non-interactive impide
+        // que una publicación automática quede esperando una respuesta.
+        execSync(
+          `eas update --branch production --environment production --message "${newVersion}" --platform android --non-interactive`,
+          { stdio: 'inherit' },
+        );
       } catch (pubErr) {
         console.error('eas update failed:', pubErr.message);
         process.exit(1);
@@ -133,7 +132,6 @@ function run() {
       console.log('Skipping eas update (--no-publish)');
     }
 
-    
   } catch (err) {
     console.error('Failed to run actualizar:', err.message);
     process.exit(1);
