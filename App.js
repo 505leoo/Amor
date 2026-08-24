@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
+import { AppState, BackHandler, View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
 import { Asset } from 'expo-asset';
 import * as Updates from 'expo-updates';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -48,6 +48,16 @@ import Tutorial from './components/Tutorial';
 import { ReporteSemanal } from './components/ReporteSemanal';
 import { reporteId, semanaActual } from './components/ReporteSemanal';
 import { temporadaParaUsuario } from './hooks/useTemporadaActual';
+import AppErrorBoundary from './components/AppErrorBoundary';
+import { GameLoadingState } from './components/GameStates';
+
+const ROOT_SCREENS = new Set(['intro', 'login', 'main']);
+const KNOWN_SCREENS = new Set([
+  'intro', 'anuncios', 'login', 'register', 'main', 'reporteSemanal', 'coleccion', 'tienda',
+  'perfil', 'buzon', 'trofeos', 'menu', 'pistas', 'temporadas', 'temporada1', 'temporada2',
+  'kitty', 'paleta', 'historia1', 'capsula1', 'librotemp1', 'animalitos', 'canjear',
+  'comerciante', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones',
+]);
 
 export default function App() {
   const [loading, setLoading]           = useState(true);
@@ -118,14 +128,30 @@ export default function App() {
   // navigation estable — useCallback + ref para que nunca cambie de referencia
   // y no cause re-renders en cascada en todos los hijos
   const currentScreenRef = useRef('intro');
+  const screenParamsRef = useRef({});
+  const navigationHistoryRef = useRef([]);
+
+  const showScreen = useCallback((screenName, params = {}) => {
+    currentScreenRef.current = screenName;
+    screenParamsRef.current = params;
+    global.currentScreen = screenName;
+    setCurrentScreen(screenName);
+    setScreenParams(params);
+  }, []);
 
   const navigateToScreen = useCallback((screenName, params) => {
+    if (!KNOWN_SCREENS.has(screenName)) {
+      console.warn(`[Navigation] Pantalla desconocida: ${screenName}`);
+      global.showToast?.({ type: 'error', text: 'Esa sección todavía no está disponible.' });
+      return;
+    }
     const key = `${currentScreenRef.current}|${screenName}`;
     const doNavigate = () => {
-      currentScreenRef.current = screenName;
-      global.currentScreen = screenName;
-      setCurrentScreen(screenName);
-      setScreenParams(params ?? {});
+      if (currentScreenRef.current !== screenName) {
+        navigationHistoryRef.current.push({ screen: currentScreenRef.current, params: screenParamsRef.current });
+        if (navigationHistoryRef.current.length > 20) navigationHistoryRef.current.shift();
+      }
+      showScreen(screenName, params ?? {});
     };
 
     if (ANIMATED_TRANSITIONS.has(key) && loadingRef.current) {
@@ -137,10 +163,29 @@ export default function App() {
     } else {
       doNavigate();
     }
-  }, []);
+  }, [showScreen]);
 
-  const navigation = useRef({ navigate: navigateToScreen }).current;
-  useEffect(() => { navigation.navigate = navigateToScreen; }, [navigateToScreen]);
+  const goBack = useCallback(() => {
+    const previous = navigationHistoryRef.current.pop();
+    if (!previous) return false;
+    showScreen(previous.screen, previous.params);
+    return true;
+  }, [showScreen]);
+
+  const navigation = useRef({ navigate: navigateToScreen, goBack }).current;
+  useEffect(() => {
+    navigation.navigate = navigateToScreen;
+    navigation.goBack = goBack;
+    navigation.canGoBack = () => navigationHistoryRef.current.length > 0;
+  }, [navigateToScreen, goBack]);
+
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (ROOT_SCREENS.has(currentScreenRef.current)) return false;
+      return goBack();
+    });
+    return () => subscription.remove();
+  }, [goBack]);
 
   // Precargar imágenes después de que Firestore esté listo — con throttle
   const preloadImages = useCallback(async () => {
@@ -209,11 +254,17 @@ export default function App() {
           // El callback puede sobrevivir a un cambio rapido de cuenta.
           // Nunca registrar ni notificar usando una sesion que ya no es activa.
           if (auth.currentUser?.uid !== currentUser.uid) return;
-          NotificationSystem.registerForPushNotifications().catch(() => {});
-          if (auth.currentUser?.uid === currentUser.uid) {
-            NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName).catch(() => {});
-          }
-          NotificationSystem.setupNotificationListeners();
+          AsyncStorage.getItem(`config_${currentUser.uid}`).then(value => {
+            if (auth.currentUser?.uid !== currentUser.uid) return;
+            let notificationsEnabled = true;
+            try { notificationsEnabled = value ? JSON.parse(value)?.notificaciones !== false : true; } catch {}
+            if (!notificationsEnabled) return;
+            NotificationSystem.registerForPushNotifications().catch(() => {});
+            if (auth.currentUser?.uid === currentUser.uid) {
+              NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName).catch(() => {});
+            }
+            NotificationSystem.setupNotificationListeners();
+          }).catch(() => {});
         });
 
         // Inicializar usuario una sola vez
@@ -255,8 +306,10 @@ export default function App() {
         }).catch(() => {});
       } else {
         userRef.current = null;
+        navigationHistoryRef.current = [];
         setTutorialActivo(false);
         currentScreenRef.current = 'login';
+        screenParamsRef.current = {};
         setScreenParams({});
         setCurrentScreen('login');
       }
@@ -276,10 +329,36 @@ export default function App() {
     return () => unsub();
   }, []);
 
-  if (loading || !authChecked) return null;
+  // Presencia liviana: no lee nada y solo escribe cada dos minutos mientras
+  // la aplicación está realmente en primer plano.
+  useEffect(() => {
+    const publicarActividad = () => {
+      const currentUser = auth.currentUser;
+      if (!currentUser || AppState.currentState !== 'active') return;
+      setDoc(doc(db, 'usuarios', currentUser.uid), {
+        ultimaActividad: serverTimestamp(),
+        isOnline: true,
+      }, { merge: true }).catch(() => {});
+    };
+    publicarActividad();
+    const interval = setInterval(publicarActividad, 2 * 60 * 1000);
+    const subscription = AppState.addEventListener('change', estado => {
+      if (estado === 'active') publicarActividad();
+    });
+    return () => {
+      clearInterval(interval);
+      subscription.remove();
+    };
+  }, [authChecked]);
+
+  if (loading || !authChecked) return <View style={styles.boot}><GameLoadingState label="Preparando Amor…" /></View>;
 
   return (
     <View style={styles.container}>
+      <AppErrorBoundary onReset={() => {
+        navigationHistoryRef.current = [];
+        showScreen(auth.currentUser ? 'main' : 'login');
+      }}>
       <TrofeosProvider>
         <MisionesProvider>
         <MusicProvider>
@@ -396,10 +475,12 @@ export default function App() {
         </MusicProvider>
         </MisionesProvider>
       </TrofeosProvider>
+      </AppErrorBoundary>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  boot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2dcae' },
 });

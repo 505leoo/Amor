@@ -56,6 +56,9 @@ function run() {
     if (fs.existsSync(appJsonPath)) {
       const app = readJSON(appJsonPath);
       if (app.expo) {
+        // Mantiene alineadas la versión visible del binario y la que mostramos
+        // dentro de la app. runtimeVersion continúa siendo independiente.
+        app.expo.version = newVersion;
         // Este dato viaja dentro del manifiesto OTA y permite que la versión
         // instalada muestre qué versión nueva está disponible antes de bajarla.
         app.expo.extra = app.expo.extra || {};

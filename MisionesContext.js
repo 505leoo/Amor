@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebaseConfig';
-import { doc, setDoc, onSnapshot, updateDoc, increment, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, onSnapshot, updateDoc, increment, deleteDoc, getDoc, runTransaction } from 'firebase/firestore';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const getDiaKey = () => {
@@ -79,6 +79,7 @@ export function MisionesProvider({ children }) {
   const uid    = auth.currentUser?.uid;
   const diaKey = getDiaKey();
   const minTimerRef = useRef(null);
+  const reclamandoRef = useRef(new Set());
 
   // ── Escuchar progreso del día ─────────────────────────────────────────────
   useEffect(() => {
@@ -170,55 +171,61 @@ export function MisionesProvider({ children }) {
   // ── Reclamar misión ───────────────────────────────────────────────────────
   // recompensaOverride: 'globo' | 'chicle' | 'monedas' | null — reemplaza la recompensa del BANCO
   const reclamar = async (mision, recompensaOverride = null) => {
-    if (!uid || reclamados.includes(mision.id)) return;
-    const nuevos = [...reclamados, mision.id];
-    setReclamados(nuevos);
+    if (!uid || reclamados.includes(mision.id) || reclamandoRef.current.has(mision.id)) return;
+    reclamandoRef.current.add(mision.id);
     const refDia = getMisionDiaRef(uid, diaKey);
-    await setDoc(refDia, {
-      progreso,
-      reclamados: nuevos,
-      ...(mision.campo === 'login_conteo' ? { loginMisionFase: mision._fase } : {}),
-    }, { merge: true }).catch(() => {});
-
     const tipoRecompensa = recompensaOverride ?? mision.recompensa ?? 'monedas';
-
-    if (tipoRecompensa === 'exp') {
-      const expGanada = mision._exp ?? 5;
-      await updateDoc(doc(db, 'usuarios', uid), { exp: increment(expGanada) }).catch(() => {});
-      setReward({ titulo: mision.titulo, exp: expGanada });
-    } else if (tipoRecompensa === 'cartasAnimalitos') {
-      const cartasGanadas = mision._cartas ?? 1;
-      await updateDoc(doc(db, 'usuarios', uid), { cartasAnimalitos: increment(cartasGanadas) }).catch(() => {});
-      setReward({ titulo: mision.titulo, cartas: cartasGanadas });
-    } else if (tipoRecompensa === 'globo') {
-      const globosGanados = mision._globos ?? 1;
-      await updateDoc(doc(db, 'usuarios', uid), { globos: increment(globosGanados) }).catch(() => {});
-      setReward({ titulo: mision.titulo, globos: globosGanados });
-    } else if (tipoRecompensa === 'chicle') {
-      const chiclesGanados = mision._chicles > 0 ? mision._chicles : 1;
-      await updateDoc(doc(db, 'usuarios', uid), { chicles: increment(chiclesGanados) }).catch(() => {});
-      if (mision.campo === 'login_conteo') {
-        const faseActual = loginData?.fase ?? 1;
-        if (faseActual < 3) {
-          // El contador es acumulativo: la siguiente fase debe continuar desde
-          // el total real de inicios de sesión, no volver a empezar en 1.
-          await updateDoc(doc(db, 'usuarios', uid), { login_fase: faseActual + 1 }).catch(() => {});
-        } else {
-          await updateDoc(doc(db, 'usuarios', uid), { login_fase: 1, login_ultimo_reclamo: diaKey }).catch(() => {});
+    const cantidad = tipoRecompensa === 'exp' ? (mision._exp ?? 5)
+      : tipoRecompensa === 'cartasAnimalitos' ? (mision._cartas ?? 1)
+        : tipoRecompensa === 'globo' ? (mision._globos ?? 1)
+          : tipoRecompensa === 'chicle' ? (mision._chicles > 0 ? mision._chicles : 1)
+            : (mision._monedas ?? RECOMPENSA_MONEDAS);
+    const campoRecompensa = tipoRecompensa === 'exp' ? 'exp'
+      : tipoRecompensa === 'cartasAnimalitos' ? 'cartasAnimalitos'
+        : tipoRecompensa === 'globo' ? 'globos'
+          : tipoRecompensa === 'chicle' ? 'chicles' : 'dinero';
+    try {
+      await runTransaction(db, async transaction => {
+        const userRef = doc(db, 'usuarios', uid);
+        const [diaSnap, userSnap] = await Promise.all([transaction.get(refDia), transaction.get(userRef)]);
+        const diaData = diaSnap.exists() ? diaSnap.data() : {};
+        const userData = userSnap.exists() ? userSnap.data() : {};
+        const reclamadosServidor = diaData.reclamados || [];
+        if (reclamadosServidor.includes(mision.id)) throw new Error('ya_reclamada');
+        const progresoServidor = diaData.progreso || {};
+        const actual = mision.campo === 'login_conteo'
+          ? Number(userData.login_conteo || 0)
+          : mision._distintas
+            ? Object.keys(progresoServidor[mision.campo] || {}).length
+            : Number(progresoServidor[mision.campo] || 0);
+        if (actual < mision.meta) throw new Error('incompleta');
+        const nuevos = [...reclamadosServidor, mision.id];
+        transaction.set(refDia, {
+          progreso: { ...progresoServidor, misiones_hoy: Number(progresoServidor.misiones_hoy || 0) + 1 },
+          reclamados: nuevos,
+          ...(mision.campo === 'login_conteo' ? { loginMisionFase: mision._fase } : {}),
+        }, { merge: true });
+        const userUpdate = { [campoRecompensa]: increment(cantidad) };
+        if (mision.campo === 'login_conteo') {
+          const faseActual = Number(userData.login_fase || 1);
+          userUpdate.login_fase = faseActual < 3 ? faseActual + 1 : 1;
+          if (faseActual >= 3) userUpdate.login_ultimo_reclamo = diaKey;
         }
-      }
-      setReward({ titulo: mision.titulo, chicles: chiclesGanados });
-    } else {
-      const monedasGanadas = mision._monedas ?? RECOMPENSA_MONEDAS;
-      await updateDoc(doc(db, 'usuarios', uid), { dinero: increment(monedasGanadas) }).catch(() => {});
-      if (mision.campo === 'login_conteo') {
-        await updateDoc(doc(db, 'usuarios', uid), { login_fase: 2 }).catch(() => {});
-      }
-      setReward({
-        titulo: mision.titulo,
-        monedas: monedasGanadas,
-        ...(mision.id === 'login_f1' ? { tutorialPaso: 3 } : {}),
+        transaction.set(userRef, userUpdate, { merge: true });
       });
+      setReclamados(previous => previous.includes(mision.id) ? previous : [...previous, mision.id]);
+      const rewardData = { titulo: mision.titulo };
+      if (campoRecompensa === 'exp') rewardData.exp = cantidad;
+      else if (campoRecompensa === 'cartasAnimalitos') rewardData.cartas = cantidad;
+      else if (campoRecompensa === 'globos') rewardData.globos = cantidad;
+      else if (campoRecompensa === 'chicles') rewardData.chicles = cantidad;
+      else rewardData.monedas = cantidad;
+      if (mision.id === 'login_f1') rewardData.tutorialPaso = 3;
+      setReward(rewardData);
+    } catch (error) {
+      if (error?.message !== 'ya_reclamada') global.showToast?.({ type: 'error', text1: 'No pudimos entregar la recompensa', text2: 'Inténtalo nuevamente.' });
+    } finally {
+      reclamandoRef.current.delete(mision.id);
     }
   };
 

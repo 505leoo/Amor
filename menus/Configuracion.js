@@ -5,14 +5,21 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { auth } from '../firebaseConfig';
 import { signOut } from 'firebase/auth';
 import NotificationSystem from '../utils/NotificationSystem';
+import { gameColors, gamePanel } from '../theme/gameTheme';
+import { GameLoadingState } from '../components/GameStates';
+
+const APP_VERSION = require('../package.json').version;
 
 const SECCIONES = [
+  { id: 'experiencia', titulo: 'Experiencia', icono: 'tune', color: '#7b8f52', opciones: [
+    { id: 'notificaciones', titulo: 'Notificaciones', icon: 'notifications-active', defecto: true, desc: 'Recibe avisos de tu pareja, regalos y novedades importantes.' },
+  ] },
   { id: 'cuenta', titulo: 'Cuenta', icono: 'person', color: '#5d89ab', opciones: [
     { id: 'cerrar-sesion', titulo: 'Cerrar sesión', icon: 'logout', readonly: true, action: 'logout', desc: 'Cierra tu sesión en este dispositivo.' },
     { id: 'borrar-preferencias', titulo: 'Restablecer preferencias', icon: 'restart-alt', readonly: true, action: 'reset', desc: 'Borra solo tus preferencias guardadas y vuelve a los valores iniciales.' },
   ] },
   { id: 'informacion', titulo: 'Información', icono: 'info', color: '#b07a43', opciones: [
-    { id: 'version', titulo: 'Versión 1.0.4', icon: 'code', readonly: true, desc: 'Versión actual de Amor. Las actualizaciones se reciben automáticamente en producción.' },
+    { id: 'version', titulo: `Versión ${APP_VERSION}`, icon: 'code', readonly: true, desc: `Actualmente tienes Amor ${APP_VERSION}. Las nuevas versiones se reciben automáticamente en producción.` },
     { id: 'soporte', titulo: 'Soporte', icon: 'help-outline', readonly: true, desc: 'Si encontrás un error, contáselo a la persona que administra la app.' },
   ] },
 ];
@@ -77,9 +84,18 @@ export const ConfiguracionModal = ({ visible, onClose }) => {
     }
   };
 
-  const toggleOpcion = (opcionId) => {
+  const toggleOpcion = async (opcionId) => {
     const nuevaConfig = { ...configuraciones, [opcionId]: !configuraciones[opcionId] };
-    guardarConfig(nuevaConfig);
+    await guardarConfig(nuevaConfig);
+    if (opcionId === 'notificaciones') {
+      const uid = auth.currentUser?.uid;
+      if (nuevaConfig.notificaciones) {
+        await NotificationSystem.registerForPushNotifications().catch(() => {});
+      } else {
+        await NotificationSystem.clearPushTokenForUser(uid).catch(() => {});
+        NotificationSystem.clearNotificationListeners();
+      }
+    }
   };
 
   const ejecutarAccion = async accion => {
@@ -127,7 +143,11 @@ export const ConfiguracionModal = ({ visible, onClose }) => {
     return undefined;
   }, [seccionActiva]);
 
-  if (cargando) return null;
+  if (cargando) return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent presentationStyle="overFullScreen" onRequestClose={onClose}>
+      <View style={styles.overlay}><GameLoadingState compact label="Cargando tus preferencias…" /></View>
+    </Modal>
+  );
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent presentationStyle="overFullScreen" onRequestClose={cerrarConfiguracion}>
@@ -230,29 +250,29 @@ export const ConfiguracionModal = ({ visible, onClose }) => {
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(16, 9, 5, 0.82)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
+  overlay: { flex: 1, backgroundColor: gameColors.overlay, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
   dismiss: { ...StyleSheet.absoluteFillObject },
   position: { width: '100%', alignItems: 'center', transform: [{ translateY: -10 }] },
-  card: { height: 295, overflow: 'hidden', borderRadius: 18, backgroundColor: '#edf5fb', borderWidth: 3, borderColor: '#8eb3ce', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.55, shadowRadius: 14, elevation: 28 },
-  header: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, backgroundColor: '#d6e9f6', borderBottomWidth: 1, borderBottomColor: '#92b8d2' },
-  headerIcon: { width: 33, height: 33, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5d89ab', borderWidth: 1, borderColor: '#edf8ff' },
+  card: { height: 295, overflow: 'hidden', ...gamePanel },
+  header: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, backgroundColor: gameColors.parchmentDeep, borderBottomWidth: 1, borderBottomColor: gameColors.gold },
+  headerIcon: { width: 33, height: 33, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: gameColors.wood, borderWidth: 1, borderColor: gameColors.parchmentLight },
   headerInfo: { flex: 1, marginLeft: 10 },
-  title: { color: '#405e76', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', letterSpacing: 0.7 },
-  subtitle: { color: '#65869f', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '800', letterSpacing: 0.6, marginTop: 1 },
-  back: { width: 27, height: 27, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(250,253,255,0.76)', borderWidth: 1, borderColor: '#a9c9dd', marginRight: 5 },
-  close: { width: 27, height: 27, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(250,253,255,0.76)', borderWidth: 1, borderColor: '#a9c9dd' },
+  title: { color: gameColors.text, fontFamily: 'Delius', fontSize: 13, fontWeight: '900', letterSpacing: 0.7 },
+  subtitle: { color: gameColors.textSoft, fontFamily: 'Delius', fontSize: 6.5, fontWeight: '800', letterSpacing: 0.6, marginTop: 1 },
+  back: { width: 27, height: 27, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: gameColors.parchmentLight, borderWidth: 1, borderColor: gameColors.gold, marginRight: 5 },
+  close: { width: 27, height: 27, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: gameColors.parchmentLight, borderWidth: 1, borderColor: gameColors.gold },
 
   sectionList: { flex: 1 },
   sectionListContent: { paddingHorizontal: 14, paddingVertical: 10, gap: 5 },
-  sectionRow: { width: '100%', height: 36, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, borderRadius: 9, backgroundColor: '#dfeef8', borderWidth: 1, borderColor: '#bdd8e9' },
+  sectionRow: { width: '100%', height: 36, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, borderRadius: 9, backgroundColor: gameColors.parchmentLight, borderWidth: 1, borderColor: gameColors.parchmentDeep },
   sectionRowIcon: { width: 23, alignItems: 'center', justifyContent: 'center' },
   sectionRowInfo: { flex: 1, marginLeft: 5 },
-  sectionRowText: { color: '#476982', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
-  sectionRowDescription: { color: '#6b8aa1', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '700', marginTop: 1 },
+  sectionRowText: { color: gameColors.text, fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  sectionRowDescription: { color: gameColors.textSoft, fontFamily: 'Delius', fontSize: 5.5, fontWeight: '700', marginTop: 1 },
 
   detail: { height: 215, paddingHorizontal: 24, paddingTop: 10, alignItems: 'stretch', justifyContent: 'flex-start' },
-  detailTitle: { color: '#405e76', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', textAlign: 'center', marginBottom: 6 },
-  detailRule: { height: 1, backgroundColor: '#bdd8e9', marginBottom: 8 },
+  detailTitle: { color: gameColors.text, fontFamily: 'Delius', fontSize: 13, fontWeight: '900', textAlign: 'center', marginBottom: 6 },
+  detailRule: { height: 1, backgroundColor: gameColors.parchmentDeep, marginBottom: 8 },
   detailDesc: { fontFamily: 'Delius', fontSize: 7.5, fontWeight: '700', textAlign: 'center', lineHeight: 10, marginBottom: 12 },
   detailToggle: { flexDirection: 'row', alignItems: 'center', marginTop: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 11, borderWidth: 1.5 },
   detailToggleLabelWrap: { flex: 1, flexDirection: 'row', alignItems: 'center' },

@@ -32,6 +32,34 @@ exports.sendPushyNotification = functions.https.onCall(
         );
       }
 
+      if (!context.auth) {
+        throw new functions.https.HttpsError(
+            "unauthenticated",
+            "Authentication is required",
+        );
+      }
+
+      // El teléfono solo puede enviar al token de su pareja actual. Ocultar
+      // botones en el cliente no evita que alguien invoque la función a mano.
+      const db = admin.firestore();
+      const senderSnap = await db.collection("usuarios")
+          .doc(context.auth.uid).get();
+      const partnerUid = senderSnap.exists ? senderSnap.data().pareja : null;
+      const partnerSnap = partnerUid ? await db.collection("usuarios")
+          .doc(partnerUid).get() : null;
+      const partnerData = partnerSnap && partnerSnap.exists ?
+        partnerSnap.data() : {};
+      const allowedTokens = [
+        partnerData.MyPushyToken,
+        partnerData.pushyToken,
+      ].filter(Boolean);
+      if (!allowedTokens.includes(token)) {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "The target is not the authenticated user's partner",
+        );
+      }
+
       const apiSecret = process.env.PUSHY_API_SECRET;
       if (!apiSecret) {
         logger.error("[PUSHY] API secret for Pushy is not configured");
@@ -43,7 +71,6 @@ exports.sendPushyNotification = functions.https.onCall(
 
       const FIRESTORE_WINDOW_MS = 120 * 1000; // 120s window
       const MAX_PENDING_PER_TOKEN = 2;
-      const db = admin.firestore();
       const docRef = db.collection("pushy_recent").doc(token);
 
       logger.info("[PUSHY] Pre-send check for token:",

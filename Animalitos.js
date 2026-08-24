@@ -11,12 +11,16 @@ import { contenidoDisponible, useTemporadaActual } from './hooks/useTemporadaAct
 import { actualizarPasoTutorial } from './components/Tutorial';
 
 const ANIMALITOS = [
-  { id: 'halcon', temporada: 't1', nombre: 'Halcón', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
+  { id: 'halcon', temporada: 't1', nombre: 'Halcón', rareza: 'Común', icono: '🦅', habilidad: 'Instinto Natural', habilidadTexto: '+10% de EXP obtenida en misiones.', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
+  { id: 'ardilla', temporada: 't1', nombre: 'Ardilla', rareza: 'Épico', pistaBloqueada: 'Habitante del bosque', icono: '🐿️', habilidad: 'Reserva Dorada', habilidadTexto: '+10% de monedas obtenidas en eventos.', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png') },
 ];
 const SKINS = [
-  { id: 'default', nombre: 'Original', temporada: 't1', rareza: 'Común', colorRareza: '#78a950', fondoRareza: '#e7f0d7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
-  { id: 'halcont1', nombre: 'Traje especial', temporada: 't1', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png') },
-  { id: 'halcont2', nombre: 'Traje celeste', temporada: 't1', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png') },
+  { id: 'halcon_default', storageId: 'default', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Original', temporada: 't1', rareza: 'Común', colorRareza: '#78a950', fondoRareza: '#e7f0d7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
+  { id: 'halcont1', storageId: 'halcont1', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Traje especial', temporada: 't1', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png') },
+  { id: 'halcont2', storageId: 'halcont2', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Traje celeste', temporada: 't1', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png') },
+  { id: 'ardilla_default', storageId: 'default', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Original', temporada: 't1', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png') },
+  { id: 'ardillat1', storageId: 'ardillat1', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Bellota Dorada', temporada: 't1', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png') },
+  { id: 'ardillat2', storageId: 'ardillat2', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Guardiana del Bosque', temporada: 't1', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae7bd', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat2.png') },
 ];
 
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
@@ -31,6 +35,13 @@ const RECOMPENSAS_NIVEL = {
     { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
     { nivel: 100, tipo: 'skin', skinId: 'halcont1', icono: '☀', titulo: 'Traje Especial' },
   ],
+  ardilla: [
+    { nivel: 5, tipo: 'dinero', cantidad: 800, icono: '🪙', titulo: '800 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 30, icono: '◆', titulo: '30 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'ardilla_icon', icono: '✦', titulo: 'Icono de Ardilla', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
+    { nivel: 100, tipo: 'skin', skinId: 'ardillat1', icono: '🌰', titulo: 'Bellota Dorada' },
+  ],
 };
 
 const Animalitos = ({ navigation, mode }) => {
@@ -41,10 +52,12 @@ const Animalitos = ({ navigation, mode }) => {
   const [nombreUsuario, setNombreUsuario] = useState(auth.currentUser?.displayName || 'Usuario');
   const [diasNacimiento, setDiasNacimiento] = useState('1 día de nacimiento');
   const [equipadaSkin, setEquipadaSkin] = useState('default');
+  const [skinsEquipadas, setSkinsEquipadas] = useState({ halcon: 'default', ardilla: 'default' });
   const [animalesEstado, setAnimalesEstado] = useState({});
   const [dinero, setDinero] = useState(0);
   const [cartasAnimalitos, setCartasAnimalitos] = useState(0);
   const [mejoraPendiente, setMejoraPendiente] = useState(null);
+  const [mejoraEnCurso, setMejoraEnCurso] = useState(null);
   const [recompensasReclamadas, setRecompensasReclamadas] = useState({});
   const [previewRecompensa, setPreviewRecompensa] = useState(null);
   const [iconosPorIdentificador, setIconosPorIdentificador] = useState({});
@@ -53,6 +66,8 @@ const Animalitos = ({ navigation, mode }) => {
   const [ordenCatalogo, setOrdenCatalogo] = useState('rareza');
 
   const loadingRef = useRef(null);
+  const limpiezaArdillaRef = useRef(false);
+  const mejoraEnCursoRef = useRef(false);
   const transicion = (fn) => loadingRef.current?.fadeIn(() => { fn(); setTimeout(() => loadingRef.current?.fadeOut(), 80); });
 
   useEffect(() => {
@@ -63,34 +78,62 @@ const Animalitos = ({ navigation, mode }) => {
       if (!snap.exists()) return;
       const data = snap.data();
       setEquipadaSkin(data.skin ?? 'default');
+      if (data.animalito) setSkinsEquipadas(prev => ({ ...prev, [data.animalito]: data.skin ?? prev[data.animalito] ?? 'default' }));
       setNombreUsuario(data.datosCompletos?.nombre || data.nombre || auth.currentUser?.displayName || 'Usuario');
       setDiasNacimiento(data.halconDesbloqueadoAt ? '1 día de nacimiento' : '1 día de nacimiento');
       setEquipado(data.animalito ?? null);
       setDinero(typeof data.dinero === 'number' ? data.dinero : 0);
-      setAnimalesEstado(data.animalitos || {});
+      setAnimalesEstado(prev => ({ ...prev, ...(data.animalitos || {}) }));
       setRecompensasReclamadas(data.recompensasAnimalitos || {});
-      setSkinsDesbloqueadas(data.skinsDesbloqueadas || {});
+      setSkinsDesbloqueadas(prev => ({ ...prev, ...(data.skinsDesbloqueadas || {}) }));
       // Los usuarios que ya tenían al Halcón reciben un paquete inicial de
       // tres cartas al migrar a las cartas universales.
       setCartasAnimalitos(Math.max(0, Number(data.cartasAnimalitos ?? (data.halconDesbloqueado ? 3 : 0)) || 0));
       const lista = [];
       if (data.halconDesbloqueado || data.animalito === 'halcon') lista.push('halcon');
-      setDesbloqueados(lista);
+      if (data.ardillaDesbloqueada) lista.push('ardilla');
+      Object.entries(data.animalitos || {}).forEach(([animalId, estado]) => {
+        if (estado?.desbloqueado || Number(estado?.nivel) > 0 || Number(estado?.cartas ?? estado?.copias) > 0) lista.push(animalId);
+      });
+      setDesbloqueados(prev => [...new Set([...prev, ...lista])]);
+
     });
     return unsub;
   }, []);
 
-  // El progreso propio de cada animalito vive en su subcolección.
+  // El progreso propio de cada animalito vive en su subcolección. Escuchar la
+  // colección completa permite sumar mascotas sin agregar listeners manuales.
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
-    return onSnapshot(doc(db, 'usuarios', uid, 'animalitos', 'halcon'), snap => {
-      const data = snap.data() || {};
-      if (!snap.exists()) return;
-      setAnimalesEstado({ halcon: { ...data, nivel: Math.max(1, Number(data.nivel) || 1) } });
-      setSkinsDesbloqueadas({ halcon: data.skinsDesbloqueadas || {} });
-      setEquipadaSkin(data.skin || 'default');
-      if (data.desbloqueado || data.nivel || data.cartas || data.copias) setDesbloqueados(['halcon']);
+    return onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+      const estados = {};
+      const desbloqueadosSubcoleccion = [];
+      const skinsPorAnimal = {};
+      const equipadasPorAnimal = {};
+      snapshot.docs.forEach(animalDoc => {
+        const data = animalDoc.data() || {};
+        const esArdillaInicialErronea = animalDoc.id === 'ardilla'
+          && data.desbloqueado === true
+          && Math.max(1, Number(data.nivel) || 1) === 1
+          && Math.max(0, Number(data.cartas ?? data.copias) || 0) === 0
+          && (data.skin || 'default') === 'default'
+          && Object.keys(data.skinsDesbloqueadas || {}).length === 0;
+        if (esArdillaInicialErronea && !limpiezaArdillaRef.current) {
+          limpiezaArdillaRef.current = true;
+          setDoc(animalDoc.ref, { desbloqueado: false }, { merge: true }).catch(() => { limpiezaArdillaRef.current = false; });
+        }
+        estados[animalDoc.id] = { ...data, nivel: Math.max(1, Number(data.nivel) || 1) };
+        skinsPorAnimal[animalDoc.id] = data.skinsDesbloqueadas || {};
+        equipadasPorAnimal[animalDoc.id] = data.skin || 'default';
+        const desbloqueado = data.desbloqueado === true
+          || (data.desbloqueado !== false && Boolean(data.nivel || data.cartas || data.copias));
+        if (desbloqueado && !esArdillaInicialErronea) desbloqueadosSubcoleccion.push(animalDoc.id);
+      });
+      setAnimalesEstado(prev => ({ ...prev, ...estados }));
+      setSkinsDesbloqueadas(prev => ({ ...prev, ...skinsPorAnimal }));
+      setSkinsEquipadas(prev => ({ ...prev, ...equipadasPorAnimal }));
+      setDesbloqueados(prev => [...new Set([...prev, ...desbloqueadosSubcoleccion])]);
     }, () => {});
   }, []);
 
@@ -107,7 +150,8 @@ const Animalitos = ({ navigation, mode }) => {
 
   const animalitosFiltrados = (mode === 'skins' ? SKINS : ANIMALITOS).filter(a => {
     if (mode !== 'skins') return desbloqueados.includes(a.id) && contenidoDisponible(a.temporada || 't1', temporadaActual);
-    return a.id === 'default' || a.id === equipadaSkin || Boolean(skinsDesbloqueadas?.halcon?.[a.id]);
+    if (!equipado || a.animalId !== equipado || !desbloqueados.includes(a.animalId) || !contenidoDisponible(a.temporada || 't1', temporadaActual)) return false;
+    return a.storageId === 'default' || skinsEquipadas?.[a.animalId] === a.storageId || Boolean(skinsDesbloqueadas?.[a.animalId]?.[a.storageId]);
   });
 
   const handleEquipar = async (id) => {
@@ -115,14 +159,21 @@ const Animalitos = ({ navigation, mode }) => {
     if (!uid) return;
     try {
       if (mode === 'skins') {
-        const nextSkin = equipadaSkin === id ? 'default' : id;
+        const skin = SKINS.find(item => item.id === id);
+        if (!skin || !desbloqueados.includes(skin.animalId)) return;
+        const actual = skinsEquipadas?.[skin.animalId] || 'default';
+        const nextSkin = actual === skin.storageId && skin.storageId !== 'default' ? 'default' : skin.storageId;
         setEquipadaSkin(nextSkin);
+        setEquipado(skin.animalId);
+        setSkinsEquipadas(prev => ({ ...prev, [skin.animalId]: nextSkin }));
         AsyncStorage.setItem(`skin_${uid}`, nextSkin).catch(() => {});
-        await setDoc(doc(db, 'usuarios', uid, 'animalitos', 'halcon'), { skin: nextSkin }, { merge: true });
-        await setDoc(doc(db, 'usuarios', uid), { skin: nextSkin }, { merge: true });
+        await setDoc(doc(db, 'usuarios', uid, 'animalitos', skin.animalId), { skin: nextSkin }, { merge: true });
+        await setDoc(doc(db, 'usuarios', uid), { animalito: skin.animalId, skin: nextSkin }, { merge: true });
       } else {
         const nuevo = equipado === id ? null : id;
-        await setDoc(doc(db, 'usuarios', uid), { animalito: nuevo }, { merge: true });
+        const skinDelAnimal = nuevo ? (skinsEquipadas?.[nuevo] || 'default') : 'default';
+        setEquipadaSkin(skinDelAnimal);
+        await setDoc(doc(db, 'usuarios', uid), { animalito: nuevo, skin: skinDelAnimal }, { merge: true });
         if (nuevo) actualizarPasoTutorial(uid, 2).catch(() => {});
       }
     } catch (e) {
@@ -153,7 +204,9 @@ const Animalitos = ({ navigation, mode }) => {
     }
 
     const uid = auth.currentUser?.uid;
-    if (!uid) return;
+    if (!uid || mejoraEnCursoRef.current) return;
+    mejoraEnCursoRef.current = true;
+    setMejoraEnCurso(id);
     try {
       await runTransaction(db, async transaction => {
         const ref = doc(db, 'usuarios', uid);
@@ -163,6 +216,9 @@ const Animalitos = ({ navigation, mode }) => {
         const animalSnap = await transaction.get(animalRef);
         const guardado = animalSnap.exists() ? animalSnap.data() : (data.animalitos?.[id] || {});
         const nivelActual = Math.max(1, Number(guardado.nivel) || 1);
+        // Si otro toque o dispositivo ya lo mejoró, esta operación no puede
+        // aplicar accidentalmente el nivel siguiente.
+        if (nivelActual !== estado.nivel) throw new Error('nivel_desactualizado');
         const cartasPropias = Math.max(0, Number(guardado.cartas ?? guardado.copias ?? 0) || 0);
         const cartasUniversales = Math.max(0, Number(data.cartasAnimalitos ?? (data.halconDesbloqueado ? 3 : 0)) || 0);
         const copiasNecesarias = COPIAS_POR_NIVEL(nivelActual);
@@ -197,6 +253,9 @@ const Animalitos = ({ navigation, mode }) => {
     } catch (error) {
       setMejoraPendiente(null);
       global.showToast?.({ text1: error.message === 'monedas_insuficientes' ? 'No tienes suficientes monedas' : 'No se pudo mejorar ahora', type: 'error' });
+    } finally {
+      mejoraEnCursoRef.current = false;
+      setMejoraEnCurso(null);
     }
   };
 
@@ -238,18 +297,25 @@ const Animalitos = ({ navigation, mode }) => {
   };
 
   const animalMostrado = seleccionado || animalitosFiltrados[0] || (mode === 'skins' ? SKINS[0] : ANIMALITOS[0]);
-  const estadoMostrado = estadoAnimal(animalMostrado.id === 'default' ? 'halcon' : animalMostrado.id);
+  const animalMostradoId = animalMostrado.animalId || animalMostrado.id;
+  const fichaAnimalMostrado = ANIMALITOS.find(animal => animal.id === animalMostradoId) || ANIMALITOS[0];
+  const estadoMostrado = estadoAnimal(animalMostradoId);
   const cartasNecesarias = COPIAS_POR_NIVEL(estadoMostrado.nivel);
   const costoMejora = COSTO_MEJORA(estadoMostrado.nivel);
   const puedeMejorar = estadoMostrado.totalCartas >= cartasNecesarias && dinero >= costoMejora;
   const progresoCartas = Math.min(100, (estadoMostrado.totalCartas / Math.max(1, cartasNecesarias)) * 100);
-  const recompensasMostradas = RECOMPENSAS_NIVEL.halcon || [];
+  const recompensasMostradas = RECOMPENSAS_NIVEL[animalMostradoId] || [];
   const animalitosOrdenados = [...animalitosFiltrados].sort((a, b) => {
     if (ordenCatalogo === 'nivel') return estadoAnimal(b.id === 'default' ? 'halcon' : b.id).nivel - estadoAnimal(a.id === 'default' ? 'halcon' : a.id).nivel;
     return (a.id === 'halcon' || a.id === 'default' ? 0 : 1) - (b.id === 'halcon' || b.id === 'default' ? 0 : 1);
   });
-  const skinsCatalogo = SKINS.map(skin => animalitosFiltrados.some(desbloqueado => desbloqueado.id === skin.id) ? skin : { ...skin, bloqueado: true });
-  const elementosCatalogo = mode === 'skins' && !soloDesbloqueados ? skinsCatalogo : animalitosOrdenados;
+  const animalitosCatalogo = ANIMALITOS
+    .filter(animal => contenidoDisponible(animal.temporada || 't1', temporadaActual))
+    .map(animal => desbloqueados.includes(animal.id) ? animal : { ...animal, bloqueado: true });
+  const skinsCatalogo = SKINS
+    .filter(skin => Boolean(equipado) && skin.animalId === equipado && desbloqueados.includes(skin.animalId) && contenidoDisponible(skin.temporada || 't1', temporadaActual))
+    .map(skin => animalitosFiltrados.some(desbloqueado => desbloqueado.id === skin.id) ? skin : { ...skin, bloqueado: true });
+  const elementosCatalogo = mode === 'skins' && !soloDesbloqueados ? skinsCatalogo : (soloDesbloqueados ? animalitosOrdenados : animalitosCatalogo);
   const catalogoSlots = soloDesbloqueados ? animalitosOrdenados : Array.from({ length: 8 }, (_, index) => elementosCatalogo[index] || null);
   const slotsTrajes = Array.from({ length: 12 }, (_, index) => skinsCatalogo[index] || null);
   const columnasTrajes = Array.from({ length: 6 }, (_, columna) => slotsTrajes.slice(columna * 2, (columna * 2) + 2));
@@ -263,16 +329,16 @@ const Animalitos = ({ navigation, mode }) => {
       <View style={s.nuevoContenido}>
         {mode === 'skins' ? <View style={s.vestidor}>
           <View style={s.tituloMadera}><Text style={s.tituloMaderaTexto}>✦ MIS TRAJES ✦</Text></View>
-          <Text style={s.coleccionTexto}>Vestidor de Halcón · {animalitosFiltrados.length} desbloqueados</Text>
-          <ScrollView horizontal style={s.trajesScroll} contentContainerStyle={s.trajesLista} showsHorizontalScrollIndicator={false} nestedScrollEnabled>
+          <Text style={s.coleccionTexto}>{equipado ? `Vestidor de ${ANIMALITOS.find(animal => animal.id === equipado)?.nombre || 'Animalito'} · ${animalitosFiltrados.length} desbloqueados` : 'Equipa un Animalito para ver sus trajes'}</Text>
+          {!equipado ? <View style={s.vestidorVacio}><Text style={s.vestidorVacioIcono}>🐾</Text><Text style={s.vestidorVacioTexto}>No tienes ningún Animalito equipado.</Text><TouchableOpacity style={s.vestidorVacioBoton} onPress={() => navigation?.navigate?.('animalitos')} activeOpacity={0.8}><Text style={s.vestidorVacioBotonTexto}>ELEGIR ANIMALITO</Text></TouchableOpacity></View> : <ScrollView horizontal style={s.trajesScroll} contentContainerStyle={s.trajesLista} showsHorizontalScrollIndicator={false} nestedScrollEnabled>
             {columnasTrajes.map((columna, columnaIndex) => <View key={`columna-trajes-${columnaIndex}`} style={s.trajesColumna}>{columna.map((traje, filaIndex) => {
               const index = (columnaIndex * 2) + filaIndex;
-              const equipadoAhora = traje?.id === equipadaSkin;
+              const equipadoAhora = Boolean(traje && equipado === traje.animalId && (skinsEquipadas?.[traje.animalId] || 'default') === traje.storageId);
               return <TouchableOpacity key={traje?.id || `traje-futuro-${index}`} style={[s.trajeTarjeta, traje && { backgroundColor: traje.fondoRareza, borderColor: traje.colorRareza }, equipadoAhora && s.trajeTarjetaActiva, (!traje || traje.bloqueado) && s.trajeTarjetaBloqueada]} disabled={!traje || traje.bloqueado} onPress={() => handleEquipar(traje.id)} activeOpacity={0.82}>
-                {traje ? <><View style={[s.trajeRareza, { backgroundColor: traje.colorRareza }]}><Text style={s.trajeRarezaTexto}>{traje.rareza}</Text></View><Text style={s.trajeTemporada}>{traje.temporada.toUpperCase()}</Text><Image source={traje.imagen} style={[s.trajeImagen, traje.bloqueado && s.trajeImagenBloqueada]} contentFit="contain" cachePolicy="memory-disk" /><Text style={s.trajeNombre}>{traje.nombre}</Text>{traje.bloqueado && <View style={s.trajeCandado}><Text style={s.trajeCandadoIcono}>🔒</Text><Text style={s.trajeCandadoTexto}>Bloqueado</Text></View>}{equipadoAhora && <View style={s.trajeEquipado}><Text style={s.trajeEquipadoTexto}>✓ USANDO</Text></View>}</> : <><Text style={s.trajeFuturoIcono}>✦</Text><Text style={s.trajeFuturoTexto}>Próximamente</Text></>}
+                {traje ? <><View style={[s.trajeRareza, { backgroundColor: traje.colorRareza }]}><Text style={s.trajeRarezaTexto}>{traje.rareza}</Text></View><Text style={s.trajeTemporada}>{traje.temporada.toUpperCase()} · {traje.animalNombre}</Text>{traje.bloqueado ? <RNImage source={traje.imagen} style={s.trajeImagenBloqueadaBlur} resizeMode="contain" blurRadius={15} /> : <Image source={traje.imagen} style={s.trajeImagen} contentFit="contain" cachePolicy="memory-disk" />}{!traje.bloqueado && <Text style={s.trajeNombre}>{traje.nombre}</Text>}{traje.bloqueado && <><View style={s.trajeBloqueadoVelo} /><View style={s.trajeCandadoInsignia}><Text style={s.trajeCandadoIcono}>🔒</Text></View><View style={s.trajeSecretoPlaca}><Text style={s.trajeCandadoTitulo}>Un secreto te espera</Text><Text style={s.trajeCandadoTexto}>Sigue explorando</Text></View></>}{equipadoAhora && <View style={s.trajeEquipado}><Text style={s.trajeEquipadoTexto}>✓ USANDO</Text></View>}</> : <><Text style={s.trajeFuturoIcono}>✦</Text><Text style={s.trajeFuturoTexto}>Próximamente</Text></>}
               </TouchableOpacity>;
             })}</View>)}
-          </ScrollView>
+          </ScrollView>}
         </View> : <>
         <View style={s.paginaIzquierda}>
           <View style={s.tituloMadera}><Text style={s.tituloMaderaTexto}>🐾 {mode === 'skins' ? 'MIS TRAJES' : 'MIS ANIMALITOS'} 🐾</Text></View>
@@ -290,10 +356,19 @@ const Animalitos = ({ navigation, mode }) => {
                     <Text style={s.tarjetaNombre}>{item.nombre || (item.id === 'default' ? 'Original' : 'Traje')}</Text>
                     <Text style={s.temporadaTarjeta}>{(item.temporada || 't1').toUpperCase()}</Text>
                     <Image source={item.imagen} style={s.tarjetaAnimal} contentFit="contain" cachePolicy="memory" />
-                    <View style={s.rarezaPildora}><Text style={s.rarezaTexto}>{item.id === 'default' || item.id === 'halcon' ? 'Común' : 'Especial'}</Text></View>
+                    <View style={s.rarezaPildora}><Text style={s.rarezaTexto}>{item.rareza || 'Común'}</Text></View>
                     <View style={s.tarjetaProgreso}><View style={[s.tarjetaProgresoFill, { width: `${progresoItem}%` }]} /><Text style={s.tarjetaProgresoTexto}>{estadoItem.totalCartas} / {cartasItemNecesarias}</Text></View>
                     <View style={s.nivelEstrella}><Text style={s.nivelEstrellaTexto}>{estadoItem.nivel}</Text></View>
-                  </> : <><Text style={s.bloqueadoIcono}>🔒</Text><Text style={s.bloqueadoTexto}>{item?.bloqueado ? 'Bloqueado' : 'Próximamente'}</Text></>}
+                  </> : item?.bloqueado ? <>
+                    <RNImage source={item.imagen} style={s.animalBloqueadoImagen} resizeMode="contain" blurRadius={18} />
+                    <View style={s.animalBloqueadoVelo} />
+                    <View style={s.animalBloqueadoInfo}>
+                      <Text style={s.bloqueadoIcono}>🔒</Text>
+                      <Text style={s.animalBloqueadoTitulo}>Animal misterioso</Text>
+                      <Text style={s.animalBloqueadoPista}>{(item.temporada || 't1').toUpperCase()} · {item.rareza || 'Desconocido'}</Text>
+                      <Text style={s.animalBloqueadoPista}>{item.pistaBloqueada || 'Aún no descubierto'}</Text>
+                    </View>
+                  </> : <><Text style={s.bloqueadoIcono}>🔒</Text><Text style={s.bloqueadoTexto}>Próximamente</Text></>}
                 </TouchableOpacity>
               );
             })}
@@ -310,14 +385,14 @@ const Animalitos = ({ navigation, mode }) => {
             <View style={s.animalGrandeWrap}><Image source={animalMostrado.imagen} style={s.animalGrande} contentFit="contain" cachePolicy="memory" /></View>
             <View style={s.fichaDatos}>
               <View style={s.datoFila}><Text style={s.datoLabel}>Tipo</Text><Text style={s.datoValor}>🍃 Naturaleza</Text></View>
-              <View style={s.datoFila}><Text style={s.datoLabel}>Rareza</Text><Text style={s.rarezaFicha}>Común</Text></View>
+              <View style={s.datoFila}><Text style={s.datoLabel}>Rareza</Text><Text style={s.rarezaFicha}>{fichaAnimalMostrado.rareza}</Text></View>
             </View>
           </View>
 
           <View style={s.infoDoble}>
-            <View style={s.habilidadCaja}><Text style={s.cajaMiniTitulo}>HABILIDAD</Text><Text style={s.habilidadNombre}>🍃 Instinto Natural</Text><Text style={s.habilidadTexto}>+10% de EXP obtenida en misiones.</Text></View>
+            <View style={s.habilidadCaja}><Text style={s.cajaMiniTitulo}>HABILIDAD</Text><Text style={s.habilidadNombre}>🍃 {fichaAnimalMostrado.habilidad}</Text><Text style={s.habilidadTexto}>{fichaAnimalMostrado.habilidadTexto}</Text></View>
             <View style={s.estadisticasCaja}>
-              <View style={s.progresoResumenFila}><Text style={s.progresoResumenIcono}>🦅</Text><View><Text style={s.progresoResumenLabel}>Cartas de {animalMostrado.nombre || 'Halcón'}</Text><Text style={s.progresoResumenValor}>{estadoMostrado.cartasPropias}</Text></View></View>
+              <View style={s.progresoResumenFila}><Text style={s.progresoResumenIcono}>{fichaAnimalMostrado.icono}</Text><View><Text style={s.progresoResumenLabel}>Cartas de {fichaAnimalMostrado.nombre}</Text><Text style={s.progresoResumenValor}>{estadoMostrado.cartasPropias}</Text></View></View>
               <View style={s.progresoResumenFila}><Text style={s.progresoResumenIcono}>▣</Text><View><Text style={s.progresoResumenLabel}>Cartas universales de apoyo</Text><Text style={s.progresoResumenValor}>{estadoMostrado.cartasUniversales} · Total {estadoMostrado.totalCartas}/{cartasNecesarias}</Text></View></View>
             </View>
           </View>
@@ -326,7 +401,7 @@ const Animalitos = ({ navigation, mode }) => {
             <View style={s.recompensasTitulo}><Text style={s.recompensasTituloTexto}>RECOMPENSAS POR NIVEL</Text></View>
             <View style={s.recompensasFila}>{recompensasMostradas.map(recompensa => {
               const disponible = estadoMostrado.nivel >= recompensa.nivel;
-              const reclamada = Boolean(recompensasReclamadas?.halcon?.[recompensa.nivel]);
+              const reclamada = Boolean(recompensasReclamadas?.[animalMostradoId]?.[recompensa.nivel]);
               return <TouchableOpacity key={recompensa.nivel} style={[s.premioTarjeta, disponible && s.premioDisponible]} onPress={() => disponible && !reclamada ? reclamarRecompensaNivel(recompensa) : setPreviewRecompensa(recompensa)} activeOpacity={0.8}><View style={s.premioNivel}><Text style={s.premioNivelTexto}>{recompensa.nivel}</Text></View><Text style={s.premioIcono}>{recompensa.icono}</Text><Text numberOfLines={2} style={s.premioNombre}>{reclamada ? '✓ Reclamado' : recompensa.titulo}</Text></TouchableOpacity>;
             })}</View>
           </View>
@@ -334,7 +409,7 @@ const Animalitos = ({ navigation, mode }) => {
           <View style={s.botonesFinales}>
             <TouchableOpacity style={s.cartasBtn} onPress={() => navigation?.navigate?.('comerciante')} activeOpacity={0.82}><Text style={s.botonFinalTexto}>▣ CONSEGUIR CARTAS</Text></TouchableOpacity>
             <TouchableOpacity style={[s.usarBtn, (mode === 'skins' ? equipadaSkin : equipado) === animalMostrado.id && s.usarBtnActivo]} onPress={() => handleEquipar(animalMostrado.id)} activeOpacity={0.82}><Text style={s.botonFinalTexto}>{(mode === 'skins' ? equipadaSkin : equipado) === animalMostrado.id ? '✓ USANDO' : 'USAR'}</Text></TouchableOpacity>
-            <TouchableOpacity style={[s.subirBtn, !puedeMejorar && s.subirBtnBloqueado, mejoraPendiente === animalMostrado.id && s.subirBtnConfirmar]} onPress={() => manejarMejora(animalMostrado.id)} activeOpacity={puedeMejorar ? 0.82 : 1}><Text style={s.botonFinalTexto}>{mejoraPendiente === animalMostrado.id ? `CONFIRMAR -${costoMejora}` : `⬆ SUBIR NIVEL · ${costoMejora}`}</Text></TouchableOpacity>
+            <TouchableOpacity style={[s.subirBtn, (!puedeMejorar || mejoraEnCurso) && s.subirBtnBloqueado, mejoraPendiente === animalMostrado.id && s.subirBtnConfirmar]} onPress={() => manejarMejora(animalMostrado.id)} disabled={!puedeMejorar || Boolean(mejoraEnCurso)} activeOpacity={puedeMejorar ? 0.82 : 1}><Text style={s.botonFinalTexto}>{mejoraEnCurso === animalMostrado.id ? 'MEJORANDO…' : mejoraPendiente === animalMostrado.id ? `CONFIRMAR -${costoMejora}` : `⬆ SUBIR NIVEL · ${costoMejora}`}</Text></TouchableOpacity>
           </View>
         </View>
         </>}
@@ -415,7 +490,7 @@ const Animalitos = ({ navigation, mode }) => {
                     const requeridas = COPIAS_POR_NIVEL(estado.nivel);
                     return <View style={s.cartasProgreso}>
                       <View style={s.cartaUniversal}><Text style={s.cartaUniversalMarca}>✦</Text></View>
-                      <Text style={s.cartasProgresoTexto}>{estado.cartas >= requeridas ? '¡Listo!' : `Faltan ${requeridas - estado.cartas}`}</Text>
+                      <Text style={s.cartasProgresoTexto}>{estado.totalCartas >= requeridas ? '¡Listo!' : `Faltan ${requeridas - estado.totalCartas}`}</Text>
                     </View>;
                   })()}
                   {mode === 'skins'
@@ -429,11 +504,11 @@ const Animalitos = ({ navigation, mode }) => {
                     {mode !== 'skins' && (() => {
                       const estado = estadoAnimal(item.id);
                       const requeridas = COPIAS_POR_NIVEL(estado.nivel);
-                      const puedeMejorar = estado.cartas >= requeridas && dinero >= COSTO_MEJORA(estado.nivel);
+                      const puedeMejorar = estado.totalCartas >= requeridas && dinero >= COSTO_MEJORA(estado.nivel);
                       const confirmar = mejoraPendiente === item.id;
                       return <View style={s.mejoraWrap}>
-                        <TouchableOpacity style={[s.mejoraBtn, puedeMejorar && s.mejoraBtnLista, confirmar && s.mejoraBtnConfirmar]} onPress={() => manejarMejora(item.id)} activeOpacity={puedeMejorar ? 0.8 : 1}>
-                          <Text style={[s.mejoraTexto, !puedeMejorar && s.mejoraTextoBloqueado, puedeMejorar && s.mejoraTextoLista]}>{confirmar ? `-${COSTO_MEJORA(estado.nivel)} 🪙` : 'Mejorar'}</Text>
+                        <TouchableOpacity style={[s.mejoraBtn, puedeMejorar && s.mejoraBtnLista, confirmar && s.mejoraBtnConfirmar]} onPress={() => manejarMejora(item.id)} disabled={!puedeMejorar || Boolean(mejoraEnCurso)} activeOpacity={puedeMejorar ? 0.8 : 1}>
+                          <Text style={[s.mejoraTexto, (!puedeMejorar || mejoraEnCurso) && s.mejoraTextoBloqueado, puedeMejorar && s.mejoraTextoLista]}>{mejoraEnCurso === item.id ? '…' : confirmar ? `-${COSTO_MEJORA(estado.nivel)} 🪙` : 'Mejorar'}</Text>
                         </TouchableOpacity>
                       </View>;
                     })()}
@@ -477,13 +552,15 @@ const s = StyleSheet.create({
   paginaIzquierda: { width: '49%', height: '100%', paddingHorizontal: 13, paddingTop: 4, paddingBottom: 5, borderRightWidth: 2, borderRightColor: 'rgba(142,96,46,0.28)', backgroundColor: 'rgba(255,250,231,0.72)', borderTopLeftRadius: 17, borderBottomLeftRadius: 17 },
   paginaDerecha: { width: '51%', height: '100%', paddingLeft: 17, paddingRight: 10, paddingTop: 4, paddingBottom: 5, backgroundColor: 'rgba(255,247,220,0.58)', borderTopRightRadius: 17, borderBottomRightRadius: 17 },
   vestidor: { width: '100%', height: '100%', paddingHorizontal: 13, paddingTop: 4, paddingBottom: 7, borderRadius: 17, backgroundColor: 'rgba(255,249,228,0.74)' },
+  vestidorVacio: { flex: 1, alignItems: 'center', justifyContent: 'center' }, vestidorVacioIcono: { fontSize: 30, opacity: 0.6 }, vestidorVacioTexto: { marginTop: 7, color: '#866846', fontFamily: 'Delius', fontSize: 9, fontWeight: '800' }, vestidorVacioBoton: { marginTop: 12, paddingHorizontal: 18, paddingVertical: 8, borderRadius: 9, backgroundColor: '#b8863f', borderWidth: 1, borderColor: '#815b28' }, vestidorVacioBotonTexto: { color: '#fffbe8', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
   trajesScroll: { flex: 1, marginTop: 1 }, trajesLista: { alignItems: 'center', paddingHorizontal: 4, paddingVertical: 2, gap: 5 }, trajesColumna: { gap: 5, justifyContent: 'center' },
   trajeTarjeta: { width: 92, height: 96, borderRadius: 10, alignItems: 'center', paddingTop: 13, borderWidth: 2, shadowColor: '#64472b', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 4, overflow: 'hidden' },
-  trajeTarjetaActiva: { borderWidth: 4, shadowOpacity: 0.4, elevation: 9, transform: [{ translateY: -3 }] }, trajeTarjetaBloqueada: { opacity: 0.65, backgroundColor: '#e4ddd0', borderColor: '#aaa093' },
+  trajeTarjetaActiva: { borderWidth: 4, shadowOpacity: 0.4, elevation: 9, transform: [{ translateY: -3 }] }, trajeTarjetaBloqueada: { backgroundColor: '#e4ddd0', borderColor: '#aaa093' },
   trajeRareza: { position: 'absolute', top: 6, right: 7, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, zIndex: 5 }, trajeRarezaTexto: { color: '#fff', fontFamily: 'Delius', fontSize: 6, fontWeight: '900' }, trajeTemporada: { position: 'absolute', top: 8, left: 9, color: '#866846', fontFamily: 'Delius', fontSize: 6, fontWeight: '900' },
-  trajeImagen: { width: 84, height: 70, marginTop: -1 }, trajeImagenBloqueada: { opacity: 0.3 }, trajeNombre: { position: 'absolute', bottom: 3, color: '#5d4128', fontFamily: 'Delius', fontSize: 6.7, fontWeight: '900', textAlign: 'center' },
-  trajeCandado: { position: 'absolute', top: 31, alignItems: 'center', justifyContent: 'center' }, trajeCandadoIcono: { fontSize: 17 }, trajeCandadoTexto: { marginTop: 1, color: '#655c53', fontFamily: 'Delius', fontSize: 6.2, fontWeight: '900' },
+  trajeImagen: { width: 84, height: 70, marginTop: -1 }, trajeImagenBloqueada: { opacity: 0.3 }, trajeImagenBloqueadaBlur: { position: 'absolute', top: 23, width: 84, height: 55, opacity: 0.48, tintColor: '#554d45' }, trajeNombre: { position: 'absolute', bottom: 3, color: '#5d4128', fontFamily: 'Delius', fontSize: 7.3, fontWeight: '900', textAlign: 'center' },
+  trajeBloqueadoVelo: { position: 'absolute', top: 23, left: 4, right: 4, height: 55, borderRadius: 8, backgroundColor: 'rgba(65,56,48,0.35)', zIndex: 3 }, trajeCandadoInsignia: { position: 'absolute', top: 17, alignSelf: 'center', zIndex: 7, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f7e7c8', borderWidth: 2, borderColor: '#9d7446', shadowColor: '#3d2d20', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.38, shadowRadius: 3, elevation: 7 }, trajeCandadoIcono: { fontSize: 12, lineHeight: 15, textAlign: 'center' }, trajeSecretoPlaca: { position: 'absolute', left: 5, right: 5, bottom: 4, zIndex: 8, alignItems: 'center', paddingVertical: 3, borderRadius: 7, backgroundColor: 'rgba(82,61,43,0.92)', borderWidth: 1, borderColor: '#d7b887' }, trajeCandadoTitulo: { color: '#fff7e6', fontFamily: 'Delius', fontSize: 6.6, lineHeight: 8, fontWeight: '900', textAlign: 'center' }, trajeCandadoTexto: { marginTop: 1, color: '#e9d4b2', fontFamily: 'Delius', fontSize: 5.3, lineHeight: 7, fontWeight: '800', textAlign: 'center' },
   trajeEquipado: { position: 'absolute', bottom: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 7, backgroundColor: '#6f9e55' }, trajeEquipadoTexto: { color: '#fff', fontFamily: 'Delius', fontSize: 6, fontWeight: '900' }, trajeFuturoIcono: { marginTop: 28, color: '#b2a18a', fontSize: 25 }, trajeFuturoTexto: { marginTop: 5, color: '#9b8c78', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
+  animalBloqueadoImagen: { position: 'absolute', width: '92%', height: '92%', opacity: 0.48, tintColor: '#4b433b' }, animalBloqueadoVelo: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(68,58,48,0.44)' }, animalBloqueadoInfo: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }, animalBloqueadoTitulo: { marginTop: 2, color: '#fff8e8', fontFamily: 'Delius', fontSize: 8.3, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.72)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }, animalBloqueadoPista: { marginTop: 3, color: '#f2dfbf', fontFamily: 'Delius', fontSize: 6.3, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.58)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   vestidorAcciones: { height: 49, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 25, marginTop: 3, paddingHorizontal: 18, borderRadius: 12, backgroundColor: 'rgba(239,215,171,0.62)', borderWidth: 1, borderColor: 'rgba(184,139,80,0.32)' }, vestidorSeleccionado: { color: '#5c4026', fontFamily: 'Delius', fontSize: 10, fontWeight: '900' }, vestidorRarezaTexto: { fontFamily: 'Delius', fontSize: 7, fontWeight: '900', marginTop: 1 }, vestidorUsarBtn: { minWidth: 126, alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 9, backgroundColor: '#b8863f', borderWidth: 1, borderColor: '#815b28', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.24, shadowRadius: 3, elevation: 4 }, vestidorUsarTexto: { color: '#fffbe8', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
   tituloMadera: { alignSelf: 'center', minWidth: 205, paddingHorizontal: 18, paddingVertical: 6, borderRadius: 7, backgroundColor: '#e9b85f', borderWidth: 2, borderColor: '#a96b25', shadowColor: '#684218', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 4 },
   tituloMaderaTexto: { color: '#6a3d18', fontFamily: 'Delius', fontSize: 12, fontWeight: '900', textAlign: 'center', letterSpacing: 0.4 },

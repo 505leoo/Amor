@@ -17,6 +17,7 @@ const COMERCIO_W = Math.min(SCREEN_W * 0.58, SCREEN_H * 0.45);
 const COMERCIO_IMAGE = require('./assets/inicio/comercio.png');
 const CARTAS_POR_ANIMAL = [
   { id: 'halcon', nombre: 'Halcón', temporada: 't1', rareza: 'Común', color: '#a9722f', fondo: '#f3e5c8', borde: '#c69a5b', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
+  { id: 'ardilla', nombre: 'Ardilla', temporada: 't1', rareza: 'Épico', color: '#9a68c4', fondo: '#eee0f7', borde: '#b58ad5', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png') },
 ];
 
 const tiempoRestanteCredito = (vencimientoMs, ahora) => {
@@ -62,6 +63,7 @@ export default function Comerciante({ navigation, temporada }) {
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState(null);
   const [confirmarSaldar, setConfirmarSaldar] = useState(false);
   const [animalitosDesbloqueados, setAnimalitosDesbloqueados] = useState([]);
+  const [animalitosEstado, setAnimalitosEstado] = useState({});
   const [productosFadeAnim] = useState(new Animated.Value(0));
   const tutorialActivo = usuario?.tutorial === 'no';
 
@@ -91,10 +93,13 @@ export default function Comerciante({ navigation, temporada }) {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
     return onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+      const estados = {};
       setAnimalitosDesbloqueados(snapshot.docs.filter(animal => {
         const data = animal.data() || {};
-        return data.desbloqueado || Number(data.nivel) > 0 || Number(data.cartas ?? data.copias) > 0;
+        estados[animal.id] = data;
+        return data.desbloqueado === true || (data.desbloqueado !== false && (Number(data.nivel) > 0 || Number(data.cartas ?? data.copias) > 0));
       }).map(animal => animal.id));
+      setAnimalitosEstado(estados);
     }, () => setAnimalitosDesbloqueados([]));
   }, []);
 
@@ -171,17 +176,21 @@ export default function Comerciante({ navigation, temporada }) {
   const creditoActivo = Boolean(credito?.activo && deuda > 0);
   const vencido = creditoActivo && ahora > credito.vencimientoMs;
   const tiempoDeuda = creditoActivo ? tiempoRestanteCredito(credito.vencimientoMs, ahora) : '';
-  const tieneSkin = skinId => Boolean(usuario?.skinsDesbloqueadas?.halcon?.[skinId] || usuario?.skin === skinId);
+  const tieneSkin = (animalId, skinId) => Boolean(
+    animalitosEstado?.[animalId]?.skinsDesbloqueadas?.[skinId]
+    || usuario?.skinsDesbloqueadas?.[animalId]?.[skinId]
+    || (usuario?.animalito === animalId && usuario?.skin === skinId)
+  );
   const tieneIcono = icono => Boolean(usuario?.iconosDesbloqueados?.[icono.id] || usuario?.iconoUrl === icono.url);
   const tutorialPaso = Number(usuario?.tutorialPaso || 0);
   const tutorialCompraActiva = tutorialActivo && tutorialPaso === 3;
   const rotacion = cicloComercio(ahora);
   const comprasRotacion = usuario?.comercio?.compras?.[rotacion.key] || {};
   const productoComprado = producto => Boolean(comprasRotacion[producto.id]);
-  const animalEstaDesbloqueado = animal => animalitosDesbloqueados.includes(animal.id)
+  const animalEstaDesbloqueado = animal => Boolean(animal) && (animalitosDesbloqueados.includes(animal.id)
     || Boolean(usuario?.animalitos?.[animal.id]?.desbloqueado)
-    || usuario?.animalito === animal.id
-    || (animal.id === 'halcon' && Boolean(usuario?.halconDesbloqueado));
+    || (animal.id !== 'ardilla' && usuario?.animalito === animal.id)
+    || (animal.id === 'halcon' && Boolean(usuario?.halconDesbloqueado)));
   const cartasAnimalesDisponibles = CARTAS_POR_ANIMAL
     .filter(animal => animalEstaDesbloqueado(animal) && contenidoDisponible(animal.temporada || 't1', temporadaActual))
     .map(animal => ({
@@ -200,15 +209,19 @@ export default function Comerciante({ navigation, temporada }) {
       bordeAnimal: animal.borde,
       rareza: animal.rareza,
     }));
+  const skinsDisponibles = [
+    ...(!tieneSkin('halcon', 'halcont2') || comprasRotacion.halcont2 ? [{ id: 'halcont2', temporada: 't1', tipo: 'skin', animalId: 'halcon', animalNombre: 'Halcón', skinId: 'halcont2', icon: 'checkroom', nombre: 'Traje celeste', cantidadLabel: 'x1', precio: 2000, imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png') }] : []),
+    ...(animalEstaDesbloqueado(CARTAS_POR_ANIMAL.find(animal => animal.id === 'ardilla')) && (!tieneSkin('ardilla', 'ardillat2') || comprasRotacion.ardillat2) ? [{ id: 'ardillat2', temporada: 't1', tipo: 'skin', animalId: 'ardilla', animalNombre: 'Ardilla', skinId: 'ardillat2', icon: 'checkroom', nombre: 'Guardiana del Bosque', cantidadLabel: 'x1', precio: 2400, imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat2.png') }] : []),
+  ];
   const productosDisponibles = [
     { id: 'cartas_3', temporada: 't1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 3, cantidadLabel: 'x3', precio: 360 },
     ...cartasAnimalesDisponibles,
     { id: 'diamantes_25', temporada: 't1', tipo: 'diamantes', icon: 'diamond', nombre: 'Diamantes', cantidad: 25, cantidadLabel: 'x25', precio: 900 },
+    ...skinsDisponibles,
     ...catalogoIconos.length > 0 ? (catalogoIconos
       .filter(icono => contenidoDisponible(icono.temporada || 't1', temporadaActual) && (!tieneIcono(icono) || comprasRotacion[`icono_${icono.id}`]))
       .sort((a, b) => numeroTemporada(b.temporada || 't1') - numeroTemporada(a.temporada || 't1'))
       .slice(0, 3).map(icono => ({ id: `icono_${icono.id}`, temporada: icono.temporada || 't1', tipo: 'icono', icon: 'face', nombre: 'Icono especial', cantidadLabel: 'x1', precio: 1200, icono, imagen: { uri: icono.url } }))) : [],
-    ...(!tieneSkin('halcont2') || comprasRotacion.halcont2 ? [{ id: 'halcont2', temporada: 't1', tipo: 'skin', skinId: 'halcont2', icon: 'checkroom', nombre: 'Skin Halcón T2', cantidadLabel: 'x1', precio: 2000, imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png') }] : []),
   ];
   const productosRelleno = [
     { id: 'cartas_8', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 8, cantidadLabel: 'x8', precio: 860 },
@@ -236,7 +249,7 @@ export default function Comerciante({ navigation, temporada }) {
         const comercioRef = doc(db, 'usuarios', uid, 'comercio', 'estado');
         const comercioSnap = await transaction.get(comercioRef);
         const comercio = comercioSnap.exists() ? (comercioSnap.data() || {}) : (data.comercio || {});
-        const animalRef = producto.tipo === 'cartasAnimal' ? doc(db, 'usuarios', uid, 'animalitos', producto.animalId) : null;
+        const animalRef = (producto.tipo === 'cartasAnimal' || producto.tipo === 'skin') ? doc(db, 'usuarios', uid, 'animalitos', producto.animalId) : null;
         const animalSnap = animalRef ? await transaction.get(animalRef) : null;
         const precio = vencido ? Math.ceil(producto.precio * 1.2) : producto.precio;
         const compras = comercio.compras || {};
@@ -254,8 +267,14 @@ export default function Comerciante({ navigation, temporada }) {
         }
         if (producto.tipo === 'diamantes') update.diamantes = (data.diamantes ?? data.diamante ?? 0) + producto.cantidad;
         if (producto.tipo === 'skin') {
-          if (data.skinsDesbloqueadas?.halcon?.[producto.skinId] || data.skin === producto.skinId) throw new Error('poseido');
-          update.skinsDesbloqueadas = { ...(data.skinsDesbloqueadas || {}), halcon: { ...(data.skinsDesbloqueadas?.halcon || {}), [producto.skinId]: true } };
+          const animalData = animalSnap?.exists() ? (animalSnap.data() || {}) : (data.animalitos?.[producto.animalId] || {});
+          const desbloqueado = Boolean(animalData.desbloqueado || Number(animalData.nivel) > 0 || data.animalito === producto.animalId || (producto.animalId === 'halcon' && data.halconDesbloqueado));
+          if (!desbloqueado) throw new Error('animal_bloqueado');
+          if (animalData.skinsDesbloqueadas?.[producto.skinId] || (data.animalito === producto.animalId && data.skin === producto.skinId)) throw new Error('poseido');
+          transaction.set(animalRef, { skinsDesbloqueadas: { ...(animalData.skinsDesbloqueadas || {}), [producto.skinId]: true } }, { merge: true });
+          // Mantiene el mapa antiguo para clientes previos sin convertirlo en
+          // la fuente principal del vestidor nuevo.
+          update.skinsDesbloqueadas = { ...(data.skinsDesbloqueadas || {}), [producto.animalId]: { ...(data.skinsDesbloqueadas?.[producto.animalId] || {}), [producto.skinId]: true } };
         }
         if (producto.tipo === 'icono') {
           if (data.iconosDesbloqueados?.[producto.icono.id] || data.iconoUrl === producto.icono.url) throw new Error('poseido');
@@ -380,7 +399,7 @@ export default function Comerciante({ navigation, temporada }) {
             const descripcion = productoSeleccionado.tipo === 'cartasAnimalitos' ? 'Un paquete de cartas universales que completa las cartas que le falten a cualquier animalito.'
               : productoSeleccionado.tipo === 'cartasAnimal' ? `Cartas propias de ${productoSeleccionado.nombre.replace('Cartas de ', '')}. Se usan primero al mejorar este animalito.`
               : productoSeleccionado.tipo === 'diamantes' ? 'Un paquete de diamantes para conseguir recompensas y objetos especiales.'
-              : productoSeleccionado.tipo === 'skin' ? 'Un traje exclusivo que podrás equipar a tu Halcón desde el selector de skins.'
+              : productoSeleccionado.tipo === 'skin' ? `Un traje exclusivo que podrás equipar a ${productoSeleccionado.animalNombre || 'tu animalito'} desde el vestidor.`
               : 'Un icono nuevo para personalizar tu perfil y hacerlo único.';
             return <View style={styles.compraTarjeta}>
               <View style={styles.compraVista}>

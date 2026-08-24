@@ -3,6 +3,7 @@ import { Animated, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth } from '../firebaseConfig';
+import { gameColors, gamePanel } from '../theme/gameTheme';
 
 // PRIORIDAD: toda tarjeta nueva debe incluir titulo, descripcion/texto y fecha (YYYY-MM-DD).
 // La fecha alimenta el badge relativo y la fecha completa de la vista detallada.
@@ -69,9 +70,10 @@ export const AvisosModal = ({ visible, onClose }) => {
 
   const cerrarAvisos = async () => {
     const uid = auth.currentUser?.uid;
-    if (uid) await AsyncStorage.setItem(`indicador_avisos_${uid}`, AVISOS_REVISION);
+    const revision = uid ? await AsyncStorage.getItem(`indicador_avisos_${uid}`).catch(() => '') : '';
+    const quedanPendientes = hayAvisosPendientes(revision);
     setAvisoPendiente(null);
-    onClose();
+    onClose(quedanPendientes);
   };
 
   const marcarAvisoLeido = async (grupo, tarjeta) => {
@@ -184,30 +186,30 @@ export const AvisosModal = ({ visible, onClose }) => {
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(16, 9, 5, 0.82)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
+  overlay: { flex: 1, backgroundColor: gameColors.overlay, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
   dismiss: { ...StyleSheet.absoluteFillObject },
   position: { width: '100%', alignItems: 'center', transform: [{ translateY: -10 }] },
-  card: { height: 295, overflow: 'hidden', borderRadius: 18, backgroundColor: '#edf5fb', borderWidth: 3, borderColor: '#8eb3ce', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.55, shadowRadius: 14, elevation: 28 },
-  header: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, backgroundColor: '#d6e9f6', borderBottomWidth: 1, borderBottomColor: '#92b8d2' },
-  headerIcon: { width: 33, height: 33, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5d89ab', borderWidth: 1, borderColor: '#edf8ff' },
+  card: { height: 295, overflow: 'hidden', ...gamePanel },
+  header: { height: 52, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, backgroundColor: gameColors.parchmentDeep, borderBottomWidth: 1, borderBottomColor: gameColors.gold },
+  headerIcon: { width: 33, height: 33, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: gameColors.wood, borderWidth: 1, borderColor: gameColors.parchmentLight },
   headerInfo: { flex: 1, marginLeft: 10 },
-  title: { color: '#405e76', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', letterSpacing: 0.7 },
-  subtitle: { color: '#65869f', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '800', letterSpacing: 0.6, marginTop: 1 },
-  back: { width: 27, height: 27, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(250,253,255,0.76)', borderWidth: 1, borderColor: '#a9c9dd', marginRight: 5 },
-  close: { width: 27, height: 27, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(250,253,255,0.76)', borderWidth: 1, borderColor: '#a9c9dd' },
+  title: { color: gameColors.text, fontFamily: 'Delius', fontSize: 13, fontWeight: '900', letterSpacing: 0.7 },
+  subtitle: { color: gameColors.textSoft, fontFamily: 'Delius', fontSize: 6.5, fontWeight: '800', letterSpacing: 0.6, marginTop: 1 },
+  back: { width: 27, height: 27, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: gameColors.parchmentLight, borderWidth: 1, borderColor: gameColors.gold, marginRight: 5 },
+  close: { width: 27, height: 27, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: gameColors.parchmentLight, borderWidth: 1, borderColor: gameColors.gold },
   sectionList: { flex: 1, justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 10, gap: 5 },
-  sectionRow: { width: '100%', height: 36, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, borderRadius: 9, backgroundColor: '#dfeef8', borderWidth: 1, borderColor: '#bdd8e9' },
+  sectionRow: { width: '100%', height: 36, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, borderRadius: 9, backgroundColor: gameColors.parchmentLight, borderWidth: 1, borderColor: gameColors.parchmentDeep },
   sectionRowIcon: { width: 23, alignItems: 'center', justifyContent: 'center' },
   sectionRowInfo: { flex: 1, marginLeft: 5 },
-  sectionRowText: { color: '#476982', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
-  sectionRowDescription: { color: '#6b8aa1', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '700', marginTop: 1 },
+  sectionRowText: { color: gameColors.text, fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  sectionRowDescription: { color: gameColors.textSoft, fontFamily: 'Delius', fontSize: 5.5, fontWeight: '700', marginTop: 1 },
   routeDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#d94b4b', marginRight: 7 },
   detail: { height: 215, paddingHorizontal: 24, paddingTop: 18, paddingBottom: 6, alignItems: 'stretch' },
-  detailTitle: { color: '#405e76', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', textAlign: 'center' },
-  detailRule: { height: 1, backgroundColor: '#bdd8e9', marginVertical: 9 },
+  detailTitle: { color: gameColors.text, fontFamily: 'Delius', fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  detailRule: { height: 1, backgroundColor: gameColors.parchmentDeep, marginVertical: 9 },
   detailScroll: { flex: 1 },
   detailScrollContent: { paddingBottom: 16 },
-  detailText: { color: '#5f7d94', fontFamily: 'Delius', fontSize: 8, lineHeight: 12, fontWeight: '700', textAlign: 'left' },
+  detailText: { color: gameColors.text, fontFamily: 'Delius', fontSize: 8, lineHeight: 12, fontWeight: '700', textAlign: 'left' },
   detailDate: { color: '#6b8aa1', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '800', marginTop: 18, textAlign: 'left' },
   detailSignature: { color: '#476982', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', marginTop: 9, textAlign: 'right' },
   carousel: { height: 215, alignItems: 'center', justifyContent: 'center', position: 'relative' },

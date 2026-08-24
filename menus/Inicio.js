@@ -24,9 +24,38 @@ import { actualizarPasoTutorial } from '../components/Tutorial';
 import MisionesDiarias from '../components/MisionesDiarias';
 import { InventarioModal } from './Inventario';
 import { useMisiones } from '../MisionesContext';
+import * as Haptics from 'expo-haptics';
 
 const OverlayContext = createContext(false);
 export const useOverlayActive = () => useContext(OverlayContext);
+
+const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
+  const pulso = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.loop(Animated.sequence([
+      Animated.timing(pulso, { toValue: 1, duration: 900, useNativeDriver: true }),
+      Animated.timing(pulso, { toValue: 0, duration: 900, useNativeDriver: true }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [pulso]);
+  const activar = () => {
+    Haptics.selectionAsync().catch(() => {});
+    onPress?.();
+  };
+  return (
+    <TouchableOpacity style={styles.siguientePaso} onPress={activar} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel={`${titulo}. ${detalle}`}>
+      <View style={[styles.siguienteLuz, styles.siguienteLuzUno]} /><View style={[styles.siguienteLuz, styles.siguienteLuzDos]} />
+      <Animated.View style={[styles.siguientePasoIcono, { transform: [{ scale: pulso.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] }]}><MaterialIcons name={icono} size={15} color="#fff8dc" /></Animated.View>
+      <View style={styles.siguientePasoInfo}>
+        <Text style={styles.siguientePasoEtiqueta}>SIGUIENTE JUGADA</Text>
+        <Text style={styles.siguientePasoTitulo} numberOfLines={1}>{titulo}</Text>
+        <Text style={styles.siguientePasoDetalle} numberOfLines={1}>{detalle}</Text>
+      </View>
+      <Animated.View style={[styles.siguientePasoInsignia, { opacity: pulso.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] }) }]}><Text style={styles.siguientePasoInsigniaTexto}>{insignia}</Text></Animated.View>
+    </TouchableOpacity>
+  );
+});
 
 const REGALO_SEGUNDOS = 2 * 60;
 // ─── Recompensas diarias ────────────────────────────────────────────────────
@@ -397,15 +426,14 @@ const MoneyMenu = memo(() => {
 
   return (
     <View style={styles.resourcesRow}>
-      <View style={styles.moneyMenu}>
+      <View style={styles.moneyMenu} accessibilityLabel={`${money} monedas`}>
         <Text style={styles.moneyCoin}>🪙</Text>
         <Text style={styles.moneyValue}>{loaded ? money.toLocaleString('es-AR') : ''}</Text>
-        <TouchableOpacity style={styles.moneyAdd} activeOpacity={0.7}><Text style={styles.moneyAddText}>+</Text></TouchableOpacity>
       </View>
-      <View style={styles.diamondMenu}>
-        <MaterialIcons name="diamond" size={15} color="#32b9d5" style={styles.moneyCoin} />
+      <View style={styles.resourceDivider} />
+      <View style={styles.diamondMenu} accessibilityLabel={`${diamonds} diamantes`}>
+        <MaterialIcons name="diamond" size={11} color="#32b9d5" style={styles.moneyCoin} />
         <Text style={styles.moneyValue}>{loaded ? diamonds.toLocaleString('es-AR') : ''}</Text>
-        <TouchableOpacity style={styles.moneyAdd} activeOpacity={0.7}><Text style={styles.moneyAddText}>+</Text></TouchableOpacity>
       </View>
     </View>
   );
@@ -508,6 +536,9 @@ const QuickMenu = memo(() => {
 
   return <>
     <View style={styles.quickMenu}>
+      <View pointerEvents="none" style={styles.quickMenuAla} />
+      <View pointerEvents="none" style={styles.quickMenuPunta} />
+      <View pointerEvents="none" style={styles.quickMenuBrillo} />
       {items.map((item, index) => <React.Fragment key={item.id}>
         <TouchableOpacity style={styles.quickItem} onPress={() => item.id === 'buzon' ? abrirBuzon() : item.id === 'actualizaciones' ? abrirAvisos() : item.id === 'recompensas' ? abrirRecompensas() : item.id === 'configuracion' ? setConfiguracionAbierta(true) : setSeccionActiva(item.id)} activeOpacity={0.7} accessibilityLabel={item.label}>
           <MaterialIcons name={item.icon} size={17} color="#76552f" />
@@ -515,7 +546,7 @@ const QuickMenu = memo(() => {
           {item.id === 'actualizaciones' && avisosNuevos && <View style={styles.unreadDot} />}
           {item.id === 'recompensas' && recompensasNuevas && <View style={styles.unreadDot} />}
         </TouchableOpacity>
-        {index < items.length - 1 && <Text style={styles.quickDivider}>|</Text>}
+        {index < items.length - 1 && <View style={styles.quickDivider} />}
       </React.Fragment>)}
     </View>
     <Modal visible={!!seccion} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setSeccionActiva(null)}>
@@ -542,7 +573,7 @@ const QuickMenu = memo(() => {
       </View>
     </Modal>
     <BuzonModal visible={buzonAbierto} onClose={() => setBuzonAbierto(false)} />
-    <AvisosModal visible={avisosAbiertos} onClose={() => { setAvisosAbiertos(false); setAvisosNuevos(false); }} />
+    <AvisosModal visible={avisosAbiertos} onClose={(quedanPendientes) => { setAvisosAbiertos(false); setAvisosNuevos(Boolean(quedanPendientes)); }} />
     <RecompensasModal visible={recompensasAbiertas} onClose={() => setRecompensasAbiertas(false)} />
     <ConfiguracionModal visible={configuracionAbierta} onClose={() => setConfiguracionAbierta(false)} />
   </>;
@@ -550,12 +581,18 @@ const QuickMenu = memo(() => {
 
 const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, tutorialActivo = false }) => {
   const [nivelJuego, setNivelJuego] = useState(1);
+  const [partidasCompletadas, setPartidasCompletadas] = useState(0);
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
     return onSnapshot(doc(db, 'usuarios', uid, 'juegos', 'conexiones'), snap => {
-      setNivelJuego(Number.isFinite(snap.data()?.nivel) ? snap.data().nivel : 1);
-    }, () => setNivelJuego(1));
+      const datosJuego = snap.data() || {};
+      setNivelJuego(Number.isFinite(datosJuego.nivel) ? datosJuego.nivel : 1);
+      setPartidasCompletadas(Math.max(0, Number(datosJuego.partidasCompletadas) || 0));
+    }, () => {
+      setNivelJuego(1);
+      setPartidasCompletadas(0);
+    });
   }, []);
   const [overlayActive, setOverlayActive] = useState(false);
   const [comercianteNuevo, setComercianteNuevo] = useState(false);
@@ -565,6 +602,11 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   const [reporteSemanalAbierto, setReporteSemanalAbierto] = useState(Boolean(openReporteSemanal));
   const puedeAbrirColeccion = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
   const { pendientesReclamar } = useMisiones();
+  const { data: estadoInicio } = useUserDocument(
+    data => ({ animalito: data?.animalito || null, halconDesbloqueado: Boolean(data?.halconDesbloqueado), pareja: data?.pareja || null }),
+    undefined,
+    (a, b) => a?.animalito === b?.animalito && a?.halconDesbloqueado === b?.halconDesbloqueado && a?.pareja === b?.pareja,
+  );
 
   useEffect(() => {
     if (pendientesReclamar > 0) setMisionesNuevas(true);
@@ -613,7 +655,55 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     setOverlayActive(false);
   };
 
+  const abrirComerciante = () => {
+    const uid = auth.currentUser?.uid;
+    if (uid) {
+      const ahora = new Date();
+      const inicio = new Date(ahora);
+      inicio.setMinutes(0, 0, 0);
+      inicio.setHours(ahora.getHours() < 12 ? 0 : 12);
+      const rotacionKey = `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, '0')}-${String(inicio.getDate()).padStart(2, '0')}-${inicio.getHours()}`;
+      AsyncStorage.setItem(`indicador_comerciante_${uid}`, rotacionKey).catch(() => {});
+    }
+    setComercianteNuevo(false);
+    navigation?.navigate('comerciante');
+  };
+
   if (tutorialActivo) return <TutorialInicio navigation={navigation} />;
+
+  const mensajesJuego = [
+    { titulo: 'Continúa jugando', detalle: `Conexiones · Nivel ${nivelJuego}` },
+    { titulo: 'Supera tu mejor marca', detalle: `El nivel ${nivelJuego} todavía puede brillar más.` },
+    { titulo: 'Consigue más estrellas', detalle: 'Una partida perfecta mejora tus premios.' },
+    { titulo: 'Avanza un nivel más', detalle: `Tu próximo desafío es el nivel ${nivelJuego}.` },
+  ];
+  const faltanParaBonus = 5 - (partidasCompletadas % 5);
+  const mensajeJuego = faltanParaBonus === 1
+    ? { titulo: 'Una partida para premio extra', detalle: 'La quinta victoria entrega una sorpresa.' }
+    : mensajesJuego[partidasCompletadas % mensajesJuego.length];
+
+  const siguientePaso = !estadoInicio?.animalito
+    ? {
+        icono: 'pets', titulo: 'Elige un Animalito', detalle: 'Tu compañero te está esperando.', insignia: 'ELEGIR',
+        accion: () => navigation?.navigate('animalitos'),
+      }
+    : misionesNuevas || pendientesReclamar > 0
+      ? {
+          icono: pendientesReclamar > 0 ? 'redeem' : 'assignment',
+          titulo: pendientesReclamar > 0 ? `${pendientesReclamar} recompensa${pendientesReclamar === 1 ? '' : 's'} lista${pendientesReclamar === 1 ? '' : 's'}` : 'Revisa tus misiones',
+          detalle: pendientesReclamar > 0 ? 'Tu premio ya está preparado.' : 'Completa objetivos y gana premios.',
+          insignia: pendientesReclamar > 0 ? 'RECLAMAR' : 'VER',
+          accion: () => setMisionesAbiertas(true),
+        }
+      : comercianteNuevo
+        ? {
+            icono: 'storefront', titulo: 'El Comerciante renovó', detalle: 'Hay nuevos objetos esperando.', insignia: 'NUEVO',
+            accion: abrirComerciante,
+          }
+        : {
+            icono: 'extension', titulo: mensajeJuego.titulo, detalle: mensajeJuego.detalle, insignia: faltanParaBonus === 1 ? '1 MÁS' : '+5 EXP',
+            accion: () => navigation?.navigate('conexiones'),
+          };
 
   return (
     <OverlayContext.Provider value={overlayActive}>
@@ -633,6 +723,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
         <StatusBar hidden={true} />
         <MoneyMenu />
         <QuickMenu />
+        <SiguientePaso icono={siguientePaso.icono} titulo={siguientePaso.titulo} detalle={siguientePaso.detalle} insignia={siguientePaso.insignia} onPress={siguientePaso.accion} />
         <Player containerStyle={styles.player} disabled={overlayActive} />
         <TouchableOpacity style={styles.changeButton} onPress={() => navigation?.navigate('animalitos')} activeOpacity={0.78}>
           <MaterialIcons name="swap-horiz" size={20} color="#c58b2d" />
@@ -677,20 +768,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
           </TouchableOpacity>
         </View>
         <View style={styles.comercianteQuickWrap}>
-          <TouchableOpacity style={styles.comercianteQuickBtn} activeOpacity={0.75} onPress={() => {
-            const uid = auth.currentUser?.uid;
-            if (uid) {
-              const ahoraMs = Date.now();
-              const ahora = new Date(ahoraMs);
-              const inicio = new Date(ahora);
-              inicio.setMinutes(0, 0, 0);
-              inicio.setHours(ahora.getHours() < 12 ? 0 : 12);
-              const rotacionKey = `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, '0')}-${String(inicio.getDate()).padStart(2, '0')}-${inicio.getHours()}`;
-              AsyncStorage.setItem(`indicador_comerciante_${uid}`, rotacionKey).catch(() => {});
-            }
-            setComercianteNuevo(false);
-            navigation?.navigate('comerciante');
-          }}>
+          <TouchableOpacity style={styles.comercianteQuickBtn} activeOpacity={0.75} onPress={abrirComerciante}>
             <View style={styles.comercianteQuickIcon}><MaterialIcons name="storefront" size={19} color="#f4fff0" /></View>
             <View style={styles.comercianteInfo}><Text style={styles.comercianteTitle}>COMERCIANTE</Text><Text style={styles.comercianteSub}>Intercambia objetos</Text></View>
             <MaterialIcons name="chevron-right" size={21} color="#466a50" />
@@ -720,14 +798,27 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
-  moneyMenu: { position: 'absolute', top: 7, left: '50%', transform: [{ translateX: -116 }], width: 110, height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderRadius: 15, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.32, shadowRadius: 8, elevation: 12, zIndex: 220 },
-  resourcesRow: { position: 'absolute', top: 0, left: 0, right: 0, height: 38, zIndex: 220, elevation: 12 },
-  diamondMenu: { position: 'absolute', top: 7, left: '50%', transform: [{ translateX: 6 }], width: 110, height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderRadius: 15, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.32, shadowRadius: 8, elevation: 12, zIndex: 220 },
-  moneyCoin: { fontSize: 13, marginRight: 2 },
-  moneyValue: { minWidth: 46, color: '#63482d', fontFamily: 'Delius', fontSize: 12, fontWeight: '900', textAlign: 'center', letterSpacing: 0.2 },
-  moneyAdd: { width: 17, height: 20, marginLeft: 0, alignItems: 'center', justifyContent: 'center', transform: [{ translateY: -1 }] },
-  moneyAddText: { color: '#76552f', fontSize: 17, lineHeight: 19, fontWeight: '800' },
-  quickMenu: { position: 'absolute', top: 7, right: 45, height: 32, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, borderRadius: 10, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 7, elevation: 12, zIndex: 220 },
+  moneyMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  resourcesRow: { position: 'absolute', top: -1, left: '50%', width: 150, height: 24, transform: [{ translateX: -75 }], flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: '#f1e1bd', borderWidth: 1, borderTopWidth: 0, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, zIndex: 220, elevation: 12 },
+  diamondMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  resourceDivider: { width: 1, height: 14, backgroundColor: 'rgba(164,116,53,0.35)' },
+  moneyCoin: { fontSize: 10, marginRight: 3 },
+  moneyValue: { minWidth: 31, color: '#63482d', fontFamily: 'Delius', fontSize: 9, fontWeight: '900', textAlign: 'center', letterSpacing: 0.1 },
+  quickMenu: { position: 'absolute', top: 0, right: 0, height: 37, flexDirection: 'row', alignItems: 'center', paddingLeft: 10, paddingRight: 8, paddingTop: 3, borderBottomLeftRadius: 15, backgroundColor: '#f1e1bd', borderWidth: 1.5, borderTopWidth: 0, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.34, shadowRadius: 6, elevation: 12, zIndex: 220 },
+  quickMenuAla: { position: 'absolute', left: -8, bottom: 4, width: 18, height: 18, borderRadius: 3, backgroundColor: '#f1e1bd', borderLeftWidth: 1.5, borderBottomWidth: 1.5, borderColor: '#d0ad70', transform: [{ rotate: '45deg' }], zIndex: -1 },
+  quickMenuPunta: { position: 'absolute', right: 32, bottom: -5, width: 11, height: 11, borderRadius: 2, backgroundColor: '#e9b85f', borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#9b6a35', transform: [{ rotate: '45deg' }], zIndex: -1 },
+  quickMenuBrillo: { position: 'absolute', top: 1, left: 5, right: 8, height: 1, backgroundColor: 'rgba(255,255,255,0.62)', borderRadius: 1 },
+  siguientePaso: { position: 'absolute', top: '18%', right: 14, width: 210, height: 34, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, borderRadius: 10, backgroundColor: '#fff4d6', borderWidth: 1.5, borderColor: '#c89a55', shadowColor: '#4b2f18', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 18, zIndex: 215 },
+  siguientePasoIcono: { width: 25, height: 25, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#9b6a35', borderWidth: 1, borderColor: '#e9b85f' },
+  siguientePasoInfo: { flex: 1, marginLeft: 6 },
+  siguientePasoEtiqueta: { color: '#b07a43', fontFamily: 'Delius', fontSize: 4.2, lineHeight: 5, fontWeight: '900', letterSpacing: 0.7 },
+  siguientePasoTitulo: { color: '#704b2d', fontFamily: 'Delius', fontSize: 7.2, lineHeight: 9, fontWeight: '900' },
+  siguientePasoDetalle: { color: '#9a7244', fontFamily: 'Delius', fontSize: 5, lineHeight: 6, fontWeight: '700' },
+  siguientePasoInsignia: { minWidth: 42, height: 20, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5, borderRadius: 7, backgroundColor: '#6f9e55', borderWidth: 1, borderColor: '#437b39' },
+  siguientePasoInsigniaTexto: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 5.2, fontWeight: '900', letterSpacing: 0.35 },
+  siguienteLuz: { position: 'absolute', width: 4, height: 4, borderRadius: 2, backgroundColor: '#f6d477', borderWidth: 0.5, borderColor: '#9b6a35' },
+  siguienteLuzUno: { left: -2, top: 6 },
+  siguienteLuzDos: { right: -2, bottom: 6 },
   accesosInicioWrap: { position: 'absolute', left: '50%', bottom: 6, transform: [{ translateX: -72 }], flexDirection: 'row', alignItems: 'center', zIndex: 220, elevation: 12 },
   accesoInicioBtn: { width: 50, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 0, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 12 },
   accesoInicioFirst: { borderTopLeftRadius: 8, borderBottomLeftRadius: 8 },
@@ -746,10 +837,10 @@ const styles = StyleSheet.create({
   temporadasQuickIconDisabled: { backgroundColor: '#c8c1b5', borderColor: '#b2aa9d' },
   temporadasQuickTextDisabled: { color: '#999287' },
   accesoInicioText: { color: '#76552f', fontFamily: 'Delius', fontSize: 6.2, fontWeight: '900', marginTop: 1 },
-  quickItem: { width: 27, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 7 },
+  quickItem: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   unreadDot: { position: 'absolute', top: 2, right: 2, width: 7, height: 7, borderRadius: 4, backgroundColor: '#d94b4b', borderWidth: 1, borderColor: '#f1e1bd' },
   unreadDotVerde: { position: 'absolute', top: 3, right: 3, width: 7, height: 7, borderRadius: 4, backgroundColor: '#4c9e61', borderWidth: 1, borderColor: '#dce9dc' },
-  quickDivider: { color: '#b88a48', fontSize: 17, lineHeight: 20, fontWeight: '400', opacity: 0.8 },
+  quickDivider: { width: 1, height: 17, backgroundColor: 'rgba(164,116,53,0.34)' },
   quickModalOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 11 },
   quickModalBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20, 12, 8, 0.80)' },
   quickModalDismiss: { ...StyleSheet.absoluteFillObject },

@@ -8,7 +8,7 @@ const stores = new Map();
 
 const getStore = uid => {
   if (!stores.has(uid)) {
-    stores.set(uid, { data: null, loaded: false, listeners: new Set(), unsubscribe: null });
+    stores.set(uid, { data: null, loaded: false, error: null, listeners: new Set(), unsubscribe: null });
   }
   return stores.get(uid);
 };
@@ -25,9 +25,11 @@ const startStore = uid => {
     store.snapshotKey = nextKey;
     store.data = nextData;
     store.loaded = true;
+    store.error = null;
     store.listeners.forEach(listener => listener(store));
-  }, () => {
+  }, error => {
     store.loaded = true;
+    store.error = error;
     store.listeners.forEach(listener => listener(store));
   });
   return store;
@@ -63,5 +65,5 @@ export const useUserDocument = (selector = data => data, uidOverride, isEqual = 
     return () => currentStore.listeners.delete(listener);
   }, [uid]);
 
-  return { data: state.selected, loaded: Boolean(state.store?.loaded), uid };
+  return { data: state.selected, loaded: Boolean(state.store?.loaded), error: state.store?.error || null, uid };
 };

@@ -5,11 +5,19 @@ import { useUserDocument } from './hooks/useUserDocument';
 
 const ANIMALITOS = {
   halcon: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
+  ardilla: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png'),
 };
-const SKINS = {
-  default: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
-  halcont1: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png'),
-  halcont2: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png'),
+const SKINS_POR_ANIMAL = {
+  halcon: {
+    default: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
+    halcont1: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png'),
+    halcont2: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png'),
+  },
+  ardilla: {
+    default: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png'),
+    ardillat1: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png'),
+    ardillat2: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat2.png'),
+  },
 };
 
 export const SinAnimal = memo(() => (
@@ -20,7 +28,8 @@ export const SinAnimal = memo(() => (
 ));
 
 const PlayerContent = ({ animalito, skin, loading, imageStyle, placeholder, onLoadStart, onLoad, onError }) => {
-  const source = animalito ? (SKINS[skin || 'default'] ?? SKINS.default ?? ANIMALITOS[animalito] ?? null) : null;
+  const skinsDisponibles = SKINS_POR_ANIMAL[animalito] || {};
+  const source = animalito ? (skinsDisponibles[skin || 'default'] ?? skinsDisponibles.default ?? ANIMALITOS[animalito] ?? null) : null;
 
   return (
     <>

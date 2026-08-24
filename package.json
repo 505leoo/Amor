@@ -1,6 +1,6 @@
 {
   "name": "amor",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "index.js",
   "scripts": {
     "start": "node ./scripts/start.js",
@@ -10,6 +10,7 @@
     "actualizar": "node ./scripts/actualizar.js --use-app-runtime",
     "actualizar:hotfix": "node ./scripts/actualizar.js --use-app-runtime",
     "actualizar:sync": "node ./scripts/actualizar.js --sync-runtime",
+    "validate": "node ./scripts/validate.js",
     "prebuild": "npm run actualizar"
   },
   "dependencies": {

@@ -38,6 +38,7 @@ const PATH_COLORS = {
   gold:   '#ffe3a5',
 };
 const MAX_LEVELS = 99;
+const EXP_POR_VICTORIA = 5;
 const LEVEL_CACHE = new Map();
 const LEVEL_GENERATION_VERSION = 'rutas-profundas-v3';
 const CONNECTION_TIME_BONUS = 6;
@@ -493,6 +494,7 @@ export default memo(function ConexionesGame({ navigation }) {
   const [progress, setProgress] = useState({ unlocked: 1, completed: {} });
   const [progressLoaded, setProgressLoaded] = useState(false);
   const [reward, setReward] = useState(0);
+  const [expReward, setExpReward] = useState(0);
   const [bonusReward, setBonusReward] = useState(null);
   const [rewardPending, setRewardPending] = useState(false);
   const [lastStars, setLastStars] = useState(0);
@@ -674,11 +676,12 @@ export default memo(function ConexionesGame({ navigation }) {
       };
       transaction.set(doc(db, 'usuarios', uid, 'juegos', 'conexiones'), onlineStats, { merge: true });
       transaction.set(userRef, {
+        exp: (Number(data.exp) || 0) + EXP_POR_VICTORIA,
         ...(earned > 0 ? { dinero: (Number(data.dinero) || 0) + earned } : {}),
         ...(bonusTipo === 'chicles' ? { chicles: (Number(data.chicles) || 0) + 1 } : {}),
         ...(bonusTipo === 'globos' ? { globos: (Number(data.globos) || 0) + 1 } : {}),
       }, { merge: true });
-      return { earned, bonus: bonusTipo ? { tipo: bonusTipo, cantidad: 1 } : null };
+      return { earned, exp: EXP_POR_VICTORIA, bonus: bonusTipo ? { tipo: bonusTipo, cantidad: 1 } : null };
     });
   }, [uid]);
 
@@ -712,6 +715,7 @@ export default memo(function ConexionesGame({ navigation }) {
       setHintUsed(false);
       setHintCells([]);
        setReward(0);
+       setExpReward(0);
        setBonusReward(null);
        setRewardPending(false);
       setLastStars(0);
@@ -937,6 +941,7 @@ export default memo(function ConexionesGame({ navigation }) {
     setProgress(nextProgress);
     setLastStars(stars);
     setReward(0);
+    setExpReward(0);
     setBonusReward(null);
     setRewardPending(Boolean(uid));
     setStatus('won');
@@ -946,6 +951,7 @@ export default memo(function ConexionesGame({ navigation }) {
       .then(result => {
         if (roundIdRef.current === completedRound) {
           setReward(result?.earned || 0);
+          setExpReward(result?.exp || 0);
           setBonusReward(result?.bonus || null);
         }
       })
@@ -1103,6 +1109,7 @@ export default memo(function ConexionesGame({ navigation }) {
             {bonusReward && <View style={styles.bonusRewardPill}>
               <Text style={styles.bonusRewardText}>Cada 5 partidas: +1 {bonusReward.tipo === 'chicles' ? 'chicle' : 'globo'}</Text>
             </View>}
+            {expReward > 0 && <View style={styles.expRewardPill}><Text style={styles.expRewardText}>+{expReward} EXP por completar la partida</Text></View>}
             <TouchableOpacity style={styles.playButton} onPress={() => {
               const next = Math.min(MAX_LEVELS, level.id + 1);
               startLevel(next <= latestUnlocked ? next : level.id);
@@ -1243,6 +1250,8 @@ const styles = StyleSheet.create({
   rewardPill: { marginTop: 8, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: 'rgba(255,240,185,0.20)', borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,240,185,0.58)' },
   rewardText: { color: '#fff0b9', fontFamily: 'Delius', fontSize: 10, fontWeight: '700' },
   bonusRewardPill: { marginTop: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9, backgroundColor: 'rgba(255,143,168,0.22)', borderWidth: 1, borderColor: 'rgba(255,190,205,0.62)' },
+  expRewardPill: { marginTop: 5, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9, backgroundColor: 'rgba(112,224,189,0.20)', borderWidth: 1, borderColor: 'rgba(184,234,217,0.68)' },
+  expRewardText: { color: '#e9fff7', fontSize: 8, fontFamily: 'Delius', fontWeight: '900' },
   bonusRewardText: { color: '#ffe5ee', fontFamily: 'Delius', fontSize: 8.5, fontWeight: '800' },
   replayText: { marginTop: 8, color: '#d8ffff', fontFamily: 'Delius', textAlign: 'center', fontSize: 8.5, lineHeight: 12 },
   textAction: { marginTop: 7, padding: 2 },

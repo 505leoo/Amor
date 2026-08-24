@@ -5,7 +5,7 @@ import Svg, { Defs, LinearGradient, Stop, Circle, Ellipse } from 'react-native-s
 import { useMisiones } from '../MisionesContext';
 import { actualizarPasoTutorial } from './Tutorial';
 import RecompensaOverlay from './RecompensaOverlay';
-import { doc, updateDoc, increment, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, increment, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db, auth } from '../firebaseConfig';
 
 const GOLD  = '#f5c842';
@@ -86,6 +86,7 @@ function useMisionesNs(lista, nsKey) {
   const [progreso, setProgreso]     = useState({});
   const [reclamados, setReclamados] = useState([]);
   const [reward, setReward]         = useState(null);
+  const reclamandoRef = useRef(new Set());
 
   const getDiaKey = () => {
     const h = new Date();
@@ -111,28 +112,42 @@ function useMisionesNs(lista, nsKey) {
   };
 
   const reclamar = async (mision) => {
-    if (!uid || reclamados.includes(mision.id)) return;
-    const nuevos = [...reclamados, mision.id];
-    setReclamados(nuevos);
+    if (!uid || reclamados.includes(mision.id) || reclamandoRef.current.has(mision.id)) return;
+    reclamandoRef.current.add(mision.id);
     const diaKey = getDiaKey();
     const refDia = doc(db, 'misiones_diarias', diaKey);
-    await setDoc(refDia, { [`${uid}_${nsKey}`]: { progreso, reclamados: nuevos } }, { merge: true }).catch(() => {});
-
     const userRef = doc(db, 'usuarios', uid);
-    if (mision._globos) {
-      await updateDoc(userRef, { globos: increment(mision._globos) }).catch(() => {});
-      setReward({ titulo: mision.titulo, globos: mision._globos });
-    } else if (mision._chicles) {
-      await updateDoc(userRef, { chicles: increment(mision._chicles) }).catch(() => {});
-      setReward({ titulo: mision.titulo, chicles: mision._chicles });
-    } else {
-      const mon = mision._monedas ?? 8;
-      await updateDoc(userRef, { dinero: increment(mon) }).catch(() => {});
-      setReward({
-        titulo: mision.titulo,
-        monedas: mon,
-        ...(mision.id === 'login_f1' ? { tutorialPaso: 3 } : {}),
+    try {
+      await runTransaction(db, async transaction => {
+        const diaSnap = await transaction.get(refDia);
+        const key = `${uid}_${nsKey}`;
+        const namespace = diaSnap.exists() ? (diaSnap.data()?.[key] || {}) : {};
+        const progresoServidor = namespace.progreso || {};
+        const reclamadosServidor = namespace.reclamados || [];
+        if (reclamadosServidor.includes(mision.id)) throw new Error('ya_reclamada');
+        const actual = mision._subCampos
+          ? mision._subCampos.filter(campo => progresoServidor[campo]).length
+          : mision._distintas
+            ? Object.keys(progresoServidor[mision.campo] || {}).length
+            : Number(progresoServidor[mision.campo] || 0);
+        if (actual < mision.meta) throw new Error('incompleta');
+        const nuevos = [...reclamadosServidor, mision.id];
+        transaction.set(refDia, { [key]: { ...namespace, progreso: progresoServidor, reclamados: nuevos } }, { merge: true });
+        if (mision._globos) transaction.set(userRef, { globos: increment(mision._globos) }, { merge: true });
+        else if (mision._chicles) transaction.set(userRef, { chicles: increment(mision._chicles) }, { merge: true });
+        else transaction.set(userRef, { dinero: increment(mision._monedas ?? 8) }, { merge: true });
       });
+      setReclamados(previous => previous.includes(mision.id) ? previous : [...previous, mision.id]);
+      if (mision._globos) setReward({ titulo: mision.titulo, globos: mision._globos });
+      else if (mision._chicles) setReward({ titulo: mision.titulo, chicles: mision._chicles });
+      else {
+        const mon = mision._monedas ?? 8;
+        setReward({ titulo: mision.titulo, monedas: mon, ...(mision.id === 'login_f1' ? { tutorialPaso: 3 } : {}) });
+      }
+    } catch (error) {
+      if (error?.message !== 'ya_reclamada') global.showToast?.({ type: 'error', text1: 'No pudimos entregar la recompensa', text2: 'Inténtalo nuevamente.' });
+    } finally {
+      reclamandoRef.current.delete(mision.id);
     }
   };
 
