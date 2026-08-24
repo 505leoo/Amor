@@ -25,21 +25,59 @@ const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 const fechaActividad = valor => {
   if (!valor) return null;
   if (typeof valor?.toDate === 'function') return valor.toDate();
-  const fecha = new Date(valor);
+  const valorNormalizado = typeof valor === 'number' && valor > 0 && valor < 1e12 ? valor * 1000 : valor;
+  const fecha = new Date(valorNormalizado);
   return Number.isNaN(fecha.getTime()) ? null : fecha;
 };
 
-const estaConectado = (usuario, ahora) => {
+const diferenciaActividad = (usuario, ahora) => {
   const fecha = fechaActividad(usuario?.ultimaActividad);
-  return Boolean(fecha && ahora - fecha.getTime() >= 0 && ahora - fecha.getTime() <= ONLINE_WINDOW_MS);
+  if (!fecha) return null;
+  const diferencia = ahora - fecha.getTime();
+  // Se tolera un pequeño desfase entre relojes, pero no fechas futuras absurdas.
+  if (diferencia < -(5 * 60 * 1000)) return null;
+  return Math.max(0, diferencia);
 };
 
-const IndicadorOnline = ({ visible }) => (
+const estaConectado = (usuario, ahora) => {
+  const diferencia = diferenciaActividad(usuario, ahora);
+  return diferencia !== null && diferencia <= ONLINE_WINDOW_MS;
+};
+
+const textoUltimaActividad = (usuario, ahora) => {
+  const diferencia = diferenciaActividad(usuario, ahora);
+  if (diferencia === null) return 'Sin actividad reciente';
+  if (diferencia <= ONLINE_WINDOW_MS) return 'Conectado/a';
+
+  const minutos = Math.floor(diferencia / (60 * 1000));
+  if (minutos < 2) return 'Hace un momento';
+  if (minutos < 60) return `Hace ${minutos} minutos`;
+
+  const horas = Math.floor(minutos / 60);
+  if (horas === 1) return 'Hace 1 hora';
+  if (horas < 24) return `Hace ${horas} horas`;
+
+  const dias = Math.floor(horas / 24);
+  if (dias === 1) return 'Hace 1 día';
+  if (dias < 30) return `Hace ${dias} días`;
+
+  const meses = Math.floor(dias / 30);
+  if (meses === 1) return 'Hace 1 mes';
+  if (dias < 365) return `Hace ${meses} meses`;
+
+  const anios = Math.floor(dias / 365);
+  return anios === 1 ? 'Hace 1 año' : `Hace ${anios} años`;
+};
+
+const IndicadorOnline = ({ usuario, ahora }) => {
+  const visible = estaConectado(usuario, ahora);
+  return (
   <View style={[styles.onlineIndicator, !visible && styles.onlineIndicatorOffline]}>
     <View style={[styles.onlineDot, !visible && styles.onlineDotOffline]} />
-    <Text style={[styles.onlineText, !visible && styles.onlineTextOffline]}>{visible ? 'Conectado/a' : 'Desconectado/a'}</Text>
+    <Text style={[styles.onlineText, !visible && styles.onlineTextOffline]}>{textoUltimaActividad(usuario, ahora)}</Text>
   </View>
-);
+  );
+};
 
 const Avatar = memo(({ uri, size = 48 }) => {
   return (
@@ -202,7 +240,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
             <Avatar uri={parejaData.iconoUrl || parejaData.photoURL} size={32} />
             <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
               <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{parejaData.nombre}</Text>
-              <IndicadorOnline visible={estaConectado(parejaData, ahora)} />
+              <IndicadorOnline usuario={parejaData} ahora={ahora} />
             </TouchableOpacity>
           </View>
           <Text style={styles.partnerLoveTitle}>Nivel de pareja</Text>
@@ -234,7 +272,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
                 <Avatar uri={item.iconoUrl || item.photoURL} size={32} />
                 <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: item.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
                   <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{item.nombre}</Text>
-                  <IndicadorOnline visible={estaConectado(item, ahora)} />
+                  <IndicadorOnline usuario={item} ahora={ahora} />
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.addBtn, styles.addBtnHidden, enviados[item.id] && styles.addBtnSent]} onPress={() => !enviados[item.id] && enviarInvitacion(item)} disabled={!!enviados[item.id]}>
                   <Text style={styles.addBtnText}>+</Text>
