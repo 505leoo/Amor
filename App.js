@@ -84,8 +84,6 @@ export default function App() {
   const globalClickEffectRef = useRef(null);
   const updateCheckInFlightRef = useRef(false);
   const lastUpdateCheckRef = useRef(0);
-  const skippedUpdateRef = useRef(null);
-  const availableUpdateIdentityRef = useRef(null);
   const updateStatusRef = useRef('checking');
 
   useEffect(() => {
@@ -110,7 +108,7 @@ export default function App() {
         new Promise((_, reject) => setTimeout(() => reject(new Error('update-check-timeout')), 12000)),
       ]);
       if (!isAvailable) {
-        if (!['available', 'downloading', 'declined'].includes(updateStatusRef.current)) {
+        if (!['available', 'downloading'].includes(updateStatusRef.current)) {
           setEstadoActualizacion('unavailable');
         }
         return;
@@ -120,14 +118,12 @@ export default function App() {
         || manifest?.extra?.updateVersion
         || manifest?.metadata?.updateVersion
         || null;
-      const updateIdentity = manifest?.id || manifest?.updateId || version || manifest?.createdAt || 'available-update';
-      availableUpdateIdentityRef.current = updateIdentity;
       setVersionActualizacion(version);
-      setEstadoActualizacion(skippedUpdateRef.current === updateIdentity ? 'declined' : 'available');
-      updateStatusRef.current = skippedUpdateRef.current === updateIdentity ? 'declined' : 'available';
+      setEstadoActualizacion('available');
+      updateStatusRef.current = 'available';
     } catch (error) {
       console.warn('[Updates] No se pudo comprobar la actualización', error?.message || error);
-      if (!['available', 'downloading', 'declined'].includes(updateStatusRef.current)) {
+      if (!['available', 'downloading'].includes(updateStatusRef.current)) {
         setEstadoActualizacion('error');
       }
     } finally {
@@ -141,7 +137,7 @@ export default function App() {
     const retryPropagacion = setTimeout(() => comprobarActualizacion({ force: true }), 30000);
     const interval = setInterval(() => {
       if (AppState.currentState === 'active') comprobarActualizacion();
-    }, 3 * 60 * 1000);
+    }, 60 * 1000);
     const subscription = AppState.addEventListener('change', estado => {
       if (estado === 'active') comprobarActualizacion({ force: true });
     });
@@ -157,12 +153,6 @@ export default function App() {
     if (isConnected) comprobarActualizacion({ force: true });
   }, [comprobarActualizacion, isConnected]);
 
-  const posponerActualizacion = useCallback(() => {
-    skippedUpdateRef.current = availableUpdateIdentityRef.current || versionActualizacion || 'available-update';
-    updateStatusRef.current = 'declined';
-    setEstadoActualizacion('declined');
-  }, [versionActualizacion]);
-
   const instalarActualizacion = useCallback(async () => {
     if (estadoActualizacion === 'downloading') return;
     setEstadoActualizacion('downloading');
@@ -171,8 +161,9 @@ export default function App() {
       await Updates.reloadAsync();
     } catch (error) {
       console.warn('[Updates] No se pudo instalar la actualización', error?.message || error);
-      setEstadoActualizacion('error');
-      global.showToast?.({ type: 'error', text: 'No pudimos actualizar. Puedes volver a intentarlo más tarde.' });
+      updateStatusRef.current = 'available';
+      setEstadoActualizacion('available');
+      global.showToast?.({ type: 'error', text: 'No pudimos actualizar todavía. Revisa tu conexión e inténtalo nuevamente.' });
     }
   }, [estadoActualizacion]);
 
@@ -428,7 +419,6 @@ export default function App() {
               status={estadoActualizacion}
               version={versionActualizacion}
               onAccept={instalarActualizacion}
-              onDecline={posponerActualizacion}
             />
           )}
 
@@ -437,7 +427,6 @@ export default function App() {
                 updateStatus={estadoActualizacion}
                 updateVersion={versionActualizacion}
                 onAcceptUpdate={instalarActualizacion}
-                onDeclineUpdate={posponerActualizacion}
                 onComplete={() => {
                 if (!userRef.current) {
                   currentScreenRef.current = 'login';

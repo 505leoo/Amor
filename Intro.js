@@ -7,7 +7,7 @@ import { Image } from 'expo-image';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
-const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, temporada = 't1', updateStatus = 'unavailable', updateVersion = null, onAcceptUpdate, onDeclineUpdate }) => {
+const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, temporada = 't1', updateStatus = 'unavailable', updateVersion = null, onAcceptUpdate }) => {
   const temporadaInicial = temporada;
   const fondoTemporada = temporadaInicial;
   const fondoLocal = fondoTemporada === 't2'
@@ -34,7 +34,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
 
   useEffect(() => {
     updateStatusRef.current = updateStatus;
-    if (sequenceFinishedRef.current && ['unavailable', 'declined', 'error'].includes(updateStatus) && !completedRef.current) {
+    if (sequenceFinishedRef.current && ['unavailable', 'error'].includes(updateStatus) && !completedRef.current) {
       completedRef.current = true;
       onComplete();
     }
@@ -151,7 +151,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
       setLoadingStatus('Preparando interfaz...');
       await new Promise(resolve => setTimeout(resolve, 300));
       sequenceFinishedRef.current = true;
-      if (!completedRef.current && ['unavailable', 'declined', 'error'].includes(updateStatusRef.current)) {
+      if (!completedRef.current && ['unavailable', 'error'].includes(updateStatusRef.current)) {
         completedRef.current = true;
         onComplete();
       }
@@ -159,7 +159,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
 
     startSequence();
     const fallbackTimer = setTimeout(() => {
-      if (!completedRef.current && ['unavailable', 'declined', 'error'].includes(updateStatusRef.current)) {
+      if (!completedRef.current && ['unavailable', 'error'].includes(updateStatusRef.current)) {
         completedRef.current = true;
         console.warn('[Intro] Salida de emergencia: finalizando intro');
         onComplete();
@@ -226,9 +226,6 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
               </View>
             ) : (
               <View style={styles.updateActions}>
-                <TouchableOpacity style={styles.updateLaterButton} onPress={onDeclineUpdate} activeOpacity={0.8}>
-                  <Text style={styles.updateLaterText}>Más tarde</Text>
-                </TouchableOpacity>
                 <TouchableOpacity style={styles.updateNowButton} onPress={onAcceptUpdate} activeOpacity={0.85}>
                   <Text style={styles.updateNowText}>Actualizar ahora</Text>
                 </TouchableOpacity>
@@ -358,8 +355,6 @@ const styles = StyleSheet.create({
   updateVersionText: { color: '#a25f56', fontSize: 8, fontWeight: '900', letterSpacing: 1.1 },
   updateDescription: { maxWidth: 350, color: '#8b685d', fontSize: 11, lineHeight: 17, fontWeight: '600', textAlign: 'center', marginTop: 9 },
   updateActions: { width: '100%', flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 18 },
-  updateLaterButton: { minWidth: 112, height: 39, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#f2dfc7', borderWidth: 1, borderColor: '#dbb994' },
-  updateLaterText: { color: '#8a6558', fontSize: 11, fontWeight: '900' },
   updateNowButton: { minWidth: 151, height: 39, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#dc7b71', borderWidth: 1, borderColor: '#bd625b', shadowColor: '#9c514b', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 4, elevation: 4 },
   updateNowText: { color: '#fff9e9', fontSize: 11, fontWeight: '900' },
   updateLoading: { height: 39, minWidth: 245, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 18, borderRadius: 13, backgroundColor: '#dc7b71' },

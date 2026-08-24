@@ -2,11 +2,11 @@ import React from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export default function UpdateModal({ status, version, onAccept, onDecline }) {
+export default function UpdateModal({ status, version, onAccept }) {
   const visible = status === 'available' || status === 'downloading';
 
   return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onDecline}>
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => {}}>
       <View style={styles.overlay}>
         <LinearGradient colors={['#fffaf0', '#fff0d4']} style={styles.card}>
           <View style={styles.glow} />
@@ -24,9 +24,6 @@ export default function UpdateModal({ status, version, onAccept, onDecline }) {
             </View>
           ) : (
             <View style={styles.actions}>
-              <TouchableOpacity style={styles.laterButton} onPress={onDecline} activeOpacity={0.8}>
-                <Text style={styles.laterText}>Más tarde</Text>
-              </TouchableOpacity>
               <TouchableOpacity style={styles.nowButton} onPress={onAccept} activeOpacity={0.85}>
                 <Text style={styles.nowText}>Actualizar ahora</Text>
               </TouchableOpacity>
@@ -50,9 +47,7 @@ const styles = StyleSheet.create({
   badgeText: { color: '#fffaf0', fontWeight: '900', fontSize: 12, letterSpacing: 0.5 },
   description: { color: '#79564c', fontSize: 14, lineHeight: 21, fontWeight: '600', textAlign: 'center', marginTop: 15 },
   actions: { flexDirection: 'row', width: '100%', gap: 10, marginTop: 22 },
-  laterButton: { flex: 0.8, minHeight: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4e5d4', borderWidth: 1, borderColor: '#ddc4ac' },
-  laterText: { color: '#8b675d', fontSize: 14, fontWeight: '800' },
-  nowButton: { flex: 1.35, minHeight: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d79635', elevation: 4, shadowColor: '#ad6d17', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
+  nowButton: { flex: 1, minHeight: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d79635', elevation: 4, shadowColor: '#ad6d17', shadowOpacity: 0.3, shadowRadius: 5, shadowOffset: { width: 0, height: 3 } },
   nowText: { color: '#fffaf0', fontSize: 14, fontWeight: '900' },
   loading: { minHeight: 50, marginTop: 22, paddingHorizontal: 18, borderRadius: 16, flexDirection: 'row', gap: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d79635' },
   loadingText: { color: '#fffaf0', fontSize: 14, fontWeight: '800' },
