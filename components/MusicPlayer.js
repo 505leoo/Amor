@@ -1,153 +1,41 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import { useMusicPlayer } from '../MusicContext';
 
-const MusicPlayer = ({ audioUrl, name, onClose }) => {
-  const [sound, setSound] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(0);
+const formatTime = seconds => {
+  const safe = Math.max(0, Number(seconds) || 0);
+  return `${Math.floor(safe / 60)}:${String(Math.floor(safe % 60)).padStart(2, '0')}`;
+};
 
-  useEffect(() => {
-    loadAudio();
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [audioUrl]);
+const MusicPlayer = ({ onClose }) => {
+  const { status, isPlaying, toggle, trackName } = useMusicPlayer();
+  const duration = Math.max(0, Number(status?.duration) || 0);
+  const position = Math.max(0, Number(status?.currentTime) || 0);
+  const progress = duration > 0 ? Math.min(1, position / duration) : 0;
 
-  const loadAudio = async () => {
-    try {
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: audioUrl },
-        { shouldPlay: false }
-      );
-      setSound(newSound);
-      
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded) {
-          setPosition(status.positionMillis || 0);
-          setDuration(status.durationMillis || 0);
-          setIsPlaying(status.isPlaying);
-        }
-      });
-    } catch (error) {
-      console.error('Error loading audio:', error);
-    }
-  };
-
-  const togglePlayback = async () => {
-    if (!sound) return;
-    
-    if (isPlaying) {
-      await sound.pauseAsync();
-    } else {
-      await sound.playAsync();
-    }
-  };
-
-  const formatTime = (millis) => {
-    const minutes = Math.floor(millis / 60000);
-    const seconds = Math.floor((millis % 60000) / 1000);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-  };
-
-  const getProgress = () => {
-    return duration > 0 ? position / duration : 0;
-  };
-
-  return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <MaterialIcons name="music-note" size={24} color="#8b5a83" />
-        <Text style={styles.title} numberOfLines={1}>{name}</Text>
-        <TouchableOpacity onPress={onClose}>
-          <MaterialIcons name="close" size={20} color="#666" />
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.controls}>
-        <TouchableOpacity style={styles.playButton} onPress={togglePlayback}>
-          <MaterialIcons 
-            name={isPlaying ? "pause" : "play-arrow"} 
-            size={24} 
-            color="#fff" 
-          />
-        </TouchableOpacity>
-        
-        <View style={styles.timeContainer}>
-          <Text style={styles.timeText}>{formatTime(position)}</Text>
-          <View style={styles.progressBar}>
-            <View style={[styles.progress, { width: `${getProgress() * 100}%` }]} />
-          </View>
-          <Text style={styles.timeText}>{formatTime(duration)}</Text>
-        </View>
-      </View>
+  return <View style={styles.container}>
+    <View style={styles.note}><MaterialIcons name="music-note" size={17} color="#fff8df" /></View>
+    <View style={styles.info}>
+      <Text style={styles.title}>{trackName}</Text>
+      <View style={styles.progressBar}><View style={[styles.progress, { width: `${progress * 100}%` }]} /></View>
+      <Text style={styles.time}>{formatTime(position)} · en bucle</Text>
     </View>
-  );
+    <TouchableOpacity style={styles.playButton} onPress={toggle} activeOpacity={0.78} accessibilityLabel={isPlaying ? 'Pausar música' : 'Reproducir música'}>
+      <MaterialIcons name={isPlaying ? 'pause' : 'play-arrow'} size={18} color="#fff8df" />
+    </TouchableOpacity>
+    {onClose && <TouchableOpacity style={styles.close} onPress={onClose} hitSlop={6}><MaterialIcons name="close" size={14} color="#76552f" /></TouchableOpacity>}
+  </View>;
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 12,
-    margin: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  title: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-  },
-  controls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  playButton: {
-    backgroundColor: '#8b5a83',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  timeContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  timeText: {
-    fontSize: 12,
-    color: '#666',
-    minWidth: 35,
-  },
-  progressBar: {
-    flex: 1,
-    height: 4,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 2,
-  },
-  progress: {
-    height: '100%',
-    backgroundColor: '#8b5a83',
-    borderRadius: 2,
-  },
+  container: { width: 210, height: 49, paddingHorizontal: 7, flexDirection: 'row', alignItems: 'center', borderRadius: 14, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 8 },
+  note: { width: 31, height: 31, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#a96f45', borderWidth: 1, borderColor: '#875333' },
+  info: { flex: 1, marginHorizontal: 7 }, title: { color: '#76552f', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  progressBar: { height: 3, marginTop: 4, borderRadius: 2, overflow: 'hidden', backgroundColor: 'rgba(118,85,47,0.18)' }, progress: { height: '100%', borderRadius: 2, backgroundColor: '#c58b49' },
+  time: { marginTop: 2, color: '#9b7952', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '700' },
+  playButton: { width: 29, height: 29, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#8b5f3d' },
+  close: { position: 'absolute', top: -7, right: -7, width: 19, height: 19, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff5dc', borderWidth: 1, borderColor: '#d0ad70' },
 });
 
 export default MusicPlayer;

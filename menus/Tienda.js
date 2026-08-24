@@ -7,7 +7,7 @@ import { collection, getDocs, doc, getDoc, updateDoc, arrayUnion } from 'firebas
 import { auth, db } from '../firebaseConfig';
 import TabButtons from '../components/TabButtons';
 import StickerUploader from '../components/StickerUploader';
-import { useAudioPlayer } from 'expo-audio';
+import { useMusicPlayer } from '../MusicContext';
 import { getSeasonTemplates } from '../Coleccion';
 
 const Tienda = ({ navigation }) => {
@@ -18,22 +18,8 @@ const Tienda = ({ navigation }) => {
   const [showUploader, setShowUploader] = useState(false);
   const [selectedTab, setSelectedTab] = useState('Personajes');
   const [playingMusic, setPlayingMusic] = useState(null);
-  const [currentAudioUrl, setCurrentAudioUrl] = useState(null);
-  const player = useAudioPlayer(currentAudioUrl);
+  const { play: playGlobalMusic, pause: pauseGlobalMusic } = useMusicPlayer();
   const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    return () => {
-      try {
-        if (playingMusic && player) {
-          player.pause();
-        }
-      } catch (error) {
-        // Ignore cleanup errors
-      }
-      setPlayingMusic(null);
-    };
-  }, []);
 
   const playMusic = async (item) => {
     if (isLoading) return;
@@ -41,12 +27,7 @@ const Tienda = ({ navigation }) => {
     try {
       setIsLoading(true);
       
-      if (playingMusic) {
-        player.pause();
-      }
-      
-      setCurrentAudioUrl(item.audioUrl);
-      player.play();
+      playGlobalMusic();
       setPlayingMusic(item);
     } catch (error) {
       console.error('Error playing music:', error);
@@ -57,9 +38,7 @@ const Tienda = ({ navigation }) => {
 
   const stopMusic = () => {
     try {
-      if (playingMusic && player) {
-        player.pause();
-      }
+      pauseGlobalMusic();
       setPlayingMusic(null);
       setIsLoading(false);
     } catch (error) {
@@ -390,7 +369,6 @@ const AnimatedCard = ({ item, index, ownedStickers, buySticker, getCardGradient,
         onExit={() => navigation?.navigate('main')}
         userMoney={userMoney}
         onAddSticker={() => setShowUploader(true)}
-        onStopMusic={stopMusic}
       />
       
       <View style={styles.backgroundContainer}>

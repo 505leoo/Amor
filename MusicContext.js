@@ -1,50 +1,92 @@
-import React from 'react';
-import { createContext, useContext, useState, useEffect } from 'react';
-import { useAudioPlayer } from 'expo-audio';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { AppState, View } from 'react-native';
+import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
-const MusicContext = createContext();
+const MusicContext = createContext(null);
+const UKELELE = require('./assets/sounds/ukelele.mp3');
+const CLICK = require('./assets/sounds/click.mp3');
+const ENTER = require('./assets/sounds/enter.mp3');
+const VOLUMEN_GLOBAL = 0.22;
 
 export const useMusicPlayer = () => {
   const context = useContext(MusicContext);
-  if (!context) {
-    throw new Error('useMusicPlayer must be used within a MusicProvider');
-  }
+  if (!context) throw new Error('useMusicPlayer must be used within a MusicProvider');
   return context;
 };
 
 export const MusicProvider = ({ children }) => {
-  const [currentMusicUrl, setCurrentMusicUrl] = useState(null);
-  const player = useAudioPlayer(currentMusicUrl);
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
+  const player = useAudioPlayer(UKELELE, { downloadFirst: true, updateInterval: 500 });
+  const clickPlayer = useAudioPlayer(CLICK, { downloadFirst: true, updateInterval: 1000 });
+  const enterPlayer = useAudioPlayer(ENTER, { downloadFirst: true, updateInterval: 1000 });
+  const status = useAudioPlayerStatus(player);
+  const enterStatus = useAudioPlayerStatus(enterPlayer);
+  const [habilitada, setHabilitada] = useState(true);
+  const appActiva = useRef(AppState.currentState === 'active');
+  const entradaReproducida = useRef(false);
+  const toqueInicial = useRef(null);
 
   useEffect(() => {
-    loadSeasonMusic();
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      interruptionMode: 'mixWithOthers',
+      allowsRecording: false,
+      shouldPlayInBackground: false,
+      shouldRouteThroughEarpiece: false,
+    }).catch(error => console.warn('[Music] No se pudo configurar el audio', error?.message || error));
   }, []);
 
   useEffect(() => {
-    if (currentMusicUrl && player) {
-      setIsPlayerReady(true);
-      const timer = setTimeout(() => {
-        try {
-          player.volume = 0.3;
-          player.play();
-        } catch (error) {
-          console.error('Error playing music:', error);
-        }
-      }, 1);
-      return () => clearTimeout(timer);
-    } else {
-      setIsPlayerReady(false);
-    }
-  }, [currentMusicUrl, player]);
+    player.loop = true;
+    player.volume = VOLUMEN_GLOBAL;
+    clickPlayer.volume = 0.42;
+    enterPlayer.volume = 0.5;
+  }, [clickPlayer, enterPlayer, player]);
 
-  const loadSeasonMusic = async () => {
-    setCurrentMusicUrl(null);
+  useEffect(() => {
+    if (!enterStatus.isLoaded || entradaReproducida.current) return;
+    entradaReproducida.current = true;
+    enterPlayer.seekTo(0).then(() => enterPlayer.play()).catch(() => {});
+  }, [enterPlayer, enterStatus.isLoaded]);
+
+  useEffect(() => {
+    if (!status.isLoaded) return;
+    if (habilitada && appActiva.current) {
+      if (!status.playing) player.play();
+    } else if (status.playing) player.pause();
+  }, [habilitada, player, status.isLoaded, status.playing]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', nextState => {
+      appActiva.current = nextState === 'active';
+      if (appActiva.current && habilitada) player.play();
+      else player.pause();
+    });
+    return () => subscription.remove();
+  }, [habilitada, player]);
+
+  const pausar = () => { setHabilitada(false); player.pause(); };
+  const reproducir = () => { setHabilitada(true); if (appActiva.current) player.play(); };
+  const alternar = () => habilitada ? pausar() : reproducir();
+  const reproducirClick = () => {
+    clickPlayer.seekTo(0).then(() => clickPlayer.play()).catch(() => {});
   };
 
-  return (
-    <MusicContext.Provider value={{ player, currentMusicUrl }}>
-      {children}
-    </MusicContext.Provider>
-  );
+  const comenzarToque = event => {
+    const touch = event.nativeEvent;
+    toqueInicial.current = { x: touch.pageX, y: touch.pageY, at: Date.now() };
+  };
+  const terminarToque = event => {
+    const inicio = toqueInicial.current;
+    toqueInicial.current = null;
+    if (!inicio) return;
+    const touch = event.nativeEvent;
+    const distancia = Math.hypot((touch.pageX || 0) - inicio.x, (touch.pageY || 0) - inicio.y);
+    if (distancia <= 10 && Date.now() - inicio.at <= 700) reproducirClick();
+  };
+
+  return <MusicContext.Provider value={{
+    player, status, isPlaying: Boolean(status.playing), enabled: habilitada,
+    currentMusicUrl: UKELELE, trackName: 'Ukelele',
+    pause: pausar, play: reproducir, toggle: alternar, playClick: reproducirClick,
+  }}><View style={{ flex: 1 }} onTouchStart={comenzarToque} onTouchEnd={terminarToque}>{children}</View></MusicContext.Provider>;
 };

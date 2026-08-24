@@ -87,11 +87,13 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
         onPress={() => { if (onStopMusic) onStopMusic(); onExit(); }}
         activeOpacity={0.75}
         style={[styles.touchable, styles.exitTouchable]}
+        accessibilityLabel="Salir"
+        hitSlop={7}
       >
-        <LinearGradient colors={['#f7e9c9', '#e5c58e']} style={styles.exitButton}>
-          <MaterialIcons name="arrow-back-ios-new" size={12} color="#76502d" />
-          <Text style={styles.exitText}>Salir</Text>
-        </LinearGradient>
+        <View style={styles.exitButton}>
+          <View pointerEvents="none" style={styles.exitHighlight} />
+          <View style={styles.exitInner}><MaterialIcons name="close" size={15} color="#76502d" /></View>
+        </View>
       </TouchableOpacity>
       <MoneyStrip userMoney={moneyFinal} diamantes={diamantesInternos} cartasUniversales={cartasInternas} />
 
@@ -123,30 +125,22 @@ const styles = StyleSheet.create({
   },
   exitButton: {
     height: 32,
-    minWidth: 82,
-    paddingHorizontal: 15,
-    flexDirection: 'row',
-    gap: 4,
+    width: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderBottomRightRadius: 13,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,248,226,0.96)',
     borderWidth: 1.25,
-    borderTopWidth: 0,
-    borderLeftWidth: 0,
-    borderColor: '#b98b52',
+    borderColor: '#c79d62',
     shadowColor: '#674523',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.24,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
     elevation: 14,
   },
-  exitTouchable: { position: 'absolute', top: 0, left: 0 },
-  exitText: {
-    color: '#76502d',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-  },
+  exitTouchable: { position: 'absolute', top: 21, left: 25 },
+  exitInner: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(238,215,174,0.42)', borderWidth: 1, borderColor: 'rgba(176,126,69,0.42)' },
+  exitHighlight: { position: 'absolute', top: 3, left: 8, width: 11, height: 4, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.76)', transform: [{ rotate: '-16deg' }] },
   rightButtons: {
     position: 'absolute',
     top: 0,
