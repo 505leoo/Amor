@@ -415,8 +415,11 @@ const MoneyMenu = memo(() => {
     undefined,
     (a, b) => a?.dinero === b?.dinero && a?.diamantes === b?.diamantes && a?.diamanteLegacy === b?.diamanteLegacy,
   );
-  const money = typeof userData?.dinero === 'number' ? userData.dinero : 0;
-  const diamonds = typeof userData?.diamantes === 'number' ? userData.diamantes : (typeof userData?.diamanteLegacy === 'number' ? userData.diamanteLegacy : 0);
+  const moneyParsed = Number(userData?.dinero);
+  const diamondsRaw = userData?.diamantes ?? userData?.diamanteLegacy;
+  const diamondsParsed = Number(diamondsRaw);
+  const money = Number.isFinite(moneyParsed) ? moneyParsed : 0;
+  const diamonds = Number.isFinite(diamondsParsed) ? diamondsParsed : 0;
 
   useEffect(() => {
     if (loaded && uid && typeof userData?.diamantes !== 'number') {

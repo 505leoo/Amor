@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { AppState, BackHandler, View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
+import { Animated, AppState, BackHandler, View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
 import { Asset } from 'expo-asset';
 import * as Updates from 'expo-updates';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebaseConfig';
-import { doc, getDoc, collection, getDocs, query, limit, updateDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, collection, getDocs, query, limit, updateDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as ImagePicker from 'expo-image-picker';
@@ -49,7 +49,6 @@ import { ReporteSemanal } from './components/ReporteSemanal';
 import { reporteId, semanaActual } from './components/ReporteSemanal';
 import { temporadaParaUsuario } from './hooks/useTemporadaActual';
 import AppErrorBoundary from './components/AppErrorBoundary';
-import { GameLoadingState } from './components/GameStates';
 
 const ROOT_SCREENS = new Set(['intro', 'login', 'main']);
 const KNOWN_SCREENS = new Set([
@@ -72,6 +71,8 @@ export default function App() {
   const [tutorialActivo, setTutorialActivo] = useState(false);
   const [estadoActualizacion, setEstadoActualizacion] = useState('checking');
   const [versionActualizacion, setVersionActualizacion] = useState(null);
+  const [bootVisible, setBootVisible] = useState(true);
+  const bootOpacity = useRef(new Animated.Value(1)).current;
   const toastRef = useRef(null);
   const userRef = useRef(null);
   const loadingRef = useRef(null);
@@ -267,8 +268,11 @@ export default function App() {
           }).catch(() => {});
         });
 
-        // Inicializar usuario una sola vez
-        getDoc(doc(db, 'usuarios', currentUser.uid)).then(snap => {
+        // La economía nunca debe inicializarse a partir de una lectura de caché.
+        // Si estamos sin conexión, esta lectura falla y no escribimos nada; así
+        // evitamos que un falso "documento inexistente" reinicie dinero o EXP.
+        const currentUserDocRef = doc(db, 'usuarios', currentUser.uid);
+        getDocFromServer(currentUserDocRef).then(snap => {
           if (snap.exists()) {
             const data = snap.data();
             setTutorialActivo(data.tutorial === 'no');
@@ -284,26 +288,29 @@ export default function App() {
               }).catch(() => {});
             }
             const updates = {};
-            if (data.dinero        === undefined) updates.dinero        = 0;
-            if (data.nivel         === undefined) updates.nivel         = 1;
-            if (data.exp           === undefined) updates.exp           = 0;
-            if (data.racha         === undefined) updates.racha         = 1;
+            // Abrir la aplicación jamás inicializa ni corrige la economía.
+            // Esos campos se crean al registrar la cuenta y luego solo cambian
+            // al entregar o gastar recompensas.
             // Marca la última sesión para que Pareja pueda mostrar un estado
             // online real, con expiración en lugar de un texto fijo.
             updates.ultimaActividad = new Date().toISOString();
             if (data.fechaUltimaRacha   === undefined) updates.fechaUltimaRacha   = new Date().toISOString();
             if (Object.keys(updates).length > 0)
-              updateDoc(doc(db, 'usuarios', currentUser.uid), updates).catch(() => {});
+              updateDoc(currentUserDocRef, updates).catch(() => {});
           } else {
-            setDoc(doc(db, 'usuarios', currentUser.uid), {
-              dinero: 0, nivel: 1, exp: 0, racha: 1,
+            // Una cuenta autenticada sin perfil puede recuperar sus datos básicos,
+            // pero no inventamos un saldo desde el arranque de la aplicación.
+            setDoc(currentUserDocRef, {
+              uid: currentUser.uid,
+              correo: currentUser.email || null,
+              displayName: currentUser.displayName || 'Usuario',
               ultimaActividad: new Date().toISOString(),
               fechaUltimaRacha: new Date().toISOString(),
-            }).catch(() => {});
+            }, { merge: true }).catch(() => {});
           }
-          
-          preloadImages();
-        }).catch(() => {});
+        }).catch(error => {
+          console.warn('[App] No se inicializó el perfil sin confirmación del servidor', error?.message || error);
+        }).finally(() => preloadImages());
       } else {
         userRef.current = null;
         navigationHistoryRef.current = [];
@@ -329,6 +336,17 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  useEffect(() => {
+    if (loading || !authChecked) return;
+    Animated.timing(bootOpacity, {
+      toValue: 0,
+      duration: 420,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setBootVisible(false);
+    });
+  }, [authChecked, bootOpacity, loading]);
+
   // Presencia liviana: no lee nada y solo escribe cada dos minutos mientras
   // la aplicación está realmente en primer plano.
   useEffect(() => {
@@ -351,7 +369,7 @@ export default function App() {
     };
   }, [authChecked]);
 
-  if (loading || !authChecked) return <View style={styles.boot}><GameLoadingState label="Preparando Amor…" /></View>;
+  if (loading || !authChecked) return <View style={styles.boot} />;
 
   return (
     <View style={styles.container}>
@@ -476,11 +494,13 @@ export default function App() {
         </MisionesProvider>
       </TrofeosProvider>
       </AppErrorBoundary>
+      {bootVisible && <Animated.View pointerEvents="none" style={[styles.bootOverlay, { opacity: bootOpacity }]} />}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  boot: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f2dcae' },
+  boot: { flex: 1, backgroundColor: '#8f9295' },
+  bootOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#8f9295', zIndex: 9999, elevation: 9999 },
 });

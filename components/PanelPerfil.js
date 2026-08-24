@@ -6,12 +6,16 @@ import { auth } from '../firebaseConfig';
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+const numeroSeguro = value => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 export default memo(function PanelPerfil({ navigation }) {
   const datosIniciales = getCachedUserData(auth.currentUser?.uid);
   const nombreInicial = datosIniciales?.datosCompletos?.nombre || datosIniciales?.nombre || auth.currentUser?.displayName || 'amigo';
   const avatarInicial = datosIniciales?.iconoUrl || datosIniciales?.photoURL || ICONO_DEFAULT;
-  const expInicial = typeof datosIniciales?.exp === 'number' ? datosIniciales.exp : 0;
+  const expInicial = numeroSeguro(datosIniciales?.exp);
   const { data: userData, loaded } = useUserDocument(
     data => ({
       nombre: data?.datosCompletos?.nombre || data?.nombre,
@@ -34,7 +38,7 @@ export default memo(function PanelPerfil({ navigation }) {
     const d = userData || {};
     setNombre(d.nombre || auth.currentUser?.displayName || 'amigo');
     setAvatarUri(d.avatarUri || ICONO_DEFAULT);
-    const currentExp = typeof d.exp === 'number' ? d.exp : 0;
+    const currentExp = numeroSeguro(d.exp);
     setExp(currentExp);
     setNivel(1 + Math.floor(currentExp / 100));
     setProfileLoaded(true);

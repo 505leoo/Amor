@@ -66,25 +66,17 @@ class NotificationSystem {
               lastTokenUpdate: new Date(),
             }, { merge: true })));
 
+          // El token es información auxiliar: nunca debe reemplazar el documento
+          // principal ni borrar dinero, EXP u otros datos del jugador.
           const userDocRef = doc(db, 'usuarios', user.uid);
-          const userDoc = await getDoc(userDocRef);
-
-          if (userDoc.exists()) {
-            await updateDoc(userDocRef, {
-              MyPushyToken: token,
-              pushyToken: token,
-              lastTokenUpdate: new Date()
-            });
-          } else {
-            await setDoc(userDocRef, {
-              uid: user.uid,
-              MyPushyToken: token,
-              pushyToken: token,
-              lastTokenUpdate: new Date(),
-              displayName: user.displayName || 'Usuario',
-              email: user.email
-            });
-          }
+          await setDoc(userDocRef, {
+            uid: user.uid,
+            MyPushyToken: token,
+            pushyToken: token,
+            lastTokenUpdate: new Date(),
+            displayName: user.displayName || 'Usuario',
+            email: user.email
+          }, { merge: true });
         } catch (firebaseError) {
           console.error('Error guardando token de Pushy en Firestore:', firebaseError);
         }
