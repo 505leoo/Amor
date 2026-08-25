@@ -414,14 +414,6 @@ export default function App() {
         <MusicProvider onVisualClick={(x, y) => globalClickEffectRef.current?.show(x, y)}>
           <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
 
-          {currentScreen !== 'intro' && (
-            <UpdateModal
-              status={estadoActualizacion}
-              version={versionActualizacion}
-              onAccept={instalarActualizacion}
-            />
-          )}
-
           {currentScreen === 'intro' && (
               <Intro
                 updateStatus={estadoActualizacion}
@@ -531,6 +523,13 @@ export default function App() {
           {currentScreen === 'pase'               && <Pase             navigation={navigation} />}
           {currentScreen === 'juegos'             && <Juegos           navigation={navigation} />}
           {currentScreen === 'conexiones'         && <ConexionesGame   navigation={navigation} />}
+          {currentScreen !== 'intro' && (
+            <UpdateModal
+              status={estadoActualizacion}
+              version={versionActualizacion}
+              onAccept={instalarActualizacion}
+            />
+          )}
           <Toast ref={toastRef} />
 
         </MusicProvider>

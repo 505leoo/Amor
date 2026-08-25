@@ -69,6 +69,33 @@ const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
   );
 });
 
+const DespedidaAmorModal = memo(({ visible, onClose }) => (
+  <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={onClose}>
+    <View style={styles.despedidaOverlay}>
+      <View pointerEvents="none" style={styles.despedidaLuz} />
+      <View style={styles.despedidaCard}>
+        <View pointerEvents="none" style={styles.despedidaBrillo} />
+        <Text style={styles.despedidaEstrella}>✦</Text>
+        <Text style={styles.despedidaEtiqueta}>UN MENSAJE DESDE NUESTRO RINCÓN</Text>
+        <Text style={styles.despedidaTitulo}>Amor cerrará sus puertas</Text>
+        <View style={styles.despedidaLinea} />
+        <Text style={styles.despedidaTexto}>
+          Muy pronto, Amor guardará sus luces y cerrará sus puertas por tiempo indefinido.
+        </Text>
+        <Text style={styles.despedidaTextoSecundario}>
+          Pero los momentos que vivimos aquí no desaparecen: quedan escondidos entre canciones, pequeñas aventuras y recuerdos que solo ustedes sabrán encontrar.
+        </Text>
+        <Text style={styles.despedidaMisterio}>
+          Tal vez no sea un adiós. Algunas historias simplemente esperan en silencio…
+        </Text>
+        <TouchableOpacity style={styles.despedidaBoton} onPress={onClose} activeOpacity={0.82}>
+          <Text style={styles.despedidaBotonTexto}>Okey</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </Modal>
+));
+
 // ─── Recompensas diarias ────────────────────────────────────────────────────
 // Hook useRecompensaDiaria maneja:
 // - Verificación de fecha al entrar
@@ -596,6 +623,7 @@ const QuickMenu = memo(() => {
 });
 
 const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, tutorialActivo = false }) => {
+  const [despedidaVisible, setDespedidaVisible] = useState(true);
   const [nivelJuego, setNivelJuego] = useState(1);
   const [partidasCompletadas, setPartidasCompletadas] = useState(0);
   useEffect(() => {
@@ -717,6 +745,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   return (
     <OverlayContext.Provider value={overlayActive}>
       <View style={[styles.container, style]}>
+        <DespedidaAmorModal visible={despedidaVisible} onClose={() => setDespedidaVisible(false)} />
         <Image
           source={INICIO_BACKGROUND}
           style={styles.backgroundImage}
@@ -801,6 +830,19 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
+  despedidaOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(32,24,25,0.74)' },
+  despedidaLuz: { position: 'absolute', width: 330, height: 230, borderRadius: 120, backgroundColor: 'rgba(238,190,115,0.08)', transform: [{ scaleX: 1.35 }] },
+  despedidaCard: { width: 390, maxWidth: '88%', alignItems: 'center', overflow: 'hidden', paddingHorizontal: 27, paddingTop: 22, paddingBottom: 19, borderRadius: 24, backgroundColor: '#f7e8c9', borderWidth: 2, borderColor: '#bd8b50', shadowColor: '#120b08', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.48, shadowRadius: 18, elevation: 30 },
+  despedidaBrillo: { position: 'absolute', top: -64, width: 260, height: 120, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.25)' },
+  despedidaEstrella: { color: '#a8793c', fontSize: 20, lineHeight: 22 },
+  despedidaEtiqueta: { marginTop: 3, color: '#9b6b3c', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', letterSpacing: 1.2, textAlign: 'center' },
+  despedidaTitulo: { marginTop: 7, color: '#5d3b2e', fontFamily: 'Delius', fontSize: 19, fontWeight: '900', letterSpacing: 0.2, textAlign: 'center' },
+  despedidaLinea: { width: 58, height: 1, marginVertical: 10, backgroundColor: 'rgba(151,103,54,0.42)' },
+  despedidaTexto: { color: '#6f5041', fontFamily: 'Delius', fontSize: 9.5, lineHeight: 14, fontWeight: '800', textAlign: 'center' },
+  despedidaTextoSecundario: { marginTop: 8, color: '#806052', fontFamily: 'Delius', fontSize: 8, lineHeight: 12, fontWeight: '700', textAlign: 'center' },
+  despedidaMisterio: { marginTop: 9, color: '#9b6b3c', fontFamily: 'Delius', fontSize: 7.5, lineHeight: 11, fontWeight: '900', fontStyle: 'italic', textAlign: 'center' },
+  despedidaBoton: { minWidth: 112, height: 34, marginTop: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#9b6a3c', borderWidth: 1, borderColor: '#694426', shadowColor: '#52321e', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 5 },
+  despedidaBotonTexto: { color: '#fff5dc', fontFamily: 'Delius', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
   backgroundImage: { position: 'absolute', width: SCREEN_W, height: IMG_H, top: IMG_TOP },
   moneyMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   resourcesRow: { position: 'absolute', top: -1, left: '50%', width: 150, height: 24, transform: [{ translateX: -75 }], flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: '#f1e1bd', borderWidth: 1, borderTopWidth: 0, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, zIndex: 220, elevation: 12 },
