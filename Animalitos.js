@@ -9,19 +9,7 @@ import Loading from './components/Loading';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { contenidoDisponible, useTemporadaActual } from './hooks/useTemporadaActual';
 import { actualizarPasoTutorial } from './components/Tutorial';
-
-const ANIMALITOS = [
-  { id: 'halcon', temporada: 't1', nombre: 'Halcón', rareza: 'Común', icono: '🦅', habilidad: 'Instinto Natural', habilidadTexto: '+10% de EXP obtenida en misiones.', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
-  { id: 'ardilla', temporada: 't1', nombre: 'Ardilla', rareza: 'Épico', pistaBloqueada: 'Habitante del bosque', icono: '🐿️', habilidad: 'Reserva Dorada', habilidadTexto: '+10% de monedas obtenidas en eventos.', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png') },
-];
-const SKINS = [
-  { id: 'halcon_default', storageId: 'default', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Original', temporada: 't1', rareza: 'Común', colorRareza: '#78a950', fondoRareza: '#e7f0d7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
-  { id: 'halcont1', storageId: 'halcont1', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Traje especial', temporada: 't1', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png') },
-  { id: 'halcont2', storageId: 'halcont2', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Traje celeste', temporada: 't1', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png') },
-  { id: 'ardilla_default', storageId: 'default', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Original', temporada: 't1', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png') },
-  { id: 'ardillat1', storageId: 'ardillat1', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Bellota Dorada', temporada: 't1', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png') },
-  { id: 'ardillat2', storageId: 'ardillat2', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Guardiana del Bosque', temporada: 't1', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae7bd', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat2.png') },
-];
+import { ANIMALITOS, SKINS } from './data/animalitos';
 
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
 const COSTO_MEJORA = nivel => 120 * nivel;

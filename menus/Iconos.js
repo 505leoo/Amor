@@ -4,6 +4,7 @@ import {
   ScrollView, TextInput, Alert, ActivityIndicator, Modal,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -33,6 +34,17 @@ const ICONO_ARDILLA = {
 
 const SECCIONES = ['temporada', 'evento', 'animales'];
 const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', animales: '🐾 Animalito' };
+
+const nombreVisibleIcono = icono => {
+  if (icono.id === ICONO_DEFAULT_ID) return 'Original';
+  if (icono.id === 'ardilla_bellota') return 'Bellota dorada';
+  const match = String(icono.nombre || '').match(/^icono_([tea])_(\d+)$/i);
+  if (match) {
+    const category = { t: 'Temporada', e: 'Evento', a: 'Animalito' }[match[1].toLowerCase()];
+    return `${category} ${match[2]}`;
+  }
+  return String(icono.nombre || 'Icono especial').replace(/^icono[_-]?/i, '').replace(/[_-]+/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+};
 
 const uploadToStorage = async (uri, nombre) => {
   const user = auth.currentUser;
@@ -178,7 +190,9 @@ const IconoItem = ({ ic, gestion, activo, seleccionado, bloqueado, separador, on
         )}
       </View>
     </TouchableOpacity>
-    {gestion && <Text style={s.icNombre} numberOfLines={1}>{ic.nombre}</Text>}
+    <Text style={[s.icNombre, bloqueado && s.icNombreBloqueado, seleccionado && s.icNombreSeleccionado]} numberOfLines={1}>
+      {gestion ? ic.nombre : bloqueado ? 'Bloqueado' : nombreVisibleIcono(ic)}
+    </Text>
   </View>
 );
 
@@ -424,20 +438,24 @@ const Iconos = ({ navigation }) => {
   }, {});
   porSeccion.animales = [...porSeccion.animales, ICONO_ARDILLA];
   const sinSeccion = [ICONO_DEFAULT, ...sortByNombre(iconos.filter(ic => !ic.seccion || !SECCIONES.includes(ic.seccion)))];
+  const catalogoCompleto = [...SECCIONES.flatMap(section => porSeccion[section]), ...sinSeccion];
+  const iconosObtenidos = catalogoCompleto.filter(icono => {
+    const selectionValue = icono.local ? icono.id : icono.url;
+    return icono.id === ICONO_DEFAULT_ID || iconosDesbloqueados?.[icono.id] || iconoSeleccionado === selectionValue;
+  }).length;
 
   return (
     <View style={s.root}>
       <StatusBar hidden />
-      <ExpoImage
-        source={require('../assets/temporadas/neutral.png')}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        cachePolicy="memory-disk"
-      />
+      <ExpoImage source={require('../assets/temporadas/neutral.png')} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
 
       <TabButtons
-        onExit={() => navigation?.navigate('perfil')}
-        userMoney={0}
+        onExit={() => {
+          // Iconos se abre desde Perfil, por lo que debe retirar esta pantalla
+          // del historial. Navegar otra vez a Perfil dejaba Iconos debajo y
+          // provocaba el bucle Perfil -> Iconos -> Perfil -> Iconos.
+          if (!navigation?.goBack?.()) navigation?.navigate?.('perfil');
+        }}
         customAddButton={
           <View style={s.topBtns}>
             {isAdmin && (
@@ -462,42 +480,21 @@ const Iconos = ({ navigation }) => {
       />
 
       <View style={s.center}>
-        <ExpoImage
-          source={require('../assets/temporadas/libro/panel2.png')}
-          style={s.panelImg}
-          contentFit="contain"
-          cachePolicy="memory-disk"
-        />
-
-        <View style={s.box}>
-          {editTarget ? (
-            <EditModal
-              icono={editTarget}
-              onCancel={() => { setEditTarget(null); setActivoId(null); }}
-              onSave={handleGuardarEdicion}
-            />
-          ) : (
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={s.scrollContent}
-            >
-              {iconos.length === 0 && !uploading && (
-                <Text style={s.vacio}>Sin iconos — pulsa + para añadir</Text>
-              )}
-              <ListaUnificada
-                porSeccion={porSeccion}
-                sinSeccion={sinSeccion}
-                gestion={gestion}
-                activoId={activoId}
-                iconoSeleccionado={iconoSeleccionado}
-                iconosDesbloqueados={iconosDesbloqueados}
-                setActivoId={setActivoId}
-                handleSeleccionar={handleSeleccionar}
-                handleEliminar={handleEliminar}
-                setEditTarget={setEditTarget}
-              />
-            </ScrollView>
-          )}
+        <View style={s.catalogPanel}>
+          <View pointerEvents="none" style={s.panelTopShine} />
+          <View style={s.catalogHeader}>
+            <LinearGradient colors={['#e58a9d', '#b94f69']} style={s.headerIcon}><MaterialIcons name="collections" size={20} color="#fff5dc" /></LinearGradient>
+            <View style={s.headerCopy}><Text style={s.headerEyebrow}>PERSONALIZA TU PERFIL</Text><Text style={s.headerTitle}>Mi colección de iconos</Text><Text style={s.headerSubtitle}>Elige uno de tus recuerdos para representarte en Amor.</Text></View>
+            <View style={s.counterPill}><Text style={s.counterValue}>{iconosObtenidos}/{catalogoCompleto.length}</Text><Text style={s.counterLabel}>OBTENIDOS</Text></View>
+          </View>
+          <View style={s.headerDivider} />
+          <View style={s.box}>
+            {editTarget ? <EditModal icono={editTarget} onCancel={() => { setEditTarget(null); setActivoId(null); }} onSave={handleGuardarEdicion} /> : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.scrollContent}>
+                {catalogoCompleto.length === 0 && !uploading && <View style={s.emptyState}><MaterialIcons name="collections" size={32} color="#b98e72" /><Text style={s.vacio}>Todavía no hay iconos en esta colección.</Text></View>}
+                <ListaUnificada porSeccion={porSeccion} sinSeccion={sinSeccion} gestion={gestion} activoId={activoId} iconoSeleccionado={iconoSeleccionado} iconosDesbloqueados={iconosDesbloqueados} setActivoId={setActivoId} handleSeleccionar={handleSeleccionar} handleEliminar={handleEliminar} setEditTarget={setEditTarget} />
+              </ScrollView>}
+          </View>
+          <View style={s.catalogFooter}><MaterialIcons name="touch-app" size={11} color="#9a7457" /><Text style={s.footerText}>Toca un icono disponible para equiparlo</Text><View style={s.footerDot} /><Text style={s.footerText}>Los bloqueados se consiguen jugando</Text></View>
         </View>
       </View>
 
@@ -525,92 +522,55 @@ const Iconos = ({ navigation }) => {
 
 // ── Estilos pantalla ──────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingLeft: 220 },
-  panelImg: { position: 'absolute', width: 650, height: 650, opacity: 0.85, left: 80, top: -148 },
-
-  box: {
-    position: 'absolute',
-    top: 72,
-    left: 168,
-    width: 484, // 7×64px + 6×4px gap
-    height: 208, // 3 filas × 64px + 2 gaps × 4px + respiro
-  },
-  scrollContent: {
-    gap: 4,
-    paddingBottom: 12,
-  },
-
-  cuadroSep: {
-    borderRightWidth: 3,
-    borderRightColor: 'rgba(90,42,58,0.18)',
-  },
-  seccionWrap: {
-    gap: 4,
-  },
-  seccionScroll: {
-    flex: 1,
-  },
-  seccionTitulo: {
-    fontSize: 9,
-    color: '#5a2a3a',
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-
-  fila: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginBottom: 4 },
-
-  itemWrap: { alignItems: 'center' },
-  acciones: {
-    flexDirection: 'row',
-    gap: 2,
-    marginBottom: 2,
-  },
-  accionBtn: { padding: 1 },
-  accionEmoji: { fontSize: 14 },
-
-  cuadro: {
-    width: 64, height: 64,
-    backgroundColor: '#0a0a0a',
-    borderWidth: 3,
-    borderColor: '#333',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  cuadroActivo: { borderColor: '#c9748f' },
-  cuadroSeleccionado: { borderColor: '#4CAF50', borderWidth: 3 },
-  cuadroBloqueado: { opacity: 0.38 },
-  lockOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(42,35,40,0.46)' },
-  checkOverlay: {
-    position: 'absolute', bottom: 2, right: 2,
-    backgroundColor: '#4CAF50',
-    borderRadius: 8, width: 16, height: 16,
-    justifyContent: 'center', alignItems: 'center',
-  },
+  root: { flex: 1, backgroundColor: '#30251f' },
+  backgroundGlow: { position: 'absolute', top: -170, left: '17%', width: 530, height: 310, borderRadius: 270, backgroundColor: 'rgba(255,207,136,0.13)' },
+  backgroundPetalOne: { position: 'absolute', left: -42, bottom: -48, width: 150, height: 105, borderRadius: 80, backgroundColor: 'rgba(76,113,74,0.25)', transform: [{ rotate: '25deg' }] },
+  backgroundPetalTwo: { position: 'absolute', right: -34, top: 67, width: 120, height: 88, borderRadius: 65, backgroundColor: 'rgba(159,80,92,0.2)', transform: [{ rotate: '-25deg' }] },
+  center: { position: 'absolute', top: 39, left: 52, right: 18, bottom: 8 },
+  catalogPanel: { flex: 1, borderRadius: 16, padding: 10, backgroundColor: '#f8e8c7', borderWidth: 4, borderColor: '#80502f', shadowColor: '#100a07', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.72, shadowRadius: 14, elevation: 20, overflow: 'hidden' },
+  panelTopShine: { position: 'absolute', top: 2, left: 8, right: 8, height: 8, borderTopLeftRadius: 11, borderTopRightRadius: 11, backgroundColor: 'rgba(255,255,255,0.42)' },
+  catalogHeader: { height: 49, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, gap: 9 },
+  headerIcon: { width: 39, height: 39, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.2, borderColor: '#983f57', shadowColor: '#8a344b', shadowOpacity: 0.3, shadowRadius: 3, elevation: 4 },
+  headerCopy: { flex: 1 },
+  headerEyebrow: { color: '#b56d45', fontSize: 5.8, fontWeight: '900', letterSpacing: 0.9 },
+  headerTitle: { color: '#513320', fontSize: 14.5, lineHeight: 17, fontWeight: '900' },
+  headerSubtitle: { color: '#866247', fontSize: 6.4, fontWeight: '700' },
+  counterPill: { width: 74, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eed8aa', borderWidth: 1, borderColor: '#c79b5e' },
+  counterValue: { color: '#684728', fontSize: 11, lineHeight: 12, fontWeight: '900' },
+  counterLabel: { color: '#9b6c3d', fontSize: 4.9, fontWeight: '900', letterSpacing: 0.5 },
+  headerDivider: { height: 1, marginHorizontal: 8, backgroundColor: 'rgba(143,91,47,0.23)' },
+  box: { flex: 1, marginTop: 5, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: 'rgba(255,248,228,0.62)', borderWidth: 1, borderColor: 'rgba(163,108,61,0.22)' },
+  scrollContent: { alignItems: 'center', gap: 3, paddingTop: 2, paddingBottom: 12 },
+  cuadroSep: { marginRight: 4 },
+  seccionWrap: { gap: 4 },
+  seccionScroll: { flex: 1 },
+  seccionTitulo: { fontSize: 8, color: '#7c5235', fontWeight: '900', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' },
+  fila: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 6, marginBottom: 5 },
+  itemWrap: { width: 67, alignItems: 'center' },
+  acciones: { height: 18, flexDirection: 'row', gap: 4, marginBottom: 2 },
+  accionBtn: { width: 18, height: 18, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#efd8b3', borderWidth: 0.8, borderColor: '#c99b68' },
+  accionEmoji: { fontSize: 10 },
+  cuadro: { width: 58, height: 58, padding: 2, backgroundColor: '#5a4133', borderWidth: 2.5, borderColor: '#9b7658', borderRadius: 13, overflow: 'hidden', shadowColor: '#4d2d1d', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.24, shadowRadius: 3, elevation: 3 },
+  cuadroActivo: { borderColor: '#c9748f', shadowColor: '#c55271', shadowOpacity: 0.5 },
+  cuadroSeleccionado: { borderColor: '#65a05f', borderWidth: 3, backgroundColor: '#6c8c55', shadowColor: '#4b843f', shadowOpacity: 0.6, elevation: 6 },
+  cuadroBloqueado: { opacity: 0.62, borderColor: '#8f7a68' },
+  lockOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(48,38,35,0.58)' },
+  checkOverlay: { position: 'absolute', bottom: 2, right: 2, backgroundColor: '#5b9855', borderRadius: 9, width: 17, height: 17, borderWidth: 1, borderColor: '#e9f4d9', justifyContent: 'center', alignItems: 'center' },
   checkEmoji: { fontSize: 10, color: '#fff', fontWeight: '900' },
-  icImg: { width: '100%', height: '100%' },
-  icNombre: {
-    fontSize: 7, color: '#5a2a3a', fontWeight: '600',
-    maxWidth: 64, textAlign: 'center', marginTop: 2,
-  },
-  vacio: { fontSize: 11, color: 'rgba(90,42,58,0.5)', fontStyle: 'italic' },
-
-  topBtns: { flexDirection: 'row' },
+  icImg: { width: '100%', height: '100%', borderRadius: 8 },
+  icNombre: { width: 67, fontSize: 5.8, color: '#69472f', fontWeight: '900', textAlign: 'center', marginTop: 3 },
+  icNombreBloqueado: { color: '#9b8878' },
+  icNombreSeleccionado: { color: '#4f813f' },
+  emptyState: { height: 145, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  vacio: { fontSize: 8, color: '#8f7059', fontWeight: '700' },
+  catalogFooter: { height: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  footerText: { color: '#89674e', fontSize: 5.6, fontWeight: '800' },
+  footerDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#c18658', marginHorizontal: 4 },
+  topBtns: { flexDirection: 'row', gap: 4, marginRight: 6, marginTop: 4 },
   touchable: { pointerEvents: 'auto' },
-  addBtn: {
-    width: 52, height: 52,
-    backgroundColor: '#c9748f',
-    borderBottomLeftRadius: 25,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  manageBtn: {
-    width: 52, height: 52,
-    backgroundColor: '#8a5a6a',
-    justifyContent: 'center', alignItems: 'center',
-  },
-  btnActivo: { backgroundColor: '#5a2a3a' },
+  addBtn: { width: 34, height: 28, borderRadius: 9, backgroundColor: '#c8667b', borderWidth: 1, borderColor: '#93475a', justifyContent: 'center', alignItems: 'center', elevation: 7 },
+  manageBtn: { width: 34, height: 28, borderRadius: 9, backgroundColor: '#8a6370', borderWidth: 1, borderColor: '#674652', justifyContent: 'center', alignItems: 'center', elevation: 7 },
+  btnActivo: { backgroundColor: '#633744' },
   btnDisabled: { backgroundColor: '#bbb' },
 });
 

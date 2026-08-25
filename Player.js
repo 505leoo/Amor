@@ -2,23 +2,7 @@ import React, { useCallback, useEffect, memo, useRef } from 'react';
 import { Animated, View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import { useUserDocument } from './hooks/useUserDocument';
-
-const ANIMALITOS = {
-  halcon: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
-  ardilla: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png'),
-};
-const SKINS_POR_ANIMAL = {
-  halcon: {
-    default: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
-    halcont1: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png'),
-    halcont2: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png'),
-  },
-  ardilla: {
-    default: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png'),
-    ardillat1: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png'),
-    ardillat2: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat2.png'),
-  },
-};
+import { ANIMALITOS_POR_ID, IMAGENES_POR_SKIN } from './data/animalitos';
 
 export const SinAnimal = memo(() => (
   <View style={styles.sinAnimalWrap}>
@@ -28,8 +12,8 @@ export const SinAnimal = memo(() => (
 ));
 
 const PlayerContent = memo(({ animalito, skin, loading, imageStyle, placeholder, onLoadStart, onLoad, onError }) => {
-  const skinsDisponibles = SKINS_POR_ANIMAL[animalito] || {};
-  const source = animalito ? (skinsDisponibles[skin || 'default'] ?? skinsDisponibles.default ?? ANIMALITOS[animalito] ?? null) : null;
+  const skinsDisponibles = IMAGENES_POR_SKIN[animalito] || {};
+  const source = animalito ? (skinsDisponibles[skin || 'default'] ?? skinsDisponibles.default ?? ANIMALITOS_POR_ID[animalito]?.imagen ?? null) : null;
 
   return (
     <>
