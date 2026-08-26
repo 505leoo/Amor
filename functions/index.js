@@ -26,6 +26,31 @@ const FIRESTORE_NOTIFICATION_TEMPLATES = [
   },
 ];
 
+const ensureFirestoreNotificationTemplates = async (db) => {
+  const creadas = [];
+  for (const template of FIRESTORE_NOTIFICATION_TEMPLATES) {
+    const ref = db.collection("notificaciones").doc(template.id);
+    const snap = await ref.get();
+    if (snap.exists) continue;
+    await ref.set({
+      nombre: template.nombre,
+      titulo: template.titulo,
+      descripcion: template.descripcion,
+      enviar: "no",
+      vibrar: true,
+      estado: "lista",
+      estadoTexto: "Lista para enviar",
+      dispositivosObjetivo: 0,
+      dispositivosLlegados: 0,
+      creadaEn: admin.firestore.FieldValue.serverTimestamp(),
+      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    creadas.push(template.id);
+  }
+  if (creadas.length) logger.info("[FirestoreBroadcast] Plantillas creadas", {creadas});
+  return creadas;
+};
+
 exports.sendPushyNotification = functions.https.onCall(
     async (data, context) => {
       logger.info("[PUSHY] Received data:", data);
@@ -248,26 +273,7 @@ exports.adminCommunityBroadcast = onCall(async (request) => {
     return {ok: true, nextAllowedAt, lastTitle: state.lastTitle || null};
   }
   if (action === "ensure_templates") {
-    const creadas = [];
-    for (const template of FIRESTORE_NOTIFICATION_TEMPLATES) {
-      const ref = db.collection("notificaciones").doc(template.id);
-      const snap = await ref.get();
-      if (snap.exists) continue;
-      await ref.set({
-        nombre: template.nombre,
-        titulo: template.titulo,
-        descripcion: template.descripcion,
-        enviar: "no",
-        vibrar: true,
-        estado: "lista",
-        estadoTexto: "Lista para enviar",
-        dispositivosObjetivo: 0,
-        dispositivosLlegados: 0,
-        creadaEn: admin.firestore.FieldValue.serverTimestamp(),
-        actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
-      });
-      creadas.push(template.id);
-    }
+    const creadas = await ensureFirestoreNotificationTemplates(db);
     return {ok: true, creadas};
   }
   if (action !== "send") throw new HttpsError("invalid-argument", "Acción inválida.");
@@ -481,8 +487,9 @@ exports.actualizarEntregasNotificaciones = onSchedule({
   timeZone: "America/Argentina/Buenos_Aires",
 }, async () => {
   const apiSecret = process.env.PUSHY_API_SECRET;
-  if (!apiSecret) return null;
   const db = admin.firestore();
+  await ensureFirestoreNotificationTemplates(db);
+  if (!apiSecret) return null;
   const now = Date.now();
   const snap = await db.collection("notificaciones").where("estado", "==", "esperando_entregas").limit(50).get();
   for (const notificationDoc of snap.docs) {
