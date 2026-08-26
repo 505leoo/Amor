@@ -9,6 +9,7 @@ const EVENTOS_POR_TEMPORADA = {
     evento: { id: 'chicles', categoria: 'EVENTOS', titulo: 'CHICLES', destino: 'capsula1', descripcion: 'Resuelve misiones, completa el camino compartiendo chicles.', imagen: require('../assets/inicio/eventos/eventochicle.png') },
   },
   t2: {
+    historia: { id: 'rutaAurora', categoria: 'EVENTO DE HISTORIA', titulo: 'RUTAS', destino: 'rutas', descripcion: 'Acompañá a Aurora durante su día y guardá cada momento como un recuerdo.', imagen: require('../assets/inicio/eventos/eventorutas.png'), tema: 'blanco' },
     evento: { id: 'paleta', categoria: 'EVENTOS', titulo: 'GLOBOS', destino: 'paleta', descripcion: 'Una aventura entre globos te espera. Completa sus desafíos y consigue recompensas.', imagen: require('../assets/inicio/eventos/eventoglobo.png'), tema: 'carmesi' },
     secundario: { id: 'kitty', categoria: 'EVENTO SECUNDARIO', titulo: 'VIDEITOS', destino: 'kitty', descripcion: 'Mirá videitos de Hello Kitty y sus amigos, preparados para compartir un ratito lindo.', imagen: require('../assets/inicio/eventos/eventokitty.png'), tema: 'blanco' },
   },

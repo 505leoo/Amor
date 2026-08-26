@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '../firebaseConfig';
+import { db } from '../firebaseConfig';
 
 // Configuración global editable desde Firestore:
 // colección: Temporada · documento: actual · campo: Temporada = "t1" | "t2" | ...
@@ -8,12 +8,10 @@ let temporada = 't1';
 let iniciada = false;
 const listeners = new Set();
 
-const ADMINS_DEBUG = new Set(['admin@gmail.com', 'admin1@gmail.com']);
-export const temporadaParaUsuario = (datos = {}, email = auth.currentUser?.email) => {
-  const esAdminDebug = ADMINS_DEBUG.has(String(email || '').trim().toLowerCase());
-  const valor = esAdminDebug
-    ? (datos.DebugTemporada || datos.Temporada || datos.temporadaActual || 't1')
-    : (datos.Temporada || datos.temporadaActual || 't1');
+export const temporadaParaUsuario = (datos = {}) => {
+  // La temporada publicada es la misma para todos los usuarios. El campo
+  // DebugTemporada no debe hacer que un administrador vea contenido antiguo.
+  const valor = datos.Temporada || datos.temporadaActual || 't1';
   return typeof valor === 'string' ? valor.toLowerCase() : 't1';
 };
 

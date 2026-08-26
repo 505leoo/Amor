@@ -6,10 +6,10 @@ import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg'
 
 const EVENTOS_ANUNCIOS = {
   reporte: { titulo: 'Reporte Semanal', accesible: 'Abrir reporte semanal', fondo: require('../assets/inicio/anuncios/anuncioreporte.png') },
-  fechas: { titulo: 'Fechas Importantes', accesible: 'Fechas importantes', fondo: require('../assets/inicio/anuncios/anunciocumple.png') },
+  fechas: { titulo: 'Cumpleaños de Aurora', accesible: 'Cumpleaños de Aurora' },
   lotes: { titulo: 'Lotes', accesible: 'Ver lote de Ardilla' },
 };
-const EVENTOS_ORDEN = ['lotes', 'reporte', 'fechas'];
+const EVENTOS_ORDEN = ['fechas', 'lotes', 'reporte'];
 
 const ARDILLA_BASE = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png');
 const ARDILLA_TRAJE_1 = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png');
@@ -92,15 +92,103 @@ function LoteArdilla() {
   );
 }
 
+function FechaAurora() {
+  const brillo = useRef(new Animated.Value(0)).current;
+  const resplandor = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animacion = Animated.loop(Animated.sequence([
+      Animated.timing(brillo, { toValue: 1, duration: 1700, useNativeDriver: true }),
+      Animated.delay(700),
+      Animated.timing(brillo, { toValue: 0, duration: 0, useNativeDriver: true }),
+    ]));
+    const pulso = Animated.loop(Animated.sequence([
+      Animated.timing(resplandor, { toValue: 1, duration: 1250, useNativeDriver: true }),
+      Animated.timing(resplandor, { toValue: 0, duration: 1250, useNativeDriver: true }),
+    ]));
+    animacion.start();
+    pulso.start();
+    return () => { animacion.stop(); pulso.stop(); };
+  }, [brillo, resplandor]);
+  const moverBrillo = brillo.interpolate({ inputRange: [0, 1], outputRange: [-60, 250] });
+  const opacidadResplandor = resplandor.interpolate({ inputRange: [0, 1], outputRange: [0.16, 0.42] });
+  const escalaResplandor = resplandor.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1.08] });
+
+  return (
+    <View pointerEvents="none" style={styles.fechaAuroraPage}>
+      <Svg style={styles.fechaAuroraBackdrop} width="100%" height="100%" viewBox="0 0 800 450" preserveAspectRatio="none">
+        <Defs>
+          <RadialGradient id="auroraRadial" cx="50%" cy="43%" rx="68%" ry="84%">
+            <Stop offset="0" stopColor="#fffafd" />
+            <Stop offset="0.34" stopColor="#ffe5f0" />
+            <Stop offset="0.7" stopColor="#f4c7dc" />
+            <Stop offset="1" stopColor="#dfa9c4" />
+          </RadialGradient>
+        </Defs>
+        <Path d="M0 0H800V450H0Z" fill="url(#auroraRadial)" />
+        <Path d="M400 193 L328 -45 H472 Z M400 193 L590 -30 H687 Z M400 193 L849 85 V160 Z M400 193 L850 310 V398 Z M400 193 L585 480 H493 Z M400 193 L216 480 H307 Z M400 193 L-48 311 V399 Z M400 193 L-49 85 V160 Z M400 193 L211 -30 H114 Z" fill="#fff8ff" opacity="0.2" />
+        <Circle cx="400" cy="193" r="188" fill="none" stroke="#fff5ff" strokeWidth="3" opacity="0.28" />
+        <Circle cx="400" cy="193" r="239" fill="none" stroke="#8f83b7" strokeWidth="2" opacity="0.13" />
+        <Circle cx="400" cy="193" r="292" fill="none" stroke="#fffaff" strokeWidth="7" opacity="0.18" />
+        <Circle cx="400" cy="193" r="132" fill="#fffaff" opacity="0.1" />
+        <Circle cx="168" cy="88" r="4" fill="#fff" opacity="0.8" />
+        <Circle cx="641" cy="104" r="3" fill="#fff" opacity="0.75" />
+        <Circle cx="672" cy="330" r="5" fill="#f8d8ed" opacity="0.9" />
+        <Circle cx="132" cy="344" r="3" fill="#dbe9ff" opacity="0.95" />
+        <Circle cx="237" cy="55" r="2" fill="#fbe2f4" opacity="0.9" />
+        <Circle cx="581" cy="365" r="3" fill="#e8d7ff" opacity="0.9" />
+        <Path d="M90 180 l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#fff" opacity="0.55" />
+        <Path d="M705 205 l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#ffe4f5" opacity="0.62" />
+      </Svg>
+
+      <View style={styles.fechaAuroraHeader}>
+        <View style={styles.fechaAuroraHeaderLine} />
+        <Text style={styles.fechaAuroraEyebrow}>UNA FECHA PARA RECORDAR</Text>
+        <View style={styles.fechaAuroraHeaderLine} />
+      </View>
+      <Text style={styles.fechaAuroraTitle}>CUMPLEAÑOS</Text>
+      <View style={styles.fechaAuroraNameWrap}>
+        <Text style={styles.fechaAuroraName}>Aurora · 18 años</Text>
+        <Animated.View style={[styles.fechaAuroraShine, { transform: [{ translateX: moverBrillo }, { skewX: '-18deg' }] }]} />
+      </View>
+
+      <View style={styles.fechaAuroraStage}>
+        <Animated.View style={[styles.fechaAuroraHalo, { opacity: opacidadResplandor, transform: [{ scale: escalaResplandor }] }]} />
+        <View style={styles.fechaAuroraOrbit} />
+        <Animated.View style={[styles.fechaAuroraBadge, { transform: [{ scale: resplandor.interpolate({ inputRange: [0, 1], outputRange: [1, 1.035] }) }] }]}>
+          <View style={styles.fechaAuroraBadgeInner}>
+            <MaterialIcons name="cake" size={31} color="#fff8ff" />
+            <Text style={styles.fechaAuroraAge}>18</Text>
+            <Text style={styles.fechaAuroraAgeLabel}>AÑOS</Text>
+          </View>
+        </Animated.View>
+        <View style={[styles.fechaAuroraSpark, styles.fechaAuroraSparkOne]}><Text style={styles.fechaAuroraSparkText}>✦</Text></View>
+        <View style={[styles.fechaAuroraSpark, styles.fechaAuroraSparkTwo]}><Text style={styles.fechaAuroraSparkTextSmall}>✦</Text></View>
+        <View style={[styles.fechaAuroraSpark, styles.fechaAuroraSparkThree]}><Text style={styles.fechaAuroraSparkTextSmall}>✦</Text></View>
+        <View style={[styles.fechaAuroraSpark, styles.fechaAuroraSparkFour]}><Text style={styles.fechaAuroraSparkText}>✧</Text></View>
+        <View style={[styles.fechaAuroraSpark, styles.fechaAuroraSparkFive]}><Text style={styles.fechaAuroraSparkTextSmall}>✧</Text></View>
+      </View>
+
+      <View style={styles.fechaAuroraInfo}>
+        <Text style={styles.fechaAuroraInfoKicker}>UN NUEVO CAPÍTULO COMIENZA</Text>
+        <Text style={styles.fechaAuroraInfoTitle}>Aurora cumple 18 años</Text>
+        <Text style={styles.fechaAuroraInfoText}>Una celebración llena de rosa, violeta, risas y recuerdos para guardar juntos.</Text>
+      </View>
+      <View style={styles.fechaAuroraButton}>
+        <MaterialIcons name="cake" size={16} color="#fffaff" />
+        <Text style={styles.fechaAuroraButtonText}>CELEBRAR SUS 18</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function Anuncios({ visible, onClose, onOpen, renderContent, evento = 'reporte', eventosDisponibles = EVENTOS_ORDEN }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const closeOpacity = useRef(new Animated.Value(0.45)).current;
-  const eventos = eventosDisponibles.filter(key => EVENTOS_ANUNCIOS[key]);
-  const [pagina, setPagina] = useState(Math.max(0, eventos.indexOf(evento)));
+  const eventos = ['fechas', ...eventosDisponibles.filter(key => key !== 'fechas' && EVENTOS_ANUNCIOS[key])];
+  const [pagina, setPagina] = useState(0);
   const touchStart = useRef(null);
   useEffect(() => {
-    const indice = eventos.indexOf(evento);
-    setPagina(indice >= 0 ? indice : 0);
+    setPagina(0);
   }, [evento, eventosDisponibles]);
   const eventoActual = EVENTOS_ANUNCIOS[eventos[pagina]] || EVENTOS_ANUNCIOS.reporte;
   const eventoKey = eventos[pagina] || 'reporte';
@@ -151,6 +239,7 @@ export default function Anuncios({ visible, onClose, onOpen, renderContent, even
           onError={error => console.warn('[Anuncios] Error cargando fondo', error?.nativeEvent || error)}
         />}
         {eventoKey === 'lotes' && <LoteArdilla />}
+        {eventoKey === 'fechas' && <FechaAurora />}
         {!renderContent && <View style={[styles.backgroundTouch, eventoKey === 'lotes' && styles.backgroundTouchLote]} {...swipeResponder} accessibilityLabel={eventoActual.accesible} />}
         {!renderContent && <View style={styles.pagination}>
           <View style={styles.dots}>{eventos.map((key, index) => <View key={key} style={[styles.dot, index === pagina && styles.dotActive]} />)}</View>
@@ -208,4 +297,34 @@ const styles = StyleSheet.create({
   loteIconIncluded: { color: '#a47c50', fontSize: 6.5, lineHeight: 8, fontWeight: '600' },
   loteButton: { position: 'absolute', bottom: 30, zIndex: 9, minWidth: 128, height: 31, paddingHorizontal: 19, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: '#b97b35', borderWidth: 1.5, borderColor: '#8b5827', shadowColor: '#68401f', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 3, elevation: 9 },
   loteButtonText: { color: '#fffaf0', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  fechaAuroraPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 7, elevation: 7, alignItems: 'center', overflow: 'hidden', backgroundColor: '#f8d6e5' },
+  fechaAuroraBackdrop: { ...StyleSheet.absoluteFillObject },
+  fechaAuroraHeader: { position: 'absolute', top: '5%', flexDirection: 'row', alignItems: 'center', gap: 9 },
+  fechaAuroraHeaderLine: { width: 34, height: 1, backgroundColor: '#c8789d', opacity: 0.72 },
+  fechaAuroraEyebrow: { color: '#a65d82', fontSize: 9, fontWeight: '800', letterSpacing: 1.8 },
+  fechaAuroraTitle: { position: 'absolute', top: '8%', color: '#8c3f68', fontSize: 31, lineHeight: 36, fontWeight: '900', letterSpacing: 4.2, textShadowColor: 'rgba(255,255,255,0.9)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 1 },
+  fechaAuroraNameWrap: { position: 'absolute', top: '18.8%', overflow: 'hidden', paddingHorizontal: 10, paddingVertical: 2, borderRadius: 7 },
+  fechaAuroraName: { color: '#c55388', fontSize: 15, fontWeight: '900', letterSpacing: 1.3, textShadowColor: 'rgba(255,239,249,0.9)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+  fechaAuroraShine: { position: 'absolute', top: -2, left: 0, width: 22, height: 29, backgroundColor: 'rgba(255,255,255,0.55)' },
+  fechaAuroraStage: { position: 'absolute', top: '25%', left: '50%', width: 260, height: 170, transform: [{ translateX: -130 }] },
+  fechaAuroraHalo: { position: 'absolute', left: 30, top: 5, width: 200, height: 150, borderRadius: 100, backgroundColor: 'rgba(255,245,255,0.28)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.42)' },
+  fechaAuroraOrbit: { position: 'absolute', left: 50, top: 17, width: 160, height: 123, borderRadius: 80, borderWidth: 1, borderColor: 'rgba(255,229,250,0.55)', transform: [{ rotate: '-12deg' }] },
+  fechaAuroraBadge: { position: 'absolute', left: 72, top: 16, width: 116, height: 116, borderRadius: 58, alignItems: 'center', justifyContent: 'center', backgroundColor: '#df78a7', borderWidth: 2, borderColor: '#fff1fb', shadowColor: '#a94f7e', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.4, shadowRadius: 9, elevation: 8 },
+  fechaAuroraBadgeInner: { width: 94, height: 94, borderRadius: 47, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ed9fbe', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.78)' },
+  fechaAuroraAge: { marginTop: -2, color: '#fffaff', fontSize: 27, lineHeight: 27, fontWeight: '900', textShadowColor: '#b84e7e', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3 },
+  fechaAuroraAgeLabel: { marginTop: -1, color: '#fff0f8', fontSize: 7, fontWeight: '900', letterSpacing: 1.4 },
+  fechaAuroraSpark: { position: 'absolute' },
+  fechaAuroraSparkOne: { left: 26, top: 24 },
+  fechaAuroraSparkTwo: { right: 20, top: 26 },
+  fechaAuroraSparkThree: { right: 44, bottom: 12 },
+  fechaAuroraSparkFour: { left: 52, bottom: 17 },
+  fechaAuroraSparkFive: { right: 61, top: 4 },
+  fechaAuroraSparkText: { color: '#fff7ff', fontSize: 26, textShadowColor: '#d28ec0', textShadowRadius: 6 },
+  fechaAuroraSparkTextSmall: { color: '#fff7ff', fontSize: 15, textShadowColor: '#8a82bb', textShadowRadius: 5 },
+  fechaAuroraInfo: { position: 'absolute', bottom: 72, width: 290, alignItems: 'center' },
+  fechaAuroraInfoKicker: { color: '#b15d87', fontSize: 7, fontWeight: '900', letterSpacing: 1.25, textAlign: 'center' },
+  fechaAuroraInfoTitle: { marginTop: 2, color: '#803d65', fontSize: 15, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(255,255,255,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  fechaAuroraInfoText: { marginTop: 4, color: '#89546f', fontSize: 8.5, lineHeight: 12, fontWeight: '700', textAlign: 'center' },
+  fechaAuroraButton: { position: 'absolute', bottom: 30, zIndex: 9, minWidth: 158, height: 31, paddingHorizontal: 19, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: '#d66f9d', borderWidth: 1.5, borderColor: '#aa4f7d', shadowColor: '#99446d', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.32, shadowRadius: 4, elevation: 9 },
+  fechaAuroraButtonText: { color: '#fffaff', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 });

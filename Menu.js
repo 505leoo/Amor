@@ -41,6 +41,20 @@ const Menu = ({ navigation, route }) => {
       ]
     },
     {
+      id: 'rutas',
+      title: 'Rutas',
+      icon: 'map-pin',
+      subTabs: [
+        {
+          title: 'Principal',
+          content: {
+            title: 'Un día con Aurora',
+            description: 'Guardá cada momento especial de la salida.',
+          }
+        }
+      ]
+    },
+    {
       id: 'creation',
       title: 'Creación',
       icon: 'plus-circle',
@@ -925,6 +939,10 @@ const Menu = ({ navigation, route }) => {
               key={tab.id}
               style={[styles.tabButton, activeTab === index && styles.activeTabButton]}
               onPress={() => {
+                if (tab.id === 'rutas') {
+                  navigation?.navigate('rutas');
+                  return;
+                }
                 setActiveTab(index);
                 setActiveSubTab(0);
               }}

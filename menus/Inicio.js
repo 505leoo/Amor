@@ -23,12 +23,14 @@ import { actualizarPasoTutorial } from '../components/Tutorial';
 import MisionesDiarias from '../components/MisionesDiarias';
 import { InventarioModal } from './Inventario';
 import { useMisiones } from '../MisionesContext';
+import { useTemporadaActual } from '../hooks/useTemporadaActual';
 import * as Haptics from 'expo-haptics';
 
 const OverlayContext = createContext(false);
 export const useOverlayActive = () => useContext(OverlayContext);
 const NOOP = () => {};
 const INICIO_BACKGROUND = require('../assets/inicio/inicio.png');
+const INICIO_BACKGROUND_T2 = require('../assets/inicio/iniciot2.png');
 const HALCON_IMAGE = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
 const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
 const JUGAR_IMAGE = require('../assets/inicio/jugar.png');
@@ -596,6 +598,8 @@ const QuickMenu = memo(() => {
 });
 
 const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, tutorialActivo = false }) => {
+  const temporadaActual = useTemporadaActual();
+  const inicioBackground = temporadaActual === 't2' ? INICIO_BACKGROUND_T2 : INICIO_BACKGROUND;
   const [nivelJuego, setNivelJuego] = useState(1);
   const [partidasCompletadas, setPartidasCompletadas] = useState(0);
   useEffect(() => {
@@ -718,7 +722,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     <OverlayContext.Provider value={overlayActive}>
       <View style={[styles.container, style]}>
         <Image
-          source={INICIO_BACKGROUND}
+          source={inicioBackground}
           style={styles.backgroundImage}
           contentFit="fill"
           cachePolicy="memory-disk"
@@ -762,7 +766,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
         </View>
         {misionesAbiertas && <MisionesDiarias externo abierto onCerrar={() => setMisionesAbiertas(false)} />}
         {inventarioAbierto && <InventarioModal visible onClose={() => setInventarioAbierto(false)} />}
-        <Eventos navigation={navigation} soloEvento />
+        <Eventos navigation={navigation} />
         <View style={styles.temporadasQuickWrap}>
           <TouchableOpacity style={[styles.temporadasQuickBtn, !puedeAbrirColeccion && styles.temporadasQuickDisabled]} hitSlop={6} activeOpacity={0.75} onPress={() => puedeAbrirColeccion && navigation?.navigate('temporadas')} disabled={!puedeAbrirColeccion}>
             <View style={[styles.temporadasQuickIcon, !puedeAbrirColeccion && styles.temporadasQuickIconDisabled]}><MaterialIcons name="event" size={20} color={puedeAbrirColeccion ? '#fff8dc' : '#aaa49a'} /></View>

@@ -7,6 +7,7 @@ import { Image } from 'expo-image';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import * as DocumentPicker from 'expo-document-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
+import * as FileSystem from 'expo-file-system/legacy';
 import { collection, getDocs, query, orderBy, addDoc, serverTimestamp, where, deleteDoc, doc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage, auth } from '../../firebaseConfig';
@@ -30,8 +31,10 @@ const uploadSvgRest = async (svgString, path) => {
 import TabButtons from '../../components/TabButtons';
 import Loading from '../../components/Loading';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useMusicPlayer } from '../../MusicContext';
 
 const THUMB_COUNT = 5;
+const KITTY_EN_MANTENIMIENTO = true;
 
 // Type selector modal (SuperCute / Clasica)
 const TypeModal = ({ visible, onCancel, onSelect }) => (
@@ -238,7 +241,13 @@ const UploadModal = ({ asset, visible, onCancel, onConfirm }) => {
 
 // ─── Fullscreen Player ────────────────────────────────────────────────────────
 const FullscreenPlayer = ({ item, onClose }) => {
-  const player = useVideoPlayer(item.url, p => { p.loop = true; p.play(); });
+  const { pause: pauseMusic, play: playMusic, enabled: musicWasEnabled } = useMusicPlayer();
+  const player = useVideoPlayer(item.url, p => { p.loop = false; p.muted = false; });
+  useEffect(() => {
+    pauseMusic();
+    player.play();
+    return () => { player.pause(); if (musicWasEnabled) playMusic(); };
+  }, []);
   return (
     <Modal visible animationType="fade" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.fsContainer}>
@@ -255,57 +264,9 @@ const FullscreenPlayer = ({ item, onClose }) => {
 const VideoItemWithPlayer = ({ item, gestion, activoId, setActivoId, onEliminar }) => {
   const player = useVideoPlayer(item.url, p => { p.pause(); p.currentTime = 0; });
   const [fullscreen, setFullscreen] = useState(false);
-  const [thumbs, setThumbs] = useState([]);
-  const [thumbIdx, setThumbIdx] = useState(0);
-  const thumbOpacity = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    const sub = player.addListener('statusChange', async ({ status }) => {
-      if (status === 'readyToPlay') {
-        player.pause();
-        player.currentTime = 0;
-        try {
-          const dur = player.duration;
-          if (dur > 0) {
-            const times = Array.from({ length: THUMB_COUNT }, (_, i) => (dur / (THUMB_COUNT + 1)) * (i + 1));
-            try {
-              const generated = await Promise.all(times.map(async t => {
-                const timeMs = t > 1000 ? Math.round(t) : Math.round(t * 1000);
-                const r = await VideoThumbnails.getThumbnailAsync(item.url, { time: timeMs, quality: 0.6 });
-                return r.uri || r;
-              }));
-              setThumbs(generated);
-            } catch (_) {}
-          }
-        } catch (_) {}
-      }
-    });
-    return () => sub.remove();
-  }, []);
-
-  useEffect(() => {
-    if (thumbs.length < 2) return;
-    const interval = setInterval(() => {
-      Animated.sequence([
-        Animated.timing(thumbOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
-        Animated.timing(thumbOpacity, { toValue: 1, duration: 400, useNativeDriver: true }),
-      ]).start();
-      setThumbIdx(i => (i + 1) % thumbs.length);
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [thumbs]);
-
-  return (
+  if (KITTY_EN_MANTENIMIENTO) return (
     <View style={styles.videoCard}>
-      {thumbs.length > 0 ? (
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: thumbOpacity }]}>
-          <Image source={thumbs[thumbIdx]} style={styles.video} contentFit="cover" />
-        </Animated.View>
-      ) : (
-        <View style={[styles.video, { backgroundColor: '#111', justifyContent: 'center', alignItems: 'center' }] }>
-          <MaterialIcons name="play-circle-outline" size={36} color="#888" />
-        </View>
-      )}
+      <View style={[styles.video, { backgroundColor: '#ffe8f0', justifyContent: 'center', alignItems: 'center' }]}><MaterialIcons name="videocam" size={34} color="#df83a6" /><Text style={{ color: '#a85b79', fontSize: 8, fontWeight: '900', marginTop: 4 }}>VIDEÍTO</Text></View>
       <TouchableOpacity style={StyleSheet.absoluteFill} onPress={() => {
         if (gestion) { onEliminar(item); return; }
         setFullscreen(true);
@@ -373,42 +334,21 @@ export default function Kitty({ navigation, route }) {
   const [typeModalVisible, setTypeModalVisible] = useState(false);
   const [gestion, setGestion] = useState(false);
   const [activoId, setActivoId] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   const ADMIN_EMAIL = 'admin@gmail.com';
 
-  const uploadFile = useCallback(async (localUri, path) => {
-    const response = await fetch(localUri);
-    const blob = await response.blob();
-    const storageRef = ref(storage, path);
-    return new Promise((resolve, reject) => {
-      const task = uploadBytesResumable(storageRef, blob);
-      task.on('state_changed',
-        () => {},
-        reject,
-        async () => resolve(await getDownloadURL(task.snapshot.ref))
-      );
+  const uploadFile = useCallback(async (localUri, path, onProgress) => {
+    const token = await auth.currentUser?.getIdToken();
+    const url = `https://firebasestorage.googleapis.com/v0/b/${STORAGE_BUCKET}/o?uploadType=media&name=${encodeURIComponent(path)}`;
+    const result = await new Promise((resolve, reject) => {
+      const task = FileSystem.createUploadTask(url, localUri, { httpMethod: 'POST', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'video/mp4' }, sessionType: FileSystem.FileSystemSessionType.BACKGROUND }, ({ totalBytesSent, totalBytesExpectedToSend }) => onProgress?.(totalBytesExpectedToSend ? totalBytesSent / totalBytesExpectedToSend : 0));
+      task.uploadAsync().then(resolve).catch(reject);
     });
+    if (!result || result.status < 200 || result.status >= 300) throw new Error(`No se pudo subir el video (${result?.status || 'sin respuesta'}).`);
+    return getDownloadURL(ref(storage, path));
   }, []);
-
-  const uploadBlob = useCallback(async (blob, path) => {
-    const storageRef = ref(storage, path);
-    return new Promise((resolve, reject) => {
-      const task = uploadBytesResumable(storageRef, blob);
-      task.on('state_changed', () => {}, reject, async () => resolve(await getDownloadURL(task.snapshot.ref)));
-    });
-  }, []);
-
-  const kittyLogoUrlRef = useRef(null);
-
-  const ensureKittyLogoUrl = useCallback(async () => {
-    if (kittyLogoUrlRef.current) return kittyLogoUrlRef.current;
-
-    const source = Image.resolveAssetSource(require('../../assets/temporadas/libro/Temporada2/logokitty.png'));
-    const response = await fetch(source.uri);
-    const blob = await response.blob();
-    kittyLogoUrlRef.current = await uploadBlob(blob, 'kitty_brand/logokitty.png');
-    return kittyLogoUrlRef.current;
-  }, [uploadBlob]);
 
   const handleAddVideo = useCallback(async () => {
     const result = await DocumentPicker.getDocumentAsync({ type: 'video/*', copyToCacheDirectory: true });
@@ -446,45 +386,52 @@ export default function Kitty({ navigation, route }) {
       const snap = await getDocs(q);
       const episode = snap.size + 1;
 
-      // use the Kitty logo directly as the default thumbnail so it definitely renders in the list
-      const logoUrl = await ensureKittyLogoUrl();
-      const thumbUrl = logoUrl;
-
       const ts = Date.now();
-      const videoUrl = await uploadFile(asset.uri, `kitty_videos/${ts}.mp4`);
+      setUploading(true);
+      const videoUrl = await uploadFile(asset.uri, `kitty_videos/${ts}.mp4`, setUploadProgress);
       const doc = await addDoc(collection(db, 'kitty_videos'), {
         url: videoUrl,
-        thumbUrl,
         type,
         episode,
         createdAt: serverTimestamp(),
       });
-      setVideos(prev => [...prev, { id: doc.id, url: videoUrl, thumbUrl, type, episode }]);
+      setVideos(prev => [...prev, { id: doc.id, url: videoUrl, type, episode }]);
     } catch (e) {
       Alert.alert('Error', e.message || String(e));
     } finally {
       setPickedAsset(null);
+      setUploading(false);
+      setUploadProgress(0);
     }
-  }, [pickedAsset, uploadBlob, uploadFile]);
+  }, [pickedAsset, uploadFile]);
  
 
   const handleUploaded = useCallback((newVideo) => {
     setVideos(prev => [...prev, newVideo]);
   }, []);
 
-  const superCuteVideos = videos.filter(item => item.type === 'SuperCute');
+  const superCuteVideos = videos;
   const filas = [];
   for (let i = 0; i < superCuteVideos.length; i += 5) filas.push(superCuteVideos.slice(i, i + 5));
 
   return (
+    <View style={styles.maintenanceContainer}>
+      <StatusBar hidden />
+      <View style={styles.maintenanceCard}>
+        <Text style={styles.maintenanceBow}>🎀</Text>
+        <Text style={styles.maintenanceEyebrow}>KITTY VIDEO CLUB</Text>
+        <Text style={styles.maintenanceTitle}>Estamos preparando este rincón</Text>
+        <Text style={styles.maintenanceText}>Los videítos están tomando una pausita. Volvemos muy pronto con una experiencia más bonita para compartir con Aurora.</Text>
+        <View style={styles.maintenanceRule}><Text>♡　✦　♡</Text></View>
+        <TouchableOpacity style={styles.maintenanceButton} onPress={() => navigation?.navigate?.(destinoSalida)} activeOpacity={0.8}><MaterialIcons name="arrow-back" size={15} color="#fff" /><Text style={styles.maintenanceButtonText}>Volver</Text></TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <Image
-        source={require('../../assets/temporadas/libro/Temporada2/fondo2.png')}
-        style={StyleSheet.absoluteFill}
-        contentFit="cover"
-        cachePolicy="memory"
-      />
+      <View style={StyleSheet.absoluteFill} pointerEvents="none" />
       <TabButtons
         onExit={() => navigation?.navigate?.(destinoSalida)}
         customAddButton={(
@@ -534,6 +481,8 @@ export default function Kitty({ navigation, route }) {
           </View>
         </>
       )}
+      {superCuteVideos.length === 0 && !uploading && <View style={styles.emptyState}><Text style={styles.emptyBow}>🎀</Text><Text style={styles.emptyEyebrow}>KAWAII VIDEO CLUB</Text><Text style={styles.emptyTitle}>El rincón de Kitty</Text><Text style={styles.emptyText}>Todavía no hay videitos. Subí el primero para compartir una tarde bonita con Aurora.</Text><Text style={styles.emptyRule}>♡　✦　♡</Text></View>}
+      {uploading && <View style={styles.uploadStatus}><View style={styles.uploadStatusIcon}><MaterialIcons name="cloud-upload" size={20} color="#fff" /></View><View style={styles.uploadStatusCopy}><Text style={styles.uploadStatusTitle}>Guardando un videíto…</Text><Text style={styles.uploadStatusText}>Preparándolo para Aurora</Text><View style={styles.uploadTrack}><View style={[styles.uploadFill, { width: `${Math.max(3, uploadProgress * 100)}%` }]} /></View></View><Text style={styles.uploadPercent}>{Math.round(uploadProgress * 100)}%</Text></View>}
 
       {pickedAsset && (
         <TypeModal
@@ -549,7 +498,13 @@ export default function Kitty({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  maintenanceContainer: { flex: 1, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  maintenanceCard: { width: '100%', maxWidth: 360, alignItems: 'center', padding: 27, borderRadius: 26, backgroundColor: '#fffafd', borderWidth: 1.5, borderColor: '#f2bfd2', shadowColor: '#d889a5', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.18, shadowRadius: 10, elevation: 4 },
+  maintenanceBow: { fontSize: 42 }, maintenanceEyebrow: { color: '#d57d9c', fontSize: 8, fontWeight: '900', letterSpacing: 1.5, marginTop: 8 }, maintenanceTitle: { color: '#75445b', fontSize: 22, lineHeight: 27, fontWeight: '900', textAlign: 'center', marginTop: 6 }, maintenanceText: { color: '#a07082', fontSize: 11, lineHeight: 17, textAlign: 'center', marginTop: 10 }, maintenanceRule: { color: '#e58aaa', fontSize: 18, marginTop: 17 }, maintenanceButton: { height: 38, paddingHorizontal: 20, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#d9789b', marginTop: 18 }, maintenanceButtonText: { color: '#fff', fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  container: { flex: 1, backgroundColor: '#fff' },
+  emptyState: { position: 'absolute', top: 145, left: 28, right: 28, alignItems: 'center', padding: 22, borderRadius: 24, backgroundColor: '#fffafd', borderWidth: 1.5, borderColor: '#f3c4d5', shadowColor: '#d889a5', shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.16, shadowRadius: 9, elevation: 3 },
+  emptyBow: { fontSize: 30 }, emptyEyebrow: { color: '#d57d9c', fontSize: 8, fontWeight: '900', letterSpacing: 1.5, marginTop: 7 }, emptyTitle: { color: '#75445b', fontSize: 21, fontWeight: '900', marginTop: 4 }, emptyText: { color: '#a07082', fontSize: 10, lineHeight: 15, textAlign: 'center', marginTop: 8 }, emptyRule: { color: '#e58aaa', fontSize: 17, marginTop: 13 },
+  uploadStatus: { position: 'absolute', left: 22, right: 22, bottom: 28, minHeight: 68, padding: 10, borderRadius: 18, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#f0adc4', shadowColor: '#bd6687', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 8 }, uploadStatusIcon: { width: 40, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e68aaa' }, uploadStatusCopy: { flex: 1, marginLeft: 9 }, uploadStatusTitle: { color: '#714158', fontSize: 11, fontWeight: '900' }, uploadStatusText: { color: '#a07082', fontSize: 8, marginTop: 2 }, uploadTrack: { height: 5, marginTop: 7, borderRadius: 5, overflow: 'hidden', backgroundColor: '#f7dce6' }, uploadFill: { height: '100%', backgroundColor: '#d86f96' }, uploadPercent: { color: '#c65d83', fontSize: 10, fontWeight: '900', marginLeft: 8 },
   listWrap: { position: 'absolute', top: 120, left: 125, maxHeight: '80%' },
   logoHeader: {
     position: 'absolute',
@@ -563,7 +518,7 @@ const styles = StyleSheet.create({
   },
   logoImage: { width: 180, height: 58 },
   row: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  videoCard: { width: 100, height: 100, borderRadius: 10, overflow: 'hidden', backgroundColor: '#000' },
+  videoCard: { width: 100, height: 100, borderRadius: 16, overflow: 'hidden', backgroundColor: '#fff4f8', borderWidth: 2, borderColor: '#f3b7cd', shadowColor: '#c86c91', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 5, elevation: 4 },
   video: { width: '100%', height: '100%' },
   videoOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.35)' },
   fsContainer: { flex: 1, backgroundColor: '#000' },

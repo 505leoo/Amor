@@ -15,6 +15,19 @@ const ARDILLA = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/
 
 const NOTICIAS = [
   {
+    id: 'cumpleanos-aurora',
+    titulo: 'Cumpleaños de Aurora',
+    resumen: 'Una ruta para celebrar juntos',
+    categoria: 'CELEBRACIÓN',
+    fecha: 'AHORA',
+    icono: 'cake',
+    color: '#d66f9d',
+    etiqueta: 'UNA FECHA PARA GUARDAR EN EL CORAZÓN',
+    titular: 'Hoy celebramos a Aurora',
+    descripcion: 'Preparamos una aventura especial para acompañar su cumpleaños con recuerdos, fotos y pequeños momentos compartidos.',
+    cierre: 'Que este nuevo año le regale muchos momentos bonitos para guardar juntos.',
+  },
+  {
     id: 'perfiles',
     titulo: 'Perfiles',
     resumen: 'Nuevo estilo personal',
@@ -45,6 +58,7 @@ const NOTICIAS = [
 export const NOTICIAS_ID = NOTICIAS[0].id;
 export const NOTICIAS_IDS = NOTICIAS.map(noticia => noticia.id);
 const INVITACION_ID = 'invitacion-halcon-tarde';
+const CUMPLEANOS_ID = 'cumpleanos-aurora';
 const COSTO_CONFIRMACION = 500;
 const FECHA_INVITACION = '2026-08-26';
 const HORA_INVITACION = '13:00';
@@ -78,6 +92,20 @@ const Feature = ({ title, detail, color, children }) => <View style={[styles.fea
   <View style={styles.featureCopy}><Text style={[styles.featureTitle, { color }]}>{title}</Text><Text style={styles.featureDetail} numberOfLines={2}>{detail}</Text></View>
 </View>;
 
+const BirthdayBody = () => <View style={styles.birthdayBody}>
+  <LinearGradient colors={['#fff0f7', '#f8d6e5']} style={styles.birthdayHero}>
+    <View style={styles.birthdayIcon}><MaterialIcons name="cake" size={25} color="#fff8fc" /></View>
+    <View style={styles.birthdayHeroCopy}><Text style={styles.birthdayKicker}>EVENTO ESPECIAL</Text><Text style={styles.birthdayHeroTitle}>Un día con Aurora</Text><Text style={styles.birthdayHeroText}>Una ruta para convertir cada parada en un recuerdo.</Text></View>
+  </LinearGradient>
+  <Text style={styles.birthdayIntro}>Para celebrar su cumpleaños, Aurora tiene una aventura preparada de principio a fin: salir, mirar la ciudad con otros ojos y guardar cada momento para volver a visitarlo juntos.</Text>
+  <View style={styles.birthdaySteps}>
+    <View style={styles.birthdayStep}><View style={[styles.birthdayStepIcon, { backgroundColor: '#e887a8' }]}><MaterialIcons name="directions-bus" size={14} color="#fff" /></View><Text style={styles.birthdayStepTitle}>El comienzo</Text><Text style={styles.birthdayStepText}>La primera foto da inicio al recorrido.</Text></View>
+    <View style={styles.birthdayStep}><View style={[styles.birthdayStepIcon, { backgroundColor: '#a978c9' }]}><MaterialIcons name="location-city" size={14} color="#fff" /></View><Text style={styles.birthdayStepTitle}>Momentos</Text><Text style={styles.birthdayStepText}>Regalos, paseo, Obelisco y algo rico.</Text></View>
+    <View style={styles.birthdayStep}><View style={[styles.birthdayStepIcon, { backgroundColor: '#d2779c' }]}><MaterialIcons name="local-florist" size={14} color="#fff" /></View><Text style={styles.birthdayStepTitle}>El cierre</Text><Text style={styles.birthdayStepText}>Las flores guardan el último recuerdo.</Text></View>
+  </View>
+  <View style={styles.birthdayNote}><MaterialIcons name="favorite" size={13} color="#d66f9d" /><Text style={styles.birthdayNoteText}>Cada foto queda como una pequeña prueba de que ese día fue suyo.</Text></View>
+</View>;
+
 export default function Noticias({ visible, onDismiss, onContinue, version, initialNoticiaId }) {
   const reveal = useRef(new Animated.Value(0)).current;
   const shine = useRef(new Animated.Value(0)).current;
@@ -95,6 +123,7 @@ export default function Noticias({ visible, onDismiss, onContinue, version, init
   const parejaUid = usuario?.pareja || null;
   const { data: pareja } = useUserDocument(data => ({ nombre: data?.nombre || data?.displayName || 'Tu pareja' }), parejaUid || '', (a, b) => a?.nombre === b?.nombre);
   const esInvitacion = noticia.id === INVITACION_ID;
+  const esCumpleanos = noticia.id === CUMPLEANOS_ID;
   const miRespuesta = miNoticia?.respuesta || 'pensando';
   const respuestaPareja = noticiaPareja?.respuesta || 'pensando';
   const invitationScale = invitationPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.018] });
@@ -254,7 +283,7 @@ export default function Noticias({ visible, onDismiss, onContinue, version, init
               <View style={styles.detailHeadingCopy}><Text style={styles.eyebrow}>{noticia.etiqueta}</Text><View style={styles.titleWrap}><Text style={styles.title}>{noticia.titular}</Text><Animated.View pointerEvents="none" style={[styles.titleShine, { transform: [{ translateX: shineX }, { rotate: '-12deg' }] }]} /></View><Text style={styles.description} numberOfLines={2}>{noticia.descripcion}</Text></View>
             </View>
 
-            {esInvitacion ? <View style={styles.invitationBody}>
+            {esCumpleanos ? <BirthdayBody /> : esInvitacion ? <View style={styles.invitationBody}>
               <LinearGradient colors={['#f7e2cd', '#efc9bd', '#ddb59f']} style={styles.invitationLetter}>
                 <View pointerEvents="none" style={styles.invitationSun} />
                 <View style={styles.invitationDate}><MaterialIcons name="wb-sunny" size={10} color="#fff0be" /><View><Text style={styles.invitationDateMain}>MAÑANA · 13:00</Text><Text style={styles.invitationDateSub}>UNA TARDE PARA LOS DOS</Text></View></View>
@@ -334,6 +363,13 @@ const styles = StyleSheet.create({
   detailCategory: { width: 48, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   detailCategoryText: { fontFamily: 'Delius', fontSize: 5.4, fontWeight: '900', letterSpacing: 0.45 },
   detailHeadingCopy: { flex: 1, minWidth: 0 },
+  birthdayBody: { flex: 1, minHeight: 0, paddingHorizontal: 10, paddingVertical: 7, gap: 7 },
+  birthdayHero: { minHeight: 68, padding: 9, borderRadius: 13, flexDirection: 'row', alignItems: 'center', borderWidth: 1.2, borderColor: '#edb3c9' },
+  birthdayIcon: { width: 48, height: 48, borderRadius: 17, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d66f9d', borderWidth: 2, borderColor: '#fff8fc' },
+  birthdayHeroCopy: { flex: 1, marginLeft: 9 }, birthdayKicker: { color: '#bd5d86', fontSize: 6.5, fontWeight: '900', letterSpacing: 1 }, birthdayHeroTitle: { color: '#803d65', fontSize: 16, fontWeight: '900', marginTop: 2 }, birthdayHeroText: { color: '#9d607d', fontSize: 8, fontWeight: '700', marginTop: 2 },
+  birthdayIntro: { color: '#79536a', fontSize: 8.5, lineHeight: 12, fontWeight: '700', paddingHorizontal: 3 },
+  birthdaySteps: { flex: 1, flexDirection: 'row', gap: 6 }, birthdayStep: { flex: 1, padding: 7, borderRadius: 11, backgroundColor: '#fff6fa', borderWidth: 1, borderColor: '#f0cada' }, birthdayStepIcon: { width: 27, height: 27, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, birthdayStepTitle: { color: '#75445b', fontSize: 8, fontWeight: '900', marginTop: 5 }, birthdayStepText: { color: '#9a7182', fontSize: 6.5, lineHeight: 9, fontWeight: '700', marginTop: 2 },
+  birthdayNote: { minHeight: 31, paddingHorizontal: 9, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fce6ef', borderWidth: 1, borderColor: '#efbfd2' }, birthdayNoteText: { flex: 1, color: '#9b5976', fontSize: 7, lineHeight: 10, fontWeight: '800' },
   detailBody: { flex: 1, minHeight: 0, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', gap: 7 },
   heroColumn: { width: '38%', minWidth: 0, gap: 6 },
   eyebrow: { color: '#a15c46', fontFamily: 'Delius', fontSize: 6.2, lineHeight: 8, fontWeight: '900', letterSpacing: 0.9 },

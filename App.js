@@ -41,6 +41,7 @@ import Iconos from './menus/Iconos';
 import Pase from './menus/Pase';
 import Juegos from './Juegos/Juegos';
 import ConexionesGame from './Juegos/Conexiones/ConexionesGame';
+import Rutas from './Rutas';
 import Comerciante from './Comerciante';
 import Anuncios from './components/Anuncios';
 import Noticias, { NOTICIAS_ID, NOTICIAS_IDS } from './components/Noticias';
@@ -62,7 +63,7 @@ const KNOWN_SCREENS = new Set([
   'intro', 'noticias', 'anuncios', 'login', 'register', 'main', 'reporteSemanal', 'coleccion', 'tienda',
   'perfil', 'buzon', 'trofeos', 'menu', 'pistas', 'temporadas', 'temporada1', 'temporada2',
   'kitty', 'paleta', 'historia1', 'capsula1', 'librotemp1', 'animalitos', 'canjear',
-  'comerciante', 'lotes', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones',
+  'comerciante', 'lotes', 'rutas', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones',
 ]);
 
 export default function App() {
@@ -490,6 +491,10 @@ export default function App() {
                   navigation.navigate('lotes', { animalId: 'ardilla' });
                   return;
                 }
+                if (evento === 'fechas') {
+                  navigation.navigate('rutas');
+                  return;
+                }
                 if (evento !== 'reporte') return;
                 currentScreenRef.current = 'reporteSemanal';
                 setScreenParams({});
@@ -537,6 +542,7 @@ export default function App() {
           {currentScreen === 'canjear'          && <Canjear          navigation={navigation} />}
           {currentScreen === 'comerciante'      && <Comerciante      navigation={navigation} temporada={screenParams?.temporada} />}
           {currentScreen === 'lotes'             && <Lotes           navigation={navigation} animalId={screenParams?.animalId} />}
+          {currentScreen === 'rutas'              && <Rutas           navigation={navigation} />}
           {currentScreen === 'adminCodigos'      && <AdminCodigos     navigation={navigation} />}
           {currentScreen === 'iconos'             && <Iconos           navigation={navigation} />}
           {currentScreen === 'pase'               && <Pase             navigation={navigation} />}
