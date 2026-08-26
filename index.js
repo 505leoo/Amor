@@ -7,12 +7,11 @@ import App from './App';
 RNPushy.setNotificationListener(async (data) => {
   try {
     const Notifications = require('expo-notifications');
-    await Notifications.setNotificationChannelAsync('amor-notifications', {
+    await Notifications.setNotificationChannelAsync('amor-notifications-v2', {
       name: 'Notificaciones de Amor',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 220, 120, 280],
       lightColor: '#D9577F',
-      sound: 'default',
     });
     if (data.vibrate !== false && data.vibrate !== 'false') Vibration.vibrate([0, 220, 120, 280]);
     await Notifications.scheduleNotificationAsync({
@@ -20,9 +19,8 @@ RNPushy.setNotificationListener(async (data) => {
         title: data.title || '💕',
         body: data.message || '',
         data,
-        sound: 'default',
       },
-      trigger: { channelId: 'amor-notifications' },
+      trigger: { channelId: 'amor-notifications-v2' },
     });
   } catch (e) {}
 });

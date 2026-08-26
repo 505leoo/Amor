@@ -263,7 +263,8 @@ exports.adminCommunityBroadcast = onCall(async (request) => {
   const db = admin.firestore();
   const stateRef = db.collection("configuracion").doc("comunidad_broadcast");
   const now = Date.now();
-  const cooldownMs = 60 * 60 * 1000;
+  // Temporal: tanto Avisos como las plantillas de Firestore descansan un minuto.
+  const cooldownMs = 60 * 1000;
   const action = String((request.data || {}).action || "status");
   const stateSnap = await stateRef.get();
   const state = stateSnap.data() || {};
