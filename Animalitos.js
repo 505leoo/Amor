@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Image as RNImage, ScrollView, Modal } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
 import { collection, doc, getDoc, getDocs, onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import RoomBackground from './components/RoomBackground';
@@ -14,6 +16,27 @@ import { ANIMALITOS, SKINS } from './data/animalitos';
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
 const COSTO_MEJORA = nivel => 120 * nivel;
 const EXP_POR_MEJORA = nivel => 15 + (5 * nivel);
+const proyectarMejoras = ({ nivel, cartasPropias, cartasUniversales }) => {
+  let nivelSimulado = Math.max(1, Number(nivel) || 1);
+  let propias = Math.max(0, Number(cartasPropias) || 0);
+  let universales = Math.max(0, Number(cartasUniversales) || 0);
+  let cartasGastadas = 0;
+  let monedasGastadas = 0;
+  let nivelesPosibles = 0;
+  while (nivelesPosibles < 100) {
+    const cartasNecesarias = COPIAS_POR_NIVEL(nivelSimulado);
+    const monedasNecesarias = COSTO_MEJORA(nivelSimulado);
+    if (propias + universales < cartasNecesarias) break;
+    const propiasUsadas = Math.min(propias, cartasNecesarias);
+    propias -= propiasUsadas;
+    universales -= cartasNecesarias - propiasUsadas;
+    cartasGastadas += cartasNecesarias;
+    monedasGastadas += monedasNecesarias;
+    nivelSimulado += 1;
+    nivelesPosibles += 1;
+  }
+  return { nivelesPosibles, nivelFinal: nivelSimulado, cartasGastadas, monedasGastadas };
+};
 const CartaUniversalIcon = () => <View style={s.cartaBarra}><Text style={s.cartaBarraMarca}>✦</Text></View>;
 const RECOMPENSAS_NIVEL = {
   halcon: [
@@ -52,6 +75,7 @@ const Animalitos = ({ navigation, mode }) => {
   const [skinsDesbloqueadas, setSkinsDesbloqueadas] = useState({});
   const [soloDesbloqueados, setSoloDesbloqueados] = useState(false);
   const [ordenCatalogo, setOrdenCatalogo] = useState('rareza');
+  const [recordatorioCerrado, setRecordatorioCerrado] = useState(false);
 
   const loadingRef = useRef(null);
   const limpiezaArdillaRef = useRef(false);
@@ -180,6 +204,16 @@ const Animalitos = ({ navigation, mode }) => {
       totalCartas: cartasPropias + cartasUniversales,
     };
   };
+
+  const recordatorioMejora = mode === 'skins' ? null : ANIMALITOS
+    .filter(animal => desbloqueados.includes(animal.id) && contenidoDisponible(animal.temporada || 't1', temporadaActual))
+    .map(animal => {
+      const estado = estadoAnimal(animal.id);
+      const proyeccion = proyectarMejoras(estado);
+      return { animal, estado, ...proyeccion, monedasFaltantes: Math.max(0, proyeccion.monedasGastadas - dinero) };
+    })
+    .filter(resultado => resultado.nivelesPosibles >= 2)
+    .sort((a, b) => b.nivelesPosibles - a.nivelesPosibles || Number(b.animal.id === equipado) - Number(a.animal.id === equipado))[0] || null;
 
   const manejarMejora = async id => {
     const estado = estadoAnimal(id);
@@ -402,6 +436,37 @@ const Animalitos = ({ navigation, mode }) => {
         </View>
         </>}
       </View>
+
+      <Modal visible={Boolean(recordatorioMejora) && !recordatorioCerrado} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setRecordatorioCerrado(true)}>
+        <View style={s.recordatorioOverlay}>
+          <TouchableOpacity style={s.recordatorioCerrarFondo} activeOpacity={1} onPress={() => setRecordatorioCerrado(true)} />
+          {recordatorioMejora && <View style={s.recordatorioCard}>
+            <LinearGradient colors={['#eaf2c9', '#b8d49a', '#719b68']} style={s.recordatorioHero}>
+              <View pointerEvents="none" style={s.recordatorioSol} />
+              <View pointerEvents="none" style={s.recordatorioColinaUno} /><View pointerEvents="none" style={s.recordatorioColinaDos} />
+              <Image source={recordatorioMejora.animal.imagen} style={s.recordatorioAnimal} contentFit="contain" cachePolicy="memory-disk" />
+              <View style={s.recordatorioNivelActual}><Text style={s.recordatorioNivelEtiqueta}>AHORA</Text><Text style={s.recordatorioNivelNumero}>{recordatorioMejora.estado.nivel}</Text></View>
+              <MaterialIcons name="arrow-forward" size={17} color="#fff6d7" style={s.recordatorioFlecha} />
+              <View style={s.recordatorioNivelFuturo}><Text style={s.recordatorioNivelEtiqueta}>PUEDE LLEGAR A</Text><Text style={s.recordatorioNivelNumero}>{recordatorioMejora.nivelFinal}</Text></View>
+              <View style={s.recordatorioBotonEjemplo}><MaterialIcons name="arrow-upward" size={11} color="#fff" /><Text style={s.recordatorioBotonEjemploTexto}>SUBIR NIVEL</Text></View>
+            </LinearGradient>
+            <TouchableOpacity style={s.recordatorioCerrar} onPress={() => setRecordatorioCerrado(true)} accessibilityLabel="Cerrar recordatorio"><MaterialIcons name="close" size={16} color="#765136" /></TouchableOpacity>
+
+            <View style={s.recordatorioContenido}>
+              <Text style={s.recordatorioEtiqueta}>TUS CARTAS ESTÁN ESPERANDO</Text>
+              <Text style={s.recordatorioTitulo}>¡{recordatorioMejora.animal.nombre} puede crecer!</Text>
+              <Text style={s.recordatorioTexto}>Ya tienes cartas para subirlo <Text style={s.recordatorioDestacado}>{recordatorioMejora.nivelesPosibles} niveles seguidos</Text>. El aviso aparece aunque todavía te falten monedas, para que no sigas acumulando cartas sin usarlas.</Text>
+              <View style={s.recordatorioRecursos}>
+                <View style={s.recordatorioRecurso}><View style={s.recordatorioCartaIcono}><Text style={s.recordatorioCartaMarca}>✦</Text></View><View><Text style={s.recordatorioRecursoValor}>{recordatorioMejora.cartasGastadas}</Text><Text style={s.recordatorioRecursoLabel}>CARTAS PARA 2+ NIVELES</Text></View></View>
+                <View style={s.recordatorioSeparador} />
+                <View style={s.recordatorioRecurso}><Text style={s.recordatorioMoneda}>●</Text><View><Text style={[s.recordatorioRecursoValor, recordatorioMejora.monedasFaltantes > 0 && s.recordatorioRecursoValorFaltante]}>{recordatorioMejora.monedasFaltantes > 0 ? `Faltan ${recordatorioMejora.monedasFaltantes.toLocaleString('es-AR')}` : recordatorioMejora.monedasGastadas.toLocaleString('es-AR')}</Text><Text style={s.recordatorioRecursoLabel}>{recordatorioMejora.monedasFaltantes > 0 ? `MONEDAS · TOTAL ${recordatorioMejora.monedasGastadas.toLocaleString('es-AR')}` : 'MONEDAS NECESARIAS'}</Text></View></View>
+              </View>
+              <Text style={s.recordatorioNota}>{recordatorioMejora.monedasFaltantes > 0 ? `Tus cartas ya están listas. Reúne las ${recordatorioMejora.monedasFaltantes.toLocaleString('es-AR')} monedas que faltan y empieza a mejorar.` : `Usaremos primero las cartas propias de ${recordatorioMejora.animal.nombre}; las universales solo completan lo que falte.`}</Text>
+              <View style={s.recordatorioAcciones}><TouchableOpacity style={s.recordatorioDespues} onPress={() => setRecordatorioCerrado(true)} activeOpacity={0.8}><Text style={s.recordatorioDespuesTexto}>Después</Text></TouchableOpacity><TouchableOpacity style={s.recordatorioIr} onPress={() => { setSeleccionado(animalitosFiltrados.find(animal => animal.id === recordatorioMejora.animal.id) || recordatorioMejora.animal); setRecordatorioCerrado(true); }} activeOpacity={0.84}><MaterialIcons name="pets" size={13} color="#fff8df" /><Text style={s.recordatorioIrTexto}>MEJORAR AHORA</Text></TouchableOpacity></View>
+            </View>
+          </View>}
+        </View>
+      </Modal>
 
       <Modal visible={Boolean(previewRecompensa)} transparent animationType="fade" onRequestClose={() => setPreviewRecompensa(null)}><View style={s.previewFondo}><TouchableOpacity style={s.previewCerrarFondo} activeOpacity={1} onPress={() => setPreviewRecompensa(null)} /><View style={s.previewTarjeta}><Text style={s.previewIconoTexto}>{previewRecompensa?.icono}</Text><Text style={s.previewTitulo}>{previewRecompensa?.titulo}</Text><Text style={s.previewNivel}>Recompensa de nivel {previewRecompensa?.nivel}</Text><TouchableOpacity style={s.previewBoton} onPress={() => setPreviewRecompensa(null)}><Text style={s.previewBotonTexto}>Entendido</Text></TouchableOpacity></View></View></Modal>
       <Loading ref={loadingRef} />
@@ -707,6 +772,42 @@ const s = StyleSheet.create({
   hitoBotonReclamado: { backgroundColor: '#a8c792', borderColor: '#6d9661' },
   hitoBotonTexto: { color: '#77726c', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
   hitoBotonTextoDisponible: { color: '#fff8dc' },
+  recordatorioOverlay: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(31,22,16,0.72)' },
+  recordatorioCerrarFondo: { ...StyleSheet.absoluteFillObject },
+  recordatorioCard: { width: 430, maxWidth: '88%', overflow: 'hidden', borderRadius: 20, backgroundColor: '#fff3d5', borderWidth: 3, borderColor: '#976231', shadowColor: '#130c08', shadowOffset: { width: 0, height: 9 }, shadowOpacity: 0.52, shadowRadius: 15, elevation: 25 },
+  recordatorioHero: { height: 112, position: 'relative', overflow: 'hidden', borderBottomWidth: 2, borderBottomColor: '#6e824d' },
+  recordatorioSol: { position: 'absolute', top: 12, left: 25, width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,241,161,0.72)', shadowColor: '#fff0a4', shadowOpacity: 0.6, shadowRadius: 8 },
+  recordatorioColinaUno: { position: 'absolute', left: -30, bottom: -35, width: 260, height: 95, borderRadius: 120, backgroundColor: '#789b61', transform: [{ rotate: '5deg' }] },
+  recordatorioColinaDos: { position: 'absolute', right: -50, bottom: -43, width: 300, height: 105, borderRadius: 140, backgroundColor: '#5d8259', transform: [{ rotate: '-4deg' }] },
+  recordatorioAnimal: { position: 'absolute', zIndex: 3, left: 20, bottom: -4, width: 135, height: 110 },
+  recordatorioNivelActual: { position: 'absolute', zIndex: 4, left: '43%', top: 19, width: 57, height: 48, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,246,215,0.87)', borderWidth: 1.2, borderColor: '#a57b42' },
+  recordatorioNivelFuturo: { position: 'absolute', zIndex: 4, right: 46, top: 16, minWidth: 77, height: 54, paddingHorizontal: 7, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e9c861', borderWidth: 2, borderColor: '#9b7028', shadowColor: '#755321', shadowOpacity: 0.25, shadowRadius: 4, elevation: 4 },
+  recordatorioNivelEtiqueta: { color: '#795a32', fontFamily: 'Delius', fontSize: 4.8, lineHeight: 6, fontWeight: '900', letterSpacing: 0.35, textAlign: 'center' },
+  recordatorioNivelNumero: { color: '#5a3d25', fontFamily: 'Delius', fontSize: 18, lineHeight: 20, fontWeight: '900' },
+  recordatorioFlecha: { position: 'absolute', zIndex: 5, left: '59%', top: 35 },
+  recordatorioBotonEjemplo: { position: 'absolute', zIndex: 5, right: 18, bottom: 8, height: 25, minWidth: 104, paddingHorizontal: 10, borderRadius: 8, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#4384bd', borderWidth: 1.2, borderColor: '#286190', shadowColor: '#234f72', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 4 },
+  recordatorioBotonEjemploTexto: { color: '#fff', fontFamily: 'Delius', fontSize: 7.2, fontWeight: '900', letterSpacing: 0.45 },
+  recordatorioCerrar: { position: 'absolute', zIndex: 10, top: 7, right: 7, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,247,222,0.88)', borderWidth: 1, borderColor: '#c5a06e' },
+  recordatorioContenido: { paddingHorizontal: 17, paddingTop: 10, paddingBottom: 13, alignItems: 'center' },
+  recordatorioEtiqueta: { color: '#9a6834', fontFamily: 'Delius', fontSize: 5.8, lineHeight: 7, fontWeight: '900', letterSpacing: 1 },
+  recordatorioTitulo: { marginTop: 2, color: '#573821', fontFamily: 'Delius', fontSize: 15.5, lineHeight: 18, fontWeight: '900', textAlign: 'center' },
+  recordatorioTexto: { width: '94%', marginTop: 3, color: '#806047', fontFamily: 'Delius', fontSize: 7, lineHeight: 10, fontWeight: '700', textAlign: 'center' },
+  recordatorioDestacado: { color: '#6b8f51', fontWeight: '900' },
+  recordatorioRecursos: { width: '100%', height: 43, marginTop: 8, paddingHorizontal: 12, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', backgroundColor: '#f1dfb7', borderWidth: 1, borderColor: '#d0ac70' },
+  recordatorioRecurso: { flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center' },
+  recordatorioCartaIcono: { width: 23, height: 29, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d6bb6d', borderWidth: 1.5, borderColor: '#8d6d36', transform: [{ rotate: '-5deg' }] },
+  recordatorioCartaMarca: { color: '#fff8dc', fontSize: 14, lineHeight: 17, fontWeight: '900' },
+  recordatorioMoneda: { width: 25, height: 25, borderRadius: 13, color: '#fff0a5', backgroundColor: '#daa63e', borderWidth: 2, borderColor: '#9e7024', fontSize: 10, lineHeight: 20, fontWeight: '900', textAlign: 'center' },
+  recordatorioRecursoValor: { color: '#5e4229', fontFamily: 'Delius', fontSize: 9, lineHeight: 11, fontWeight: '900' },
+  recordatorioRecursoValorFaltante: { color: '#b5533d' },
+  recordatorioRecursoLabel: { color: '#987352', fontFamily: 'Delius', fontSize: 4.5, lineHeight: 6, fontWeight: '900', letterSpacing: 0.25 },
+  recordatorioSeparador: { width: 1, height: 27, backgroundColor: 'rgba(147,104,57,0.3)' },
+  recordatorioNota: { marginTop: 6, color: '#97775d', fontFamily: 'Delius', fontSize: 5.5, lineHeight: 7, fontWeight: '700', textAlign: 'center' },
+  recordatorioAcciones: { marginTop: 9, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  recordatorioDespues: { height: 30, minWidth: 82, paddingHorizontal: 13, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ead9b8', borderWidth: 1, borderColor: '#bea079' },
+  recordatorioDespuesTexto: { color: '#806047', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
+  recordatorioIr: { height: 30, minWidth: 137, paddingHorizontal: 14, borderRadius: 10, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#6f985d', borderWidth: 1, borderColor: '#486f42', shadowColor: '#355334', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.27, shadowRadius: 3, elevation: 4 },
+  recordatorioIrTexto: { color: '#fff8df', fontFamily: 'Delius', fontSize: 7.2, fontWeight: '900', letterSpacing: 0.4 },
   previewFondo: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(39,27,20,0.58)' },
   previewCerrarFondo: { ...StyleSheet.absoluteFillObject },
   previewTarjeta: { width: 225, minHeight: 255, borderRadius: 18, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 19, backgroundColor: '#fff0c8', borderWidth: 3, borderColor: '#b7873b', shadowColor: '#120c08', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.42, shadowRadius: 12, elevation: 20 },

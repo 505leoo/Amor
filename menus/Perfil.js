@@ -6,6 +6,7 @@ import {
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
+import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { collection, deleteField, doc, onSnapshot, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import TabButtons from '../components/TabButtons';
@@ -34,24 +35,24 @@ const FRAME_OPTIONS = [
 ];
 
 const RINCON_THEMES = [
-  { id: 'amanecer', nombre: 'Amanecer', detalle: 'Cálido y dorado', icon: 'wb-sunny', colors: ['#fff3bf', '#f0c078', '#8eb87a'], ground: '#688c57', border: '#bc813d', glow: '#fff2a8' },
-  { id: 'bosque', nombre: 'Bosque', detalle: 'Verde y tranquilo', icon: 'eco', colors: ['#dff0be', '#8fb77b', '#4e8268'], ground: '#416b50', border: '#527757', glow: '#e5f7ba' },
-  { id: 'cielo', nombre: 'Cielo', detalle: 'Claro y liviano', icon: 'water-drop', colors: ['#e5f9ff', '#9fd6dc', '#7bb19e'], ground: '#679879', border: '#5d8d8c', glow: '#f5ffff' },
-  { id: 'noche', nombre: 'Noche', detalle: 'Mágico y sereno', icon: 'dark-mode', colors: ['#9f9cce', '#5d668f', '#354667'], ground: '#334b51', border: '#48466f', glow: '#fff1a5' },
-  { id: 'lavanda', nombre: 'Lavanda', detalle: 'Suave y soñador', icon: 'auto-awesome', colors: ['#f3e1f3', '#c89ac7', '#8775a7'], ground: '#776687', border: '#8a608f', glow: '#fff1fa' },
-  { id: 'corazon', nombre: 'Corazón', detalle: 'Dulce y romántico', icon: 'favorite', colors: ['#ffe5dc', '#e8a0a4', '#bd7889'], ground: '#9b6675', border: '#ad6374', glow: '#fff0d8' },
+  { id: 'amanecer', nombre: 'Amanecer', detalle: 'Montañas doradas', precio: 0, colors: ['#fff3bf', '#f0c078', '#8eb87a'], ground: '#688c57', border: '#bc813d', glow: '#fff2a8' },
+  { id: 'bosque', nombre: 'Bosque', detalle: 'Árboles y honguitos', precio: 20, colors: ['#dff0be', '#8fb77b', '#4e8268'], ground: '#416b50', border: '#527757', glow: '#e5f7ba' },
+  { id: 'cielo', nombre: 'Lago celeste', detalle: 'Agua, nubes y juncos', precio: 35, colors: ['#e5f9ff', '#9fd6dc', '#7bb19e'], ground: '#679879', border: '#5d8d8c', glow: '#f5ffff' },
+  { id: 'noche', nombre: 'Noche', detalle: 'Luna y farolitos', precio: 50, colors: ['#9f9cce', '#5d668f', '#354667'], ground: '#334b51', border: '#48466f', glow: '#fff1a5' },
+  { id: 'lavanda', nombre: 'Lavanda', detalle: 'Campo y molino', precio: 75, colors: ['#f3e1f3', '#c89ac7', '#8775a7'], ground: '#776687', border: '#8a608f', glow: '#fff1fa' },
+  { id: 'corazon', nombre: 'Jardín de Amor', detalle: 'Arco, rosas y luces', precio: 100, colors: ['#ffe5dc', '#e8a0a4', '#bd7889'], ground: '#9b6675', border: '#ad6374', glow: '#fff0d8' },
 ];
 
 const RINCON_DECORATIONS = [
-  { id: 'flores', nombre: 'Flores', icon: 'local-florist', colors: ['#f6a9b9', '#b85773'] },
-  { id: 'hojitas', nombre: 'Hojitas', icon: 'spa', colors: ['#9ac36e', '#4d7e50'] },
-  { id: 'corazon', nombre: 'Corazón', icon: 'favorite', colors: ['#f28ba4', '#bd4f6d'] },
-  { id: 'regalito', nombre: 'Regalito', icon: 'redeem', colors: ['#e0a052', '#a86138'] },
-  { id: 'destellos', nombre: 'Destellos', icon: 'auto-awesome', colors: ['#e4bb55', '#a87132'] },
-  { id: 'almohadon', nombre: 'Almohadón', icon: 'weekend', colors: ['#bc92d0', '#76588f'] },
+  { id: 'flores', nombre: 'Canasto floral', precio: 0 },
+  { id: 'hojitas', nombre: 'Maceta silvestre', precio: 10 },
+  { id: 'corazon', nombre: 'Farol de corazón', precio: 25 },
+  { id: 'regalito', nombre: 'Regalo especial', precio: 40 },
+  { id: 'destellos', nombre: 'Lámpara estelar', precio: 65 },
+  { id: 'almohadon', nombre: 'Almohadón real', precio: 90 },
 ];
 
-const DEFAULT_RINCON = { tema: 'amanecer', animalId: null, skinId: 'default', adornos: ['flores', 'hojitas'] };
+const DEFAULT_RINCON = { tema: 'amanecer', animalId: null, skinId: 'default', adornos: ['flores'] };
 
 const BADGE_TIERS = [
   { id: 'bronce', nombre: 'Bronce', colors: ['#e0a16d', '#a96036', '#6d3822'] },
@@ -91,6 +92,9 @@ const unlockedSkinsFor = (animalId, user, animalStates) => {
     || (user?.animalito === animalId && user?.skin === skin.storageId));
 };
 
+const rinconItemUnlocked = (type, item, user) => item?.precio === 0
+  || Boolean(user?.rinconcitoDesbloqueos?.[type]?.[item?.id]);
+
 const normalizeRinconConfig = (raw, user, ownedAnimals, animalStates) => {
   const safeRaw = raw && typeof raw === 'object' ? raw : {};
   const ownedIds = new Set((ownedAnimals || []).map(animal => animal.id));
@@ -101,8 +105,8 @@ const normalizeRinconConfig = (raw, user, ownedAnimals, animalStates) => {
     ? user.skin
     : (availableSkins[0]?.storageId || 'default');
   const skinId = availableSkins.some(skin => skin.storageId === safeRaw.skinId) ? safeRaw.skinId : fallbackSkin;
-  const themeIds = new Set(RINCON_THEMES.map(theme => theme.id));
-  const decorationIds = new Set(RINCON_DECORATIONS.map(decoration => decoration.id));
+  const themeIds = new Set(RINCON_THEMES.filter(theme => rinconItemUnlocked('ambientes', theme, user)).map(theme => theme.id));
+  const decorationIds = new Set(RINCON_DECORATIONS.filter(decoration => rinconItemUnlocked('adornos', decoration, user)).map(decoration => decoration.id));
   const adornos = [...new Set(Array.isArray(safeRaw.adornos) ? safeRaw.adornos : DEFAULT_RINCON.adornos)]
     .filter(id => decorationIds.has(id))
     .slice(0, 2);
@@ -288,6 +292,83 @@ const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained
   </View>;
 };
 
+const RinconBackdrop = ({ themeId }) => {
+  const commonProps = { style: StyleSheet.absoluteFill, viewBox: '0 0 400 220', preserveAspectRatio: 'xMidYMid slice', pointerEvents: 'none' };
+  if (themeId === 'bosque') return <Svg {...commonProps}>
+    <Path d="M0 142 Q70 105 140 139 T285 126 T420 142 V220 H0Z" fill="#527b57" fillOpacity="0.76" />
+    <Path d="M0 174 Q83 147 166 172 T330 160 T430 174 V220 H0Z" fill="#315c48" />
+    {[22, 91, 322, 376].map((x, index) => <G key={x}>
+      <Rect x={x + 13} y={index % 2 ? 54 : 39} width={index % 2 ? 13 : 16} height="121" rx="6" fill="#694a35" />
+      <Rect x={x + 17} y={index % 2 ? 54 : 39} width="4" height="121" rx="2" fill="#9a704d" fillOpacity="0.58" />
+      <Circle cx={x + 20} cy={index % 2 ? 48 : 34} r={index % 2 ? 39 : 46} fill={index % 2 ? '#4d8056' : '#5f945e'} />
+      <Circle cx={x - 4} cy={index % 2 ? 55 : 43} r="24" fill="#78a96a" />
+      <Circle cx={x + 46} cy={index % 2 ? 51 : 38} r="29" fill="#3f754f" />
+    </G>)}
+    <Path d="M0 31 Q42 15 79 30 T151 25" fill="none" stroke="#47764e" strokeWidth="7" strokeLinecap="round" />
+    {[19, 52, 86, 126].map((x, index) => <Ellipse key={x} cx={x} cy={28 + (index % 2) * 5} rx="7" ry="13" fill="#83ae6d" transform={`rotate(${index % 2 ? 28 : -28} ${x} ${28 + (index % 2) * 5})`} />)}
+    <G><Rect x="55" y="171" width="8" height="15" rx="3" fill="#f4e4c1" /><Path d="M45 173 Q59 150 74 173Z" fill="#d86f59" /><Circle cx="55" cy="166" r="2.2" fill="#fff3d3" /><Circle cx="65" cy="166" r="2.2" fill="#fff3d3" /></G>
+    <G><Rect x="333" y="176" width="7" height="13" rx="3" fill="#f4e4c1" /><Path d="M324 178 Q337 158 350 178Z" fill="#e5a45b" /><Circle cx="332" cy="171" r="2" fill="#fff3d3" /><Circle cx="342" cy="171" r="2" fill="#fff3d3" /></G>
+    {[26, 115, 289, 365].map((x, index) => <G key={x}><Line x1={x} y1="173" x2={x + (index % 2 ? 5 : -4)} y2="151" stroke="#8fbd74" strokeWidth="3" /><Ellipse cx={x - 3} cy="155" rx="5" ry="9" fill="#a8ce82" transform={`rotate(-28 ${x - 3} 155)`} /></G>)}
+  </Svg>;
+  if (themeId === 'cielo') return <Svg {...commonProps}>
+    <G fill="#ffffff" fillOpacity="0.54"><Ellipse cx="67" cy="48" rx="46" ry="15" /><Circle cx="46" cy="41" r="19" /><Circle cx="78" cy="36" r="25" /><Ellipse cx="330" cy="67" rx="57" ry="17" /><Circle cx="306" cy="56" r="21" /><Circle cx="344" cy="52" r="28" /></G>
+    <Path d="M0 132 Q72 91 144 132 Q225 80 301 129 Q351 103 420 135 V220 H0Z" fill="#79aa89" fillOpacity="0.72" />
+    <Path d="M0 158 Q85 136 164 157 T320 151 T420 161 V220 H0Z" fill="#4f8c75" />
+    <Path d="M35 173 Q192 134 365 172 Q306 211 42 206Z" fill="#8cd1d3" />
+    <Path d="M55 181 Q188 153 342 179" fill="none" stroke="#dff9ee" strokeWidth="5" strokeLinecap="round" strokeOpacity="0.7" />
+    {[38, 53, 70, 332, 349, 365].map((x, index) => <G key={x}><Path d={`M${x} 192 Q${x - 2} 169 ${x + (index % 2 ? 5 : -4)} 151`} fill="none" stroke="#496f54" strokeWidth="3" /><Ellipse cx={x + (index % 2 ? 4 : -3)} cy="157" rx="3.5" ry="11" fill="#7b6944" /></G>)}
+    <Path d="M113 75 q12 -12 24 0 q12 -12 24 0" fill="none" stroke="#557e82" strokeWidth="3" strokeLinecap="round" />
+    <Path d="M245 52 q9 -9 18 0 q9 -9 18 0" fill="none" stroke="#557e82" strokeWidth="2.5" strokeLinecap="round" />
+    {[102, 298].map(x => <G key={x}><Ellipse cx={x} cy="173" rx="23" ry="7" fill="#d9f2d3" /><Circle cx={x - 9} cy="168" r="4" fill="#f6bed0" /><Circle cx={x + 7} cy="170" r="3" fill="#fff1b0" /></G>)}
+  </Svg>;
+  if (themeId === 'noche') return <Svg {...commonProps}>
+    <Circle cx="322" cy="48" r="31" fill="#fff0ad" fillOpacity="0.9" /><Circle cx="335" cy="38" r="29" fill="#666b98" />
+    {[38, 75, 119, 169, 225, 275, 360].map((x, index) => <G key={x}><Circle cx={x} cy={25 + (index % 3) * 18} r={index % 2 ? 2 : 3} fill="#fff0a6" /><Line x1={x - 6} y1={25 + (index % 3) * 18} x2={x + 6} y2={25 + (index % 3) * 18} stroke="#fff0a6" strokeWidth="1" strokeOpacity="0.65" /></G>)}
+    <Path d="M0 145 Q75 111 146 144 T285 130 T420 148 V220 H0Z" fill="#344b58" />
+    {[18, 62, 106, 296, 342, 382].map((x, index) => <G key={x}><Rect x={x - 4} y={115 + (index % 2) * 12} width="8" height="65" fill="#283b40" /><Polygon points={`${x},${60 + (index % 2) * 13} ${x - 30},143 ${x + 30},143`} fill={index % 2 ? '#29484a' : '#38585a'} /><Polygon points={`${x},${83 + (index % 2) * 13} ${x - 25},158 ${x + 25},158`} fill="#263f43" /></G>)}
+    <Path d="M0 182 Q84 160 170 181 T338 174 T420 185 V220 H0Z" fill="#243b3d" />
+    {[87, 315].map(x => <G key={x}><Line x1={x} y1="125" x2={x} y2="182" stroke="#805c39" strokeWidth="4" /><Rect x={x - 9} y="129" width="18" height="24" rx="4" fill="#efba59" /><Rect x={x - 6} y="132" width="12" height="18" rx="3" fill="#ffe8a0" /><Circle cx={x} cy="141" r="18" fill="#ffe68b" fillOpacity="0.12" /></G>)}
+    <G fill="#d5edf1"><Circle cx="45" cy="118" r="1.5" /><Circle cx="143" cy="102" r="1.5" /><Circle cx="250" cy="91" r="1.5" /><Circle cx="370" cy="109" r="1.5" /></G>
+  </Svg>;
+  if (themeId === 'lavanda') return <Svg {...commonProps}>
+    <Circle cx="73" cy="48" r="31" fill="#fff1db" fillOpacity="0.72" />
+    <Path d="M0 134 Q82 96 163 135 Q248 91 329 132 Q374 111 420 137 V220 H0Z" fill="#a783ae" fillOpacity="0.62" />
+    <Path d="M0 163 Q95 132 187 162 T365 157 T420 164 V220 H0Z" fill="#78618f" />
+    <G transform="translate(315 77)"><Rect x="-5" y="31" width="10" height="76" fill="#eee1cf" /><Path d="M-22 107 H22 L13 48 H-13Z" fill="#d7c1bc" /><Circle cx="0" cy="30" r="6" fill="#8c6c78" /><Line x1="0" y1="30" x2="-34" y2="5" stroke="#f3e8db" strokeWidth="5" /><Line x1="0" y1="30" x2="34" y2="5" stroke="#f3e8db" strokeWidth="5" /><Line x1="0" y1="30" x2="-29" y2="58" stroke="#f3e8db" strokeWidth="5" /><Line x1="0" y1="30" x2="29" y2="58" stroke="#f3e8db" strokeWidth="5" /></G>
+    {[18, 38, 60, 84, 109, 137, 165, 236, 260, 283, 350, 375, 395].map((x, index) => <G key={x}><Path d={`M${x} 218 Q${x + (index % 2 ? 8 : -7)} 190 ${x + (index % 3 ? 3 : -3)} 163`} fill="none" stroke="#4f6d55" strokeWidth="2.5" /><G fill={index % 2 ? '#caa0dd' : '#a878c3'}><Circle cx={x + (index % 3 ? 3 : -3)} cy="165" r="4" /><Circle cx={x + (index % 3 ? 7 : 1)} cy="172" r="4" /><Circle cx={x + (index % 3 ? 0 : -6)} cy="178" r="4" /><Circle cx={x + (index % 3 ? 7 : 1)} cy="184" r="3.5" /></G></G>)}
+    <Path d="M0 207 Q105 186 208 207 T420 202 V220 H0Z" fill="#604d78" fillOpacity="0.78" />
+  </Svg>;
+  if (themeId === 'corazon') return <Svg {...commonProps}>
+    <Circle cx="58" cy="44" r="26" fill="#fff1d4" fillOpacity="0.7" />
+    <Path d="M0 151 Q72 112 145 151 T290 139 T420 153 V220 H0Z" fill="#b57982" fillOpacity="0.65" />
+    <Path d="M0 181 Q98 151 195 178 T390 174 T430 182 V220 H0Z" fill="#8d6272" />
+    <G fill="none" stroke="#f4d5bd" strokeWidth="8" strokeLinecap="round"><Path d="M38 179 V102 Q38 65 79 65 Q120 65 120 102 V179" /><Path d="M280 179 V102 Q280 65 321 65 Q362 65 362 102 V179" /></G>
+    {[45, 63, 84, 105, 287, 306, 328, 349].map((x, index) => <G key={x}><Circle cx={x} cy={76 + (index % 2) * 9} r="7" fill={index % 3 ? '#dd6f86' : '#f0a1a6'} /><Circle cx={x} cy={76 + (index % 2) * 9} r="2.5" fill="#ffe3b3" /><Ellipse cx={x - 6} cy={88 + (index % 2) * 4} rx="4" ry="8" fill="#6f956a" transform={`rotate(-35 ${x - 6} ${88 + (index % 2) * 4})`} /></G>)}
+    <Path d="M166 51 C151 33 122 46 128 69 C133 89 166 104 166 104 C166 104 199 89 204 69 C210 46 181 33 166 51Z" fill="#ef7890" /><Path d="M232 42 C221 29 201 39 205 55 C209 69 232 80 232 80 C232 80 255 69 259 55 C263 39 243 29 232 42Z" fill="#f4a7ac" />
+    {[145, 255].map(x => <G key={x}><Line x1={x} y1="92" x2={x} y2="161" stroke="#805b45" strokeWidth="3" /><Circle cx={x} cy="105" r="13" fill="#ffd88c" fillOpacity="0.32" /><Path d={`M${x} 96 C${x - 7} 87 ${x - 18} 96 ${x} 113 C${x + 18} 96 ${x + 7} 87 ${x} 96Z`} fill="#ffd78c" /></G>)}
+  </Svg>;
+  return <Svg {...commonProps}>
+    <Circle cx="317" cy="48" r="34" fill="#fff0a3" fillOpacity="0.88" />
+    {[0, 45, 90, 135].map(angle => <Line key={angle} x1="317" y1="5" x2="317" y2="-8" stroke="#fff2a9" strokeWidth="4" strokeLinecap="round" transform={`rotate(${angle} 317 48)`} />)}
+    <Polygon points="0,151 88,72 167,151" fill="#9b9871" fillOpacity="0.72" /><Polygon points="83,151 194,54 292,151" fill="#7c936e" fillOpacity="0.82" /><Polygon points="214,151 326,84 420,151" fill="#68886a" fillOpacity="0.84" />
+    <Path d="M0 157 Q78 124 157 157 T313 148 T420 161 V220 H0Z" fill="#71925d" />
+    <Path d="M0 186 Q96 153 190 184 T375 178 T430 188 V220 H0Z" fill="#557b50" />
+    <Path d="M183 220 Q145 195 178 170 Q197 158 209 143 Q217 164 246 183 Q267 200 242 220Z" fill="#bce0c5" fillOpacity="0.76" />
+    {[28, 64, 112, 286, 342, 381].map((x, index) => <G key={x}><Rect x={x - 3} y={135 + (index % 2) * 10} width="6" height="51" rx="2" fill="#5b513a" /><Circle cx={x} cy={126 + (index % 2) * 10} r="17" fill={index % 2 ? '#709252' : '#829d58'} /><Circle cx={x - 9} cy={132 + (index % 2) * 10} r="11" fill="#98ae67" /></G>)}
+    {[48, 129, 273, 358].map((x, index) => <G key={x}><Line x1={x} y1="203" x2={x + (index % 2 ? 4 : -4)} y2="182" stroke="#4e7549" strokeWidth="2" /><Circle cx={x + (index % 2 ? 4 : -4)} cy="180" r="4" fill={index % 2 ? '#f7c767' : '#f29b88'} /></G>)}
+  </Svg>;
+};
+
+const RinconDecorationArtwork = ({ decorationId }) => {
+  const props = { style: StyleSheet.absoluteFill, viewBox: '0 0 70 70', pointerEvents: 'none' };
+  if (decorationId === 'hojitas') return <Svg {...props}><Ellipse cx="35" cy="61" rx="27" ry="6" fill="#3d322b" fillOpacity="0.2" /><Path d="M19 38 H51 L47 61 H23Z" fill="#b66e45" /><Path d="M23 43 H47 L44 56 H26Z" fill="#db9863" /><G fill="#57905c" stroke="#3e704b" strokeWidth="1.2"><Ellipse cx="28" cy="28" rx="8" ry="15" transform="rotate(-35 28 28)" /><Ellipse cx="42" cy="25" rx="8" ry="16" transform="rotate(32 42 25)" /><Ellipse cx="20" cy="36" rx="7" ry="13" transform="rotate(-55 20 36)" /><Ellipse cx="50" cy="36" rx="7" ry="13" transform="rotate(55 50 36)" /><Ellipse cx="35" cy="21" rx="7" ry="16" /></G><G stroke="#d3e7ae" strokeWidth="1"><Line x1="35" y1="38" x2="28" y2="20" /><Line x1="35" y1="38" x2="43" y2="17" /></G></Svg>;
+  if (decorationId === 'corazon') return <Svg {...props}><Ellipse cx="35" cy="63" rx="23" ry="5" fill="#3d322b" fillOpacity="0.2" /><Rect x="32" y="16" width="6" height="47" rx="3" fill="#80583e" /><Path d="M20 20 Q35 3 50 20 L46 48 Q35 57 24 48Z" fill="#d47a68" stroke="#88493f" strokeWidth="2" /><Path d="M35 27 C29 19 18 27 35 43 C52 27 41 19 35 27Z" fill="#ffe09a" /><Circle cx="35" cy="34" r="19" fill="#ffd881" fillOpacity="0.18" /><Path d="M25 15 Q35 7 45 15" fill="none" stroke="#f5c77b" strokeWidth="3" /></Svg>;
+  if (decorationId === 'regalito') return <Svg {...props}><Ellipse cx="35" cy="62" rx="28" ry="6" fill="#3d322b" fillOpacity="0.2" /><Rect x="11" y="29" width="48" height="33" rx="6" fill="#d98263" stroke="#9f5148" strokeWidth="2" /><Rect x="8" y="24" width="54" height="13" rx="5" fill="#efad76" stroke="#9f5148" strokeWidth="2" /><Rect x="31" y="24" width="9" height="38" fill="#f6d078" /><Path d="M35 24 C22 20 17 9 25 7 C33 5 36 16 35 24Z" fill="#f4c96d" stroke="#a9683f" strokeWidth="2" /><Path d="M35 24 C48 20 53 9 45 7 C37 5 34 16 35 24Z" fill="#f4c96d" stroke="#a9683f" strokeWidth="2" /><Circle cx="35" cy="25" r="5" fill="#ffd990" /></Svg>;
+  if (decorationId === 'destellos') return <Svg {...props}><Ellipse cx="35" cy="63" rx="23" ry="5" fill="#3d322b" fillOpacity="0.2" /><Path d="M30 57 H40 L43 64 H27Z" fill="#76513a" /><Rect x="32" y="27" width="6" height="32" rx="3" fill="#8c6240" /><Circle cx="35" cy="23" r="22" fill="#ffe59a" fillOpacity="0.2" /><Polygon points="35,4 41,16 55,18 45,28 48,42 35,35 22,42 25,28 15,18 29,16" fill="#f7cc63" stroke="#a86b32" strokeWidth="2" /><Circle cx="35" cy="23" r="6" fill="#fff4bd" /><G stroke="#fff0a1" strokeWidth="2" strokeLinecap="round"><Line x1="10" y1="7" x2="15" y2="12" /><Line x1="58" y1="8" x2="54" y2="13" /><Line x1="61" y1="35" x2="66" y2="35" /></G></Svg>;
+  if (decorationId === 'almohadon') return <Svg {...props}><Ellipse cx="35" cy="61" rx="29" ry="7" fill="#3d322b" fillOpacity="0.2" /><Path d="M9 28 Q13 13 28 17 Q35 10 42 17 Q58 13 61 29 Q67 37 61 47 Q58 61 43 57 Q35 64 27 57 Q12 61 9 47 Q3 37 9 28Z" fill="#a97ec0" stroke="#684c83" strokeWidth="2" /><Path d="M16 31 Q20 21 30 24 Q35 19 40 24 Q51 21 55 32 Q60 38 54 46 Q50 54 41 50 Q35 56 29 50 Q19 54 15 45 Q10 38 16 31Z" fill="#cba4d8" /><Circle cx="35" cy="38" r="5" fill="#f5d591" /><Path d="M14 25 Q35 38 56 25 M14 50 Q35 38 56 50" fill="none" stroke="#e6c7ee" strokeWidth="1.5" /></Svg>;
+  return <Svg {...props}><Ellipse cx="35" cy="62" rx="28" ry="6" fill="#3d322b" fillOpacity="0.2" /><Path d="M13 32 Q35 22 57 32 L53 59 Q35 66 17 59Z" fill="#b9774d" stroke="#7a4a34" strokeWidth="2" /><Path d="M16 34 Q35 41 54 34" fill="none" stroke="#e2ad75" strokeWidth="3" /><G stroke="#4f794d" strokeWidth="2"><Line x1="25" y1="37" x2="19" y2="15" /><Line x1="35" y1="36" x2="35" y2="10" /><Line x1="44" y1="37" x2="52" y2="16" /></G><G><Circle cx="19" cy="14" r="8" fill="#ef8fa4" /><Circle cx="35" cy="10" r="9" fill="#f2c768" /><Circle cx="52" cy="15" r="8" fill="#bd8acb" /><G fill="#fff0bd"><Circle cx="19" cy="14" r="2.5" /><Circle cx="35" cy="10" r="2.8" /><Circle cx="52" cy="15" r="2.5" /></G></G><G fill="#6b985d"><Ellipse cx="25" cy="25" rx="5" ry="9" transform="rotate(-40 25 25)" /><Ellipse cx="44" cy="26" rx="5" ry="9" transform="rotate(42 44 26)" /></G></Svg>;
+};
+
 const RinconcitoScene = ({ config, large = false }) => {
   const theme = RINCON_THEMES.find(item => item.id === config?.tema) || RINCON_THEMES[0];
   const animal = ANIMALITOS_POR_ID[config?.animalId] || null;
@@ -296,17 +377,9 @@ const RinconcitoScene = ({ config, large = false }) => {
     || null;
   const decorations = (config?.adornos || []).map(id => RINCON_DECORATIONS.find(item => item.id === id)).filter(Boolean).slice(0, 2);
   return <LinearGradient colors={theme.colors} start={{ x: 0.05, y: 0 }} end={{ x: 0.95, y: 1 }} style={[styles.rinconScene, large && styles.rinconSceneLarge, { borderColor: theme.border }]}>
-    <View pointerEvents="none" style={[styles.rinconSun, large && styles.rinconSunLarge, { backgroundColor: theme.glow }]} />
-    <View pointerEvents="none" style={[styles.rinconCloud, styles.rinconCloudLeft, large && styles.rinconCloudLarge]} />
-    <View pointerEvents="none" style={[styles.rinconCloud, styles.rinconCloudRight, large && styles.rinconCloudLarge]} />
-    <View pointerEvents="none" style={[styles.rinconHillBack, large && styles.rinconHillBackLarge, { backgroundColor: `${theme.ground}88` }]} />
-    <View pointerEvents="none" style={[styles.rinconHillFront, large && styles.rinconHillFrontLarge, { backgroundColor: theme.ground }]} />
-    {[0, 1, 2, 3].map(index => <View key={index} pointerEvents="none" style={[styles.rinconSpark, large && styles.rinconSparkLarge, { left: `${17 + (index * 21)}%`, top: `${15 + ((index % 2) * 12)}%`, backgroundColor: theme.glow }]} />)}
+    <RinconBackdrop themeId={theme.id} />
     {decorations.map((decoration, index) => <View key={decoration.id} pointerEvents="none" style={[styles.rinconDecoration, large && styles.rinconDecorationLarge, index === 0 ? styles.rinconDecorationLeft : styles.rinconDecorationRight]}>
-      <View style={[styles.rinconDecorationShadow, large && styles.rinconDecorationShadowLarge]} />
-      <LinearGradient colors={decoration.colors} style={[styles.rinconDecorationMedal, large && styles.rinconDecorationMedalLarge]}>
-        <MaterialIcons name={decoration.icon} size={large ? 26 : 15} color="#fff8df" />
-      </LinearGradient>
+      <RinconDecorationArtwork decorationId={decoration.id} />
     </View>)}
     <View pointerEvents="none" style={[styles.rinconPlatform, large && styles.rinconPlatformLarge, { backgroundColor: `${theme.glow}a8`, borderColor: `${theme.border}99` }]} />
     {skin ? <ExpoImage source={skin.imagen} style={[styles.rinconAnimal, large && styles.rinconAnimalLarge]} contentFit="contain" cachePolicy="memory-disk" /> : <View style={[styles.rinconNoAnimal, large && styles.rinconNoAnimalLarge]}><MaterialIcons name="pets" size={large ? 42 : 24} color="rgba(255,248,220,0.82)" /><Text style={[styles.rinconNoAnimalText, large && styles.rinconNoAnimalTextLarge]}>Tu compañero aparecerá aquí</Text></View>}
@@ -321,14 +394,10 @@ const RinconcitoPreview = ({ config, readOnly, ownerName, onPress }) => {
       <View><Text style={styles.rinconPreviewEyebrow}>{readOnly ? 'SU ESPACIO PERSONAL' : 'TU ESPACIO PERSONAL'}</Text><Text style={styles.rinconPreviewTitle}>{readOnly ? `El rinconcito de ${ownerName}` : 'Mi Rinconcito'}</Text></View>
       {!readOnly && <View style={styles.rinconEditChip}><MaterialIcons name="edit" size={9} color="#6b4327" /><Text style={styles.rinconEditChipText}>PERSONALIZAR</Text></View>}
     </LinearGradient>
-    <View pointerEvents="none" style={styles.rinconPreviewBottom}>
-      <Text style={styles.rinconPreviewHint}>{readOnly ? 'Un pedacito de su mundo dentro de Amor' : 'Toca para cambiar el ambiente, compañero, traje y adornos'}</Text>
-      {!readOnly && <MaterialIcons name="chevron-right" size={15} color="#fff6dd" />}
-    </View>
   </TouchableOpacity>;
 };
 
-const RinconcitoBookPage = ({ onBack, config, ownedAnimals, animalStates, user, onSave, saving }) => {
+const RinconcitoBookPage = ({ onBack, config, ownedAnimals, animalStates, user, onSave, saving, onUnlock, unlocking }) => {
   const initialConfig = useRef(config).current;
   const configKey = JSON.stringify(initialConfig);
   const [draft, setDraft] = useState(initialConfig);
@@ -348,11 +417,19 @@ const RinconcitoBookPage = ({ onBack, config, ownedAnimals, animalStates, user, 
     if (selected.includes(decorationId)) return { ...current, adornos: selected.filter(id => id !== decorationId) };
     return { ...current, adornos: selected.length >= 2 ? [selected[1], decorationId] : [...selected, decorationId] };
   });
+  const chooseTheme = async theme => {
+    if (!rinconItemUnlocked('ambientes', theme, user) && !(await onUnlock('ambientes', theme))) return;
+    setDraft(current => ({ ...current, tema: theme.id }));
+  };
+  const chooseDecoration = async decoration => {
+    if (!rinconItemUnlocked('adornos', decoration, user) && !(await onUnlock('adornos', decoration))) return;
+    toggleDecoration(decoration.id);
+  };
 
   return <View style={subpage.page}>
     <View style={modal.modalHeader}>
       <View><Text style={modal.eyebrow}>TU ESPACIO DENTRO DE AMOR</Text><Text style={modal.title}>Mi Rinconcito</Text><Text style={modal.subtitle}>Combina un ambiente, tu compañero, su traje y hasta dos adornos.</Text></View>
-      <TouchableOpacity style={modal.close} onPress={onBack} disabled={saving}><MaterialIcons name="arrow-back" size={18} color="#75502f" /></TouchableOpacity>
+      <View style={modal.rinconHeaderActions}><View style={modal.rinconDiamondBalance}><MaterialIcons name="diamond" size={13} color="#40bedd" /><Text style={modal.rinconDiamondBalanceText}>{numero(user?.diamantes)}</Text></View><TouchableOpacity style={modal.close} onPress={onBack} disabled={saving || Boolean(unlocking)}><MaterialIcons name="arrow-back" size={18} color="#75502f" /></TouchableOpacity></View>
     </View>
     <View style={modal.rinconEditorBody}>
       <View style={modal.rinconPreviewColumn}>
@@ -364,10 +441,13 @@ const RinconcitoBookPage = ({ onBack, config, ownedAnimals, animalStates, user, 
           <View style={modal.rinconControlHeading}><View style={modal.rinconStep}><Text style={modal.rinconStepText}>1</Text></View><View><Text style={modal.rinconControlTitle}>ELIGE EL AMBIENTE</Text><Text style={modal.rinconControlSubtitle}>Marca el tono de todo tu rincón.</Text></View></View>
           <View style={modal.rinconThemeGrid}>{RINCON_THEMES.map(theme => {
             const active = draft?.tema === theme.id;
-            return <TouchableOpacity key={theme.id} onPress={() => setDraft(current => ({ ...current, tema: theme.id }))} style={[modal.rinconThemeCard, active && modal.rinconOptionActive]} activeOpacity={0.82}>
-              <LinearGradient colors={theme.colors} style={modal.rinconThemeSwatch}><MaterialIcons name={theme.icon} size={12} color="#fff9df" /></LinearGradient>
+            const unlocked = rinconItemUnlocked('ambientes', theme, user);
+            const busy = unlocking === `ambientes:${theme.id}`;
+            return <TouchableOpacity key={theme.id} disabled={Boolean(unlocking)} onPress={() => chooseTheme(theme)} style={[modal.rinconThemeCard, active && modal.rinconOptionActive, !unlocked && modal.rinconOptionLocked]} activeOpacity={0.82}>
+              <LinearGradient colors={theme.colors} style={modal.rinconThemeSwatch}><RinconBackdrop themeId={theme.id} /></LinearGradient>
               <View style={modal.rinconThemeInfo}><Text style={modal.rinconOptionName}>{theme.nombre}</Text><Text style={modal.rinconOptionDetail}>{theme.detalle}</Text></View>
               {active && <View style={modal.rinconCheck}><MaterialIcons name="check" size={8} color="#fff" /></View>}
+              {!unlocked && <View style={modal.rinconPriceBadge}><MaterialIcons name="diamond" size={7} color="#35badb" /><Text style={modal.rinconPriceText}>{busy ? '…' : theme.precio}</Text></View>}
             </TouchableOpacity>;
           })}</View>
 
@@ -386,11 +466,13 @@ const RinconcitoBookPage = ({ onBack, config, ownedAnimals, animalStates, user, 
           <View style={modal.rinconControlHeading}><View style={modal.rinconStep}><Text style={modal.rinconStepText}>4</Text></View><View><Text style={modal.rinconControlTitle}>DALE EL TOQUE FINAL · {(draft?.adornos || []).length}/2</Text><Text style={modal.rinconControlSubtitle}>Al elegir un tercero, reemplaza al más antiguo.</Text></View></View>
           <View style={modal.rinconDecorationGrid}>{RINCON_DECORATIONS.map(decoration => {
             const active = draft?.adornos?.includes(decoration.id);
-            return <TouchableOpacity key={decoration.id} onPress={() => toggleDecoration(decoration.id)} style={[modal.rinconDecorationChoice, active && modal.rinconOptionActive]} activeOpacity={0.82}><LinearGradient colors={decoration.colors} style={modal.rinconDecorationChoiceIcon}><MaterialIcons name={decoration.icon} size={13} color="#fff8e1" /></LinearGradient><Text style={modal.rinconChoiceName}>{decoration.nombre}</Text>{active && <View style={modal.rinconCheck}><MaterialIcons name="check" size={8} color="#fff" /></View>}</TouchableOpacity>;
+            const unlocked = rinconItemUnlocked('adornos', decoration, user);
+            const busy = unlocking === `adornos:${decoration.id}`;
+            return <TouchableOpacity key={decoration.id} disabled={Boolean(unlocking)} onPress={() => chooseDecoration(decoration)} style={[modal.rinconDecorationChoice, active && modal.rinconOptionActive, !unlocked && modal.rinconOptionLocked]} activeOpacity={0.82}><View style={modal.rinconDecorationChoiceIcon}><RinconDecorationArtwork decorationId={decoration.id} /></View><Text style={modal.rinconDecorationChoiceName} numberOfLines={2}>{decoration.nombre}</Text>{active && <View style={modal.rinconCheck}><MaterialIcons name="check" size={8} color="#fff" /></View>}{!unlocked && <View style={modal.rinconPriceBadge}><MaterialIcons name="diamond" size={7} color="#35badb" /><Text style={modal.rinconPriceText}>{busy ? '…' : decoration.precio}</Text></View>}</TouchableOpacity>;
           })}</View>
         </ScrollView>
-        <TouchableOpacity onPress={() => onSave(draft)} disabled={saving || !dirty} style={[modal.rinconSaveWrap, (!dirty || saving) && modal.rinconSaveDisabled]} activeOpacity={0.86}>
-          <LinearGradient colors={dirty ? ['#7fa468', '#527c5d'] : ['#c7bda9', '#9d9280']} style={modal.rinconSaveButton}><MaterialIcons name={saving ? 'hourglass-top' : 'favorite'} size={14} color="#fff7dc" /><View><Text style={modal.rinconSaveText}>{saving ? 'GUARDANDO…' : dirty ? 'GUARDAR MI RINCONCITO' : 'TODO ESTÁ GUARDADO'}</Text><Text style={modal.rinconSaveHint}>{dirty ? 'Se verá así en tu perfil' : 'Haz un cambio para volver a guardar'}</Text></View></LinearGradient>
+        <TouchableOpacity onPress={() => onSave(draft)} disabled={saving || !dirty || Boolean(unlocking)} style={[modal.rinconSaveWrap, (!dirty || saving || Boolean(unlocking)) && modal.rinconSaveDisabled]} activeOpacity={0.86}>
+          <LinearGradient colors={dirty && !unlocking ? ['#7fa468', '#527c5d'] : ['#c7bda9', '#9d9280']} style={modal.rinconSaveButton}><MaterialIcons name={saving || unlocking ? 'hourglass-top' : 'favorite'} size={14} color="#fff7dc" /><View><Text style={modal.rinconSaveText}>{unlocking ? 'DESBLOQUEANDO…' : saving ? 'GUARDANDO…' : dirty ? 'GUARDAR MI RINCONCITO' : 'TODO ESTÁ GUARDADO'}</Text><Text style={modal.rinconSaveHint}>{unlocking ? 'Un momento, ya casi es tuyo' : dirty ? 'Se verá así en tu perfil' : 'Haz un cambio para volver a guardar'}</Text></View></LinearGradient>
         </TouchableOpacity>
       </View>
     </View>
@@ -520,12 +602,14 @@ const Perfil = ({ navigation, route }) => {
   const [openBadgeId, setOpenBadgeId] = useState(null);
   const [busyFrameId, setBusyFrameId] = useState(null);
   const [rinconSaving, setRinconSaving] = useState(false);
+  const [rinconUnlocking, setRinconUnlocking] = useState(null);
   const [seccionPerfil, setSeccionPerfil] = useState('principal');
   const contentReveal = useRef(new Animated.Value(0)).current;
   const badgeAwardingRef = useRef(new Set());
   const legacyCleanupRef = useRef(false);
   const frameActionRef = useRef(false);
   const rinconSaveRef = useRef(false);
+  const rinconUnlockRef = useRef(false);
 
   useEffect(() => {
     const currentUser = auth.currentUser;
@@ -535,9 +619,11 @@ const Perfil = ({ navigation, route }) => {
     setOpenBadgeId(null);
     setBusyFrameId(null);
     setRinconSaving(false);
+    setRinconUnlocking(null);
     setSeccionPerfil('principal');
     frameActionRef.current = false;
     rinconSaveRef.current = false;
+    rinconUnlockRef.current = false;
     legacyCleanupRef.current = false;
     if (!targetUid) return undefined;
     let conexiones = {};
@@ -570,6 +656,7 @@ const Perfil = ({ navigation, route }) => {
         marcosDesbloqueados: { corazon: true, ...(raw.marcosComprados || {}) },
         chapasPerfil: raw.chapasPerfil || {},
         rinconcito: raw.rinconcito || {},
+        rinconcitoDesbloqueos: raw.rinconcitoDesbloqueos || {},
       });
     }, () => setUserData(null));
     const unsubscribeGame = onSnapshot(doc(db, 'usuarios', targetUid, 'juegos', 'conexiones'), snap => {
@@ -808,6 +895,48 @@ const Perfil = ({ navigation, route }) => {
     }
   };
 
+  const desbloquearRincon = async (type, item) => {
+    if (soloLectura || rinconUnlockRef.current || !d.uid || !item) return false;
+    if (rinconItemUnlocked(type, item, d)) return true;
+    const unlockKey = `${type}:${item.id}`;
+    rinconUnlockRef.current = true;
+    setRinconUnlocking(unlockKey);
+    try {
+      const result = await runTransaction(db, async transaction => {
+        const userRef = doc(db, 'usuarios', d.uid);
+        const snapshot = await transaction.get(userRef);
+        if (!snapshot.exists()) throw new Error('USUARIO_NO_ENCONTRADO');
+        const current = snapshot.data() || {};
+        const unlocks = current.rinconcitoDesbloqueos || {};
+        if (item.precio === 0 || unlocks?.[type]?.[item.id]) {
+          return { diamonds: Math.max(0, Number(current.diamantes ?? current.diamante) || 0), unlocks, purchased: false };
+        }
+        const diamonds = Math.max(0, Number(current.diamantes ?? current.diamante) || 0);
+        if (diamonds < item.precio) {
+          const error = new Error('DIAMANTES_INSUFICIENTES');
+          error.code = 'DIAMANTES_INSUFICIENTES';
+          throw error;
+        }
+        const nextUnlocks = { ...unlocks, [type]: { ...(unlocks[type] || {}), [item.id]: true } };
+        transaction.update(userRef, { diamantes: diamonds - item.precio, rinconcitoDesbloqueos: nextUnlocks });
+        return { diamonds: diamonds - item.precio, unlocks: nextUnlocks, purchased: true };
+      });
+      setUserData(current => current ? { ...current, diamantes: result.diamonds, rinconcitoDesbloqueos: result.unlocks } : current);
+      if (result.purchased) global.showToast?.({ type: 'success', text1: 'Nuevo detalle desbloqueado', text2: `${item.nombre} ya forma parte de tu colección` });
+      return true;
+    } catch (error) {
+      if (error?.code === 'DIAMANTES_INSUFICIENTES' || error?.message === 'DIAMANTES_INSUFICIENTES') {
+        global.showToast?.({ type: 'info', text1: 'Te faltan diamantes', text2: `${item.nombre} cuesta ${item.precio}` });
+      } else {
+        global.showToast?.({ type: 'error', text1: 'No pudimos desbloquearlo', text2: 'Tus diamantes no fueron modificados' });
+      }
+      return false;
+    } finally {
+      rinconUnlockRef.current = false;
+      setRinconUnlocking(null);
+    }
+  };
+
   return (
     <View style={styles.root}>
       <StatusBar hidden />
@@ -817,7 +946,7 @@ const Perfil = ({ navigation, route }) => {
       <Animated.View style={[styles.book, { opacity: contentReveal }]}>
         <View pointerEvents="none" style={styles.bookTopLight} />
         {seccionPerfil === 'principal' && <View pointerEvents="none" style={styles.bookSpine} />}
-        {seccionPerfil === 'marcos' ? <FrameBookPage onBack={() => setSeccionPerfil('principal')} avatar={avatar} selectedFrame={activeFrame} unlockedFrames={d.marcosDesbloqueados} readOnly={soloLectura} onSelect={seleccionarMarco} busyFrameId={busyFrameId} /> : seccionPerfil === 'coleccion' ? <CollectionBookPage onBack={() => setSeccionPerfil('principal')} animals={ANIMALITOS} ownedAnimals={ownedAnimals} animalStates={animalStates} user={d} /> : seccionPerfil === 'rinconcito' && !soloLectura ? <RinconcitoBookPage onBack={() => setSeccionPerfil('principal')} config={rinconConfig} ownedAnimals={ownedAnimals} animalStates={animalStates} user={d} onSave={guardarRinconcito} saving={rinconSaving} /> : <>
+        {seccionPerfil === 'marcos' ? <FrameBookPage onBack={() => setSeccionPerfil('principal')} avatar={avatar} selectedFrame={activeFrame} unlockedFrames={d.marcosDesbloqueados} readOnly={soloLectura} onSelect={seleccionarMarco} busyFrameId={busyFrameId} /> : seccionPerfil === 'coleccion' ? <CollectionBookPage onBack={() => setSeccionPerfil('principal')} animals={ANIMALITOS} ownedAnimals={ownedAnimals} animalStates={animalStates} user={d} /> : seccionPerfil === 'rinconcito' && !soloLectura ? <RinconcitoBookPage onBack={() => setSeccionPerfil('principal')} config={rinconConfig} ownedAnimals={ownedAnimals} animalStates={animalStates} user={d} onSave={guardarRinconcito} saving={rinconSaving} onUnlock={desbloquearRincon} unlocking={rinconUnlocking} /> : <>
         <View style={styles.leftPage}>
           <View style={styles.identityRow}>
             <View style={styles.portraitColumn}>
@@ -1062,36 +1191,20 @@ const styles = StyleSheet.create({
   rinconPreview: { flex: 1, minHeight: 82, position: 'relative', overflow: 'hidden', marginTop: 5, marginHorizontal: 1, borderRadius: 11, borderWidth: 1.4, borderColor: '#785435', shadowColor: '#55331f', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.34, shadowRadius: 4, elevation: 5 },
   rinconScene: { flex: 1, minHeight: 78, position: 'relative', overflow: 'hidden', borderRadius: 9, borderWidth: 0.7 },
   rinconSceneLarge: { minHeight: 190, borderRadius: 13, borderWidth: 1.2 },
-  rinconSun: { position: 'absolute', top: 10, right: '13%', width: 28, height: 28, borderRadius: 14, opacity: 0.72, shadowColor: '#fff4a5', shadowOpacity: 0.7, shadowRadius: 8, elevation: 2 },
-  rinconSunLarge: { top: 18, width: 48, height: 48, borderRadius: 24, shadowRadius: 12 },
-  rinconCloud: { position: 'absolute', width: 65, height: 17, borderRadius: 12, backgroundColor: 'rgba(255,255,246,0.28)' },
-  rinconCloudLeft: { left: -12, top: 27, transform: [{ rotate: '-5deg' }] },
-  rinconCloudRight: { right: -19, top: 42, transform: [{ rotate: '7deg' }] },
-  rinconCloudLarge: { width: 115, height: 28, borderRadius: 18 },
-  rinconHillBack: { position: 'absolute', left: -30, right: '32%', bottom: 9, height: 50, borderTopRightRadius: 85, transform: [{ rotate: '4deg' }] },
-  rinconHillBackLarge: { left: -45, bottom: 14, height: 105, borderTopRightRadius: 145 },
-  rinconHillFront: { position: 'absolute', left: '24%', right: -35, bottom: -26, height: 75, borderTopLeftRadius: 100, transform: [{ rotate: '-3deg' }] },
-  rinconHillFrontLarge: { right: -55, bottom: -42, height: 145, borderTopLeftRadius: 180 },
-  rinconSpark: { position: 'absolute', width: 3, height: 3, borderRadius: 2, opacity: 0.72 },
-  rinconSparkLarge: { width: 5, height: 5, borderRadius: 3 },
-  rinconDecoration: { position: 'absolute', zIndex: 2, bottom: 17, width: 30, height: 32, alignItems: 'center', justifyContent: 'flex-end' },
-  rinconDecorationLarge: { bottom: 27, width: 57, height: 62 },
-  rinconDecorationLeft: { left: '12%' },
-  rinconDecorationRight: { right: '12%' },
-  rinconDecorationShadow: { position: 'absolute', bottom: 0, width: 28, height: 7, borderRadius: 10, backgroundColor: 'rgba(49,37,28,0.25)' },
-  rinconDecorationShadowLarge: { width: 50, height: 11 },
-  rinconDecorationMedal: { width: 26, height: 26, marginBottom: 3, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,247,214,0.72)', transform: [{ rotate: '-3deg' }], shadowColor: '#4d3022', shadowOpacity: 0.28, shadowRadius: 2, elevation: 3 },
-  rinconDecorationMedalLarge: { width: 48, height: 48, marginBottom: 5, borderRadius: 16, borderWidth: 1.5, shadowRadius: 4 },
-  rinconPlatform: { position: 'absolute', zIndex: 1, bottom: 9, alignSelf: 'center', width: 105, height: 17, borderRadius: 55, borderWidth: 1, transform: [{ scaleY: 0.45 }], shadowColor: '#432e24', shadowOpacity: 0.35, shadowRadius: 3, elevation: 2 },
-  rinconPlatformLarge: { bottom: 15, width: 185, height: 30, borderWidth: 1.5, shadowRadius: 5 },
-  rinconAnimal: { position: 'absolute', zIndex: 3, bottom: 7, alignSelf: 'center', width: 98, height: 76 },
-  rinconAnimalLarge: { bottom: 15, width: 190, height: 158 },
+  rinconDecoration: { position: 'absolute', zIndex: 2, bottom: 3, width: 40, height: 43 },
+  rinconDecorationLarge: { bottom: 12, width: 72, height: 78 },
+  rinconDecorationLeft: { left: '8%' },
+  rinconDecorationRight: { right: '8%' },
+  rinconPlatform: { position: 'absolute', zIndex: 1, bottom: 3, alignSelf: 'center', width: 94, height: 15, borderRadius: 50, borderWidth: 1, transform: [{ scaleY: 0.42 }], shadowColor: '#432e24', shadowOpacity: 0.35, shadowRadius: 3, elevation: 2 },
+  rinconPlatformLarge: { bottom: 11, width: 175, height: 28, borderWidth: 1.5, shadowRadius: 5 },
+  rinconAnimal: { position: 'absolute', zIndex: 3, bottom: 3, alignSelf: 'center', width: 86, height: 67 },
+  rinconAnimalLarge: { bottom: 11, width: 175, height: 145 },
   rinconNoAnimal: { position: 'absolute', zIndex: 3, bottom: 20, alignSelf: 'center', alignItems: 'center' },
   rinconNoAnimalLarge: { bottom: 48 },
   rinconNoAnimalText: { marginTop: 1, color: 'rgba(255,250,229,0.9)', fontSize: 5.4, fontWeight: '900' },
   rinconNoAnimalTextLarge: { marginTop: 4, fontSize: 7 },
-  rinconAnimalName: { position: 'absolute', zIndex: 5, right: 7, bottom: 22, maxWidth: 76, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8, backgroundColor: 'rgba(255,247,220,0.84)', borderWidth: 0.7, borderColor: 'rgba(110,72,43,0.3)', alignItems: 'center' },
-  rinconAnimalNameLarge: { right: 12, bottom: 32, maxWidth: 108, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 11 },
+  rinconAnimalName: { position: 'absolute', zIndex: 5, right: 5, bottom: 4, maxWidth: 76, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8, backgroundColor: 'rgba(255,247,220,0.88)', borderWidth: 0.7, borderColor: 'rgba(110,72,43,0.3)', alignItems: 'center' },
+  rinconAnimalNameLarge: { right: 10, bottom: 18, maxWidth: 108, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 11 },
   rinconAnimalNameText: { color: '#533722', fontSize: 6.1, lineHeight: 7, fontWeight: '900' },
   rinconAnimalNameTextLarge: { fontSize: 9.5, lineHeight: 11 },
   rinconSkinName: { color: '#8d6749', fontSize: 4.7, lineHeight: 6, fontWeight: '800' },
@@ -1101,8 +1214,6 @@ const styles = StyleSheet.create({
   rinconPreviewTitle: { color: '#fff9e4', fontSize: 10.2, lineHeight: 12, fontWeight: '900', textShadowColor: 'rgba(42,25,17,0.65)', textShadowRadius: 2 },
   rinconEditChip: { height: 18, marginTop: 1, paddingHorizontal: 7, borderRadius: 9, flexDirection: 'row', gap: 3, alignItems: 'center', backgroundColor: 'rgba(255,240,199,0.92)', borderWidth: 0.8, borderColor: 'rgba(112,72,39,0.55)' },
   rinconEditChipText: { color: '#6b4327', fontSize: 4.8, fontWeight: '900', letterSpacing: 0.35 },
-  rinconPreviewBottom: { position: 'absolute', zIndex: 8, left: 5, right: 5, bottom: 4, minHeight: 18, paddingLeft: 7, paddingRight: 3, borderRadius: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(60,44,31,0.7)', borderWidth: 0.7, borderColor: 'rgba(255,244,216,0.34)' },
-  rinconPreviewHint: { flex: 1, color: '#fff4dc', fontSize: 5.5, lineHeight: 7, fontWeight: '800' },
   badgesGrid: { height: 84, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around', borderBottomWidth: 1, borderBottomColor: 'rgba(150,102,60,0.17)' },
   badgeItem: { width: '24%', height: 82, position: 'relative' },
   badgeFace: { ...StyleSheet.absoluteFillObject, alignItems: 'center', backfaceVisibility: 'hidden' },
@@ -1182,6 +1293,9 @@ const modal = StyleSheet.create({
   title: { color: '#50321f', fontSize: 15, lineHeight: 17, fontWeight: '900' },
   subtitle: { color: '#856247', fontSize: 6.8, fontWeight: '700' },
   close: { width: 29, height: 29, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0d7a8', borderWidth: 1, borderColor: '#bd8a53' },
+  rinconHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  rinconDiamondBalance: { height: 29, minWidth: 70, paddingHorizontal: 10, borderRadius: 15, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff6de', borderWidth: 1, borderColor: '#cda769', shadowColor: '#835f35', shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
+  rinconDiamondBalanceText: { color: '#5a402d', fontSize: 8.2, fontWeight: '900' },
   frameHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   frameEquippedChip: { width: 119, height: 38, paddingHorizontal: 4, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,247,222,0.78)', borderWidth: 1, borderColor: '#d6b27d' },
   frameEquippedLabel: { color: '#b0723d', fontSize: 4.8, lineHeight: 6, fontWeight: '900', letterSpacing: 0.6 },
@@ -1226,7 +1340,10 @@ const modal = StyleSheet.create({
   rinconOptionName: { color: '#5a3924', fontSize: 5.8, lineHeight: 7, fontWeight: '900' },
   rinconOptionDetail: { color: '#957258', fontSize: 4.5, lineHeight: 5.5, fontWeight: '700' },
   rinconOptionActive: { borderWidth: 1.8, borderColor: '#6c955f', backgroundColor: '#f3f2d7', shadowColor: '#648b58', shadowOpacity: 0.24, shadowRadius: 3, elevation: 3 },
+  rinconOptionLocked: { backgroundColor: 'rgba(232,222,203,0.86)', borderColor: '#bba88d' },
   rinconCheck: { position: 'absolute', zIndex: 5, top: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#6f995e', borderWidth: 1, borderColor: '#fff5da' },
+  rinconPriceBadge: { position: 'absolute', zIndex: 6, top: 2, right: 2, minWidth: 24, height: 13, paddingHorizontal: 4, borderRadius: 7, flexDirection: 'row', gap: 2, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,250,232,0.96)', borderWidth: 0.8, borderColor: '#76bed0', shadowColor: '#436d78', shadowOpacity: 0.18, shadowRadius: 1, elevation: 2 },
+  rinconPriceText: { color: '#48636b', fontSize: 5.3, fontWeight: '900' },
   rinconChoiceRail: { gap: 5, paddingTop: 1, paddingRight: 5 },
   rinconAnimalChoice: { width: 73, height: 61, position: 'relative', padding: 3, borderRadius: 9, alignItems: 'center', justifyContent: 'flex-end', backgroundColor: 'rgba(255,248,228,0.76)', borderWidth: 1, borderColor: '#d6ba90' },
   rinconAnimalChoiceImage: { width: 55, height: 44, position: 'absolute', top: 0 },
@@ -1237,8 +1354,9 @@ const modal = StyleSheet.create({
   rinconEmptyChoice: { minHeight: 38, paddingHorizontal: 9, borderRadius: 9, flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: 'rgba(229,216,194,0.7)', borderWidth: 1, borderStyle: 'dashed', borderColor: '#bda98c' },
   rinconEmptyChoiceText: { flex: 1, color: '#8b6b51', fontSize: 5.8, fontWeight: '800' },
   rinconDecorationGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 5 },
-  rinconDecorationChoice: { width: '32%', height: 37, position: 'relative', paddingHorizontal: 4, borderRadius: 9, flexDirection: 'row', gap: 4, alignItems: 'center', backgroundColor: 'rgba(255,248,228,0.76)', borderWidth: 1, borderColor: '#d6ba90' },
-  rinconDecorationChoiceIcon: { width: 27, height: 27, borderRadius: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 0.8, borderColor: 'rgba(255,247,220,0.7)' },
+  rinconDecorationChoice: { width: '32%', height: 43, position: 'relative', paddingHorizontal: 3, borderRadius: 9, flexDirection: 'row', gap: 3, alignItems: 'center', backgroundColor: 'rgba(255,248,228,0.76)', borderWidth: 1, borderColor: '#d6ba90' },
+  rinconDecorationChoiceIcon: { width: 34, height: 34, flexShrink: 0 },
+  rinconDecorationChoiceName: { flex: 1, minWidth: 0, color: '#563821', fontSize: 5.1, lineHeight: 6.2, fontWeight: '900' },
   rinconSaveWrap: { height: 42, marginTop: 5, borderRadius: 11, overflow: 'hidden', shadowColor: '#426040', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.32, shadowRadius: 4, elevation: 5 },
   rinconSaveDisabled: { opacity: 0.72, shadowOpacity: 0, elevation: 0 },
   rinconSaveButton: { flex: 1, paddingHorizontal: 12, borderRadius: 11, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', borderWidth: 1.2, borderColor: 'rgba(62,84,53,0.75)' },

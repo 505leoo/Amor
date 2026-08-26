@@ -43,6 +43,7 @@ import Juegos from './Juegos/Juegos';
 import ConexionesGame from './Juegos/Conexiones/ConexionesGame';
 import Comerciante from './Comerciante';
 import Anuncios from './components/Anuncios';
+import Noticias, { NOTICIAS_ID, NOTICIAS_IDS } from './components/Noticias';
 import Lotes from './Lotes';
 import Tutorial from './components/Tutorial';
 import { ReporteSemanal } from './components/ReporteSemanal';
@@ -58,7 +59,7 @@ const APP_VERSION = require('./app.json').expo?.extra?.updateVersion
 
 const ROOT_SCREENS = new Set(['intro', 'login', 'main']);
 const KNOWN_SCREENS = new Set([
-  'intro', 'anuncios', 'login', 'register', 'main', 'reporteSemanal', 'coleccion', 'tienda',
+  'intro', 'noticias', 'anuncios', 'login', 'register', 'main', 'reporteSemanal', 'coleccion', 'tienda',
   'perfil', 'buzon', 'trofeos', 'menu', 'pistas', 'temporadas', 'temporada1', 'temporada2',
   'kitty', 'paleta', 'historia1', 'capsula1', 'librotemp1', 'animalitos', 'canjear',
   'comerciante', 'lotes', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones',
@@ -182,6 +183,24 @@ export default function App() {
     setCurrentScreen(screenName);
     setScreenParams(params);
   }, []);
+
+  const abrirNoticiasOAnuncios = useCallback(async () => {
+    const uid = userRef.current?.uid || 'invitado';
+    const estados = await Promise.all(NOTICIAS_IDS.map(noticiaId => AsyncStorage.getItem(`@amor:noticias:${uid}:${noticiaId}`).catch(() => null)));
+    const pendienteIndex = estados.findIndex(estado => !estado);
+    showScreen(pendienteIndex < 0 ? 'anuncios' : 'noticias', pendienteIndex < 0 ? {} : { noticiaId: NOTICIAS_IDS[pendienteIndex] });
+  }, [showScreen]);
+
+  const posponerNoticias = useCallback(() => {
+    showScreen('anuncios');
+  }, [showScreen]);
+
+  const continuarNoticias = useCallback(async (noticiaId = NOTICIAS_ID) => {
+    const uid = userRef.current?.uid || 'invitado';
+    const storageKey = `@amor:noticias:${uid}:${noticiaId}`;
+    await AsyncStorage.setItem(storageKey, new Date().toISOString()).catch(() => {});
+    showScreen('anuncios');
+  }, [showScreen]);
 
   const navigateToScreen = useCallback((screenName, params) => {
     if (!KNOWN_SCREENS.has(screenName)) {
@@ -444,13 +463,11 @@ export default function App() {
                   }
                   setTipoAnuncio('lotes');
                   setEventosAnuncio(completo ? ['lotes', 'fechas'] : ['lotes', 'reporte', 'fechas']);
-                  currentScreenRef.current = 'anuncios';
-                  setCurrentScreen('anuncios');
+                  await abrirNoticiasOAnuncios();
                 })().catch(() => {
                   setTipoAnuncio('lotes');
                   setEventosAnuncio(['lotes', 'reporte', 'fechas']);
-                  currentScreenRef.current = 'anuncios';
-                  setCurrentScreen('anuncios');
+                  abrirNoticiasOAnuncios();
                 });
                 }}
                 temporada={temporadaInicio}
@@ -458,6 +475,8 @@ export default function App() {
               isConnected={isConnected}
               />
           )}
+
+          {currentScreen === 'noticias' && <Noticias visible version={APP_VERSION} initialNoticiaId={screenParams?.noticiaId} onDismiss={posponerNoticias} onContinue={continuarNoticias} />}
 
           {currentScreen === 'anuncios' && (
             <Anuncios
