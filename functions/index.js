@@ -355,7 +355,7 @@ exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{no
   const broadcastStateRef = db.collection("configuracion").doc("comunidad_broadcast");
   const notificationId = event.params.notificationId;
   const now = Date.now();
-  const cooldownMs = 60 * 60 * 1000;
+  const cooldownMs = 60 * 1000;
   const title = String(after.titulo || "").trim().replace(/\s+/g, " ");
   const body = String(after.descripcion || after.cuerpo || "").trim().replace(/\s+/g, " ");
 
@@ -365,13 +365,13 @@ exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{no
       const current = currentSnap.data() || {};
       const broadcastState = stateSnap.data() || {};
       if (!quiereEnviar(current.enviar)) throw new Error("trigger_ya_procesado");
-      const nextAllowedAt = (Number(broadcastState.lastSentMs) || 0) + cooldownMs;
-      if (now < nextAllowedAt || now < (Number(broadcastState.sendingUntil) || 0)) {
+      const nextAllowedAt = (Number(broadcastState.lastFirestoreSentMs) || 0) + cooldownMs;
+      if (now < nextAllowedAt || now < (Number(broadcastState.firestoreSendingUntil) || 0)) {
         tx.set(notificationRef, {
           enviar: "no",
           estado: "esperando_cooldown",
-          estadoTexto: now < nextAllowedAt ? "Esperando el límite de una hora" : "Ya hay otro envío en curso",
-          proximoEnvioMs: Math.max(nextAllowedAt, Number(broadcastState.sendingUntil) || 0),
+          estadoTexto: now < nextAllowedAt ? "Esperando el límite de un minuto" : "Ya hay otro envío en curso",
+          proximoEnvioMs: Math.max(nextAllowedAt, Number(broadcastState.firestoreSendingUntil) || 0),
           actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
         }, {merge: true});
         return false;
@@ -385,7 +385,7 @@ exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{no
         errorUltimoEnvio: admin.firestore.FieldValue.delete(),
         actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
       }, {merge: true});
-      tx.set(broadcastStateRef, {sendingUntil: now + 2 * 60 * 1000, sendingBy: "firestore"}, {merge: true});
+      tx.set(broadcastStateRef, {firestoreSendingUntil: now + 60 * 1000, firestoreSendingBy: notificationId}, {merge: true});
       return true;
     });
     if (!lockTaken) return null;
@@ -402,7 +402,7 @@ exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{no
       errorUltimoEnvio: "El título o la descripción no tienen un tamaño válido.",
       actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
-    await broadcastStateRef.set({sendingUntil: 0}, {merge: true}).catch(() => {});
+    await broadcastStateRef.set({firestoreSendingUntil: 0}, {merge: true}).catch(() => {});
     return null;
   }
 
@@ -457,13 +457,12 @@ exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{no
       actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
     await broadcastStateRef.set({
-      lastSentMs: now,
-      lastTitle: title,
-      lastBody: body,
-      lastSentBy: "firestore",
-      lastRecipientCount: objetivo,
-      sentAt: admin.firestore.FieldValue.serverTimestamp(),
-      sendingUntil: 0,
+      lastFirestoreSentMs: now,
+      lastFirestoreTitle: title,
+      lastFirestoreBody: body,
+      lastFirestoreRecipientCount: objetivo,
+      lastFirestoreSentAt: admin.firestore.FieldValue.serverTimestamp(),
+      firestoreSendingUntil: 0,
     }, {merge: true});
     return null;
   } catch (error) {
@@ -475,7 +474,7 @@ exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{no
       errorUltimoEnvio: String(error.message || error),
       actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
-    await broadcastStateRef.set({sendingUntil: 0}, {merge: true}).catch(() => {});
+    await broadcastStateRef.set({firestoreSendingUntil: 0}, {merge: true}).catch(() => {});
     return null;
   }
 });
