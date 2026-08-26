@@ -36,7 +36,4 @@ rootProject.name = 'Amor'
 expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
-// pushy-react-native no entra en el autolinking de Expo; enlazamos el módulo Android a mano
-include ':pushy_react_native'
-project(':pushy_react_native').projectDir = new File(rootProject.projectDir, '../node_modules/pushy-react-native/android')
 includeBuild(expoAutolinking.reactNativeGradlePlugin)

@@ -1,4 +1,4 @@
-package com.leitof7.Amor
+package com.leitof7.amor
 
 import android.os.Build
 import android.os.Bundle
@@ -8,7 +8,6 @@ import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
-import expo.modules.ReactActivityDelegateWrapper
 import me.pushy.sdk.Pushy
 
 class MainActivity : ReactActivity() {
@@ -32,14 +31,11 @@ class MainActivity : ReactActivity() {
    * which allows you to enable New Architecture with a single boolean flags [fabricEnabled]
    */
   override fun createReactActivityDelegate(): ReactActivityDelegate {
-    return ReactActivityDelegateWrapper(
-          this,
-          BuildConfig.IS_NEW_ARCHITECTURE_ENABLED,
-          object : DefaultReactActivityDelegate(
+    return object : DefaultReactActivityDelegate(
               this,
               mainComponentName,
               fabricEnabled
-          ){})
+          ){}
   }
 
   /**

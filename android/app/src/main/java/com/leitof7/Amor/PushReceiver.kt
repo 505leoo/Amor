@@ -1,4 +1,4 @@
-package com.leitof7.Amor
+package com.leitof7.amor
 
 import me.pushy.sdk.Pushy
 import android.content.Intent

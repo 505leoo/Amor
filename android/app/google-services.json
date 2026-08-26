@@ -1,0 +1,43 @@
+{
+  "project_info": {
+    "project_number": "580063862777",
+    "project_id": "amor-9df0d",
+    "storage_bucket": "amor-9df0d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:580063862777:android:dc7c47da3566b574fe2728",
+        "android_client_info": {
+          "package_name": "com.leitof7.amor"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "580063862777-r9su24sbjo81srp73hs3v5chlb79kjob.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.leitof7.amor",
+            "certificate_hash": "8110caf7cd404e6d7d1227b632a9ee79eb217945"
+          }
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBksEJLaWlj5uRo0ipJU1dec5h7p18wdy8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "580063862777-4fj250tssskfsmtodp8ikfp5hs76d1r3.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
