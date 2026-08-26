@@ -11,6 +11,20 @@ admin.initializeApp();
 
 const BUZON_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const buzonExpiration = () => admin.firestore.Timestamp.fromMillis(Date.now() + BUZON_RETENTION_MS);
+const FIRESTORE_NOTIFICATION_TEMPLATES = [
+  {
+    id: "notificacion_1_actualizacion",
+    nombre: "Notificación 1",
+    titulo: "Una nueva actualización llegó a Amor",
+    descripcion: "Hay nuevos detalles, mejoras y pequeñas sorpresas esperándote. Entra a Amor y descubre todo lo que cambió.",
+  },
+  {
+    id: "notificacion_2_sorpresa",
+    nombre: "Notificación 2",
+    titulo: "Amor tiene algo bonito para ti",
+    descripcion: "Una sorpresa acaba de aparecer. Vuelve cuando puedas y descubre qué preparamos con cariño.",
+  },
+];
 
 exports.sendPushyNotification = functions.https.onCall(
     async (data, context) => {
@@ -233,6 +247,29 @@ exports.adminCommunityBroadcast = onCall(async (request) => {
   if (action === "status") {
     return {ok: true, nextAllowedAt, lastTitle: state.lastTitle || null};
   }
+  if (action === "ensure_templates") {
+    const creadas = [];
+    for (const template of FIRESTORE_NOTIFICATION_TEMPLATES) {
+      const ref = db.collection("notificaciones").doc(template.id);
+      const snap = await ref.get();
+      if (snap.exists) continue;
+      await ref.set({
+        nombre: template.nombre,
+        titulo: template.titulo,
+        descripcion: template.descripcion,
+        enviar: "no",
+        vibrar: true,
+        estado: "lista",
+        estadoTexto: "Lista para enviar",
+        dispositivosObjetivo: 0,
+        dispositivosLlegados: 0,
+        creadaEn: admin.firestore.FieldValue.serverTimestamp(),
+        actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      creadas.push(template.id);
+    }
+    return {ok: true, creadas};
+  }
   if (action !== "send") throw new HttpsError("invalid-argument", "Acción inválida.");
 
   const title = String(request.data.title || "").trim().replace(/\s+/g, " ");
@@ -296,6 +333,187 @@ exports.adminCommunityBroadcast = onCall(async (request) => {
     logger.error("[CommunityBroadcast] Error", error);
     throw new HttpsError("internal", "No se pudo enviar el aviso.");
   }
+});
+
+// Cola editable desde Firestore. Para disparar una plantilla, Administración
+// únicamente cambia `enviar` de "no" a "si". El trigger toma un bloqueo,
+// devuelve el campo a "no" y conserva todo el historial del último intento.
+exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{notificationId}", async (event) => {
+  const before = event.data && event.data.before.data() || {};
+  const after = event.data && event.data.after.data() || {};
+  const quiereEnviar = (value) => value === true || ["si", "sí", "yes"].includes(String(value || "").trim().toLowerCase());
+  if (!quiereEnviar(after.enviar) || quiereEnviar(before.enviar)) return null;
+
+  const db = admin.firestore();
+  const notificationRef = event.data.after.ref;
+  const broadcastStateRef = db.collection("configuracion").doc("comunidad_broadcast");
+  const notificationId = event.params.notificationId;
+  const now = Date.now();
+  const cooldownMs = 60 * 60 * 1000;
+  const title = String(after.titulo || "").trim().replace(/\s+/g, " ");
+  const body = String(after.descripcion || after.cuerpo || "").trim().replace(/\s+/g, " ");
+
+  try {
+    const lockTaken = await db.runTransaction(async (tx) => {
+      const [currentSnap, stateSnap] = await Promise.all([tx.get(notificationRef), tx.get(broadcastStateRef)]);
+      const current = currentSnap.data() || {};
+      const broadcastState = stateSnap.data() || {};
+      if (!quiereEnviar(current.enviar)) throw new Error("trigger_ya_procesado");
+      const nextAllowedAt = (Number(broadcastState.lastSentMs) || 0) + cooldownMs;
+      if (now < nextAllowedAt || now < (Number(broadcastState.sendingUntil) || 0)) {
+        tx.set(notificationRef, {
+          enviar: "no",
+          estado: "esperando_cooldown",
+          estadoTexto: now < nextAllowedAt ? "Esperando el límite de una hora" : "Ya hay otro envío en curso",
+          proximoEnvioMs: Math.max(nextAllowedAt, Number(broadcastState.sendingUntil) || 0),
+          actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+        }, {merge: true});
+        return false;
+      }
+      tx.set(notificationRef, {
+        enviar: "no",
+        estado: "procesando",
+        estadoTexto: "Preparando el envío…",
+        ultimoIntentoEn: admin.firestore.FieldValue.serverTimestamp(),
+        ultimoIntentoMs: now,
+        errorUltimoEnvio: admin.firestore.FieldValue.delete(),
+        actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+      tx.set(broadcastStateRef, {sendingUntil: now + 2 * 60 * 1000, sendingBy: "firestore"}, {merge: true});
+      return true;
+    });
+    if (!lockTaken) return null;
+  } catch (error) {
+    if (error.message === "trigger_ya_procesado") return null;
+    throw error;
+  }
+
+  if (title.length < 4 || title.length > 60 || body.length < 10 || body.length > 180) {
+    await notificationRef.set({
+      enviar: "no",
+      estado: "error",
+      estadoTexto: "Notificación no enviada",
+      errorUltimoEnvio: "El título o la descripción no tienen un tamaño válido.",
+      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+    await broadcastStateRef.set({sendingUntil: 0}, {merge: true}).catch(() => {});
+    return null;
+  }
+
+  try {
+    const users = await db.collection("usuarios").get();
+    const tokens = [...new Set(users.docs.map((userDoc) => {
+      const data = userDoc.data() || {};
+      return data.MyPushyToken || data.pushyToken || null;
+    }).filter(Boolean))];
+    if (!tokens.length) throw new Error("No hay dispositivos registrados.");
+    const apiSecret = process.env.PUSHY_API_SECRET;
+    if (!apiSecret) throw new Error("Pushy no está configurado.");
+
+    const pushes = [];
+    let objetivo = 0;
+    for (let index = 0; index < tokens.length; index += 1000) {
+      const registrationIds = tokens.slice(index, index + 1000);
+      const response = await fetch(`https://api.pushy.me/push?api_key=${apiSecret}`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          to: registrationIds,
+          notification: {title, body, sound: "default"},
+          data: {
+            title,
+            message: body,
+            type: "firestore_broadcast",
+            notificationId,
+            vibrate: after.vibrar !== false,
+          },
+          collapse_key: `firestore-${notificationId}-${now}`.slice(0, 32),
+          time_to_live: 86400,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.id) throw new Error(`Pushy: ${result.error || response.status}`);
+      const devices = Math.max(0, Number(result.info && result.info.devices) || registrationIds.length);
+      objetivo += devices;
+      pushes.push({id: result.id, dispositivos: devices});
+    }
+
+    await notificationRef.set({
+      enviar: "no",
+      estado: "esperando_entregas",
+      estadoTexto: "Esperando confirmaciones…",
+      ultimaVezEnviada: admin.firestore.FieldValue.serverTimestamp(),
+      ultimaVezEnviadaMs: now,
+      dispositivosObjetivo: objetivo,
+      dispositivosLlegados: 0,
+      pushyEnvios: pushes,
+      conteoCierraEnMs: now + 5 * 60 * 1000,
+      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+    await broadcastStateRef.set({
+      lastSentMs: now,
+      lastTitle: title,
+      lastBody: body,
+      lastSentBy: "firestore",
+      lastRecipientCount: objetivo,
+      sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      sendingUntil: 0,
+    }, {merge: true});
+    return null;
+  } catch (error) {
+    logger.error("[FirestoreBroadcast] Error", {notificationId, error});
+    await notificationRef.set({
+      enviar: "no",
+      estado: "error",
+      estadoTexto: "Notificación no enviada",
+      errorUltimoEnvio: String(error.message || error),
+      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+    await broadcastStateRef.set({sendingUntil: 0}, {merge: true}).catch(() => {});
+    return null;
+  }
+});
+
+// Pushy informa qué Android todavía no recibió el mensaje. Durante cinco
+// minutos actualizamos el contador y luego congelamos el resultado final.
+exports.actualizarEntregasNotificaciones = onSchedule({
+  schedule: "every 1 minutes",
+  timeZone: "America/Argentina/Buenos_Aires",
+}, async () => {
+  const apiSecret = process.env.PUSHY_API_SECRET;
+  if (!apiSecret) return null;
+  const db = admin.firestore();
+  const now = Date.now();
+  const snap = await db.collection("notificaciones").where("estado", "==", "esperando_entregas").limit(50).get();
+  for (const notificationDoc of snap.docs) {
+    const data = notificationDoc.data() || {};
+    const pushes = Array.isArray(data.pushyEnvios) ? data.pushyEnvios : [];
+    let objetivo = 0;
+    let pendientes = 0;
+    for (const push of pushes) {
+      const dispositivos = Math.max(0, Number(push.dispositivos) || 0);
+      objetivo += dispositivos;
+      try {
+        const response = await fetch(`https://api.pushy.me/pushes/${encodeURIComponent(push.id)}?api_key=${apiSecret}`);
+        const result = await response.json();
+        if (response.ok) pendientes += Math.min(dispositivos, Array.isArray(result.push && result.push.pending_devices) ? result.push.pending_devices.length : 0);
+        else pendientes += dispositivos;
+      } catch (_) {
+        pendientes += dispositivos;
+      }
+    }
+    const llegados = Math.max(0, objetivo - pendientes);
+    const finalizado = now >= (Number(data.conteoCierraEnMs) || 0);
+    await notificationDoc.ref.set({
+      dispositivosObjetivo: objetivo,
+      dispositivosLlegados: llegados,
+      estado: finalizado ? "finalizada" : "esperando_entregas",
+      estadoTexto: finalizado ? "Envío finalizado" : "Esperando confirmaciones…",
+      conteoActualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
+      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+  }
+  return null;
 });
 
 // ─── Crédito de Menta ──────────────────────────────────────────────────────

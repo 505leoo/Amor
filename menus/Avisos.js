@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
-import { auth, functions } from '../firebaseConfig';
+import { auth, db, functions } from '../firebaseConfig';
 import { httpsCallable } from 'firebase/functions';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { gameColors, gamePanel } from '../theme/gameTheme';
 
 // PRIORIDAD: toda tarjeta nueva debe incluir titulo, descripcion/texto y fecha (YYYY-MM-DD).
@@ -38,6 +39,12 @@ const textoFechaCompleta = fecha => {
   return `Escrita el ${dia} de ${MESES[mes - 1]} de ${anio}`;
 };
 
+const textoHoraEnvio = valor => {
+  const fecha = valor?.toDate?.() || (valor ? new Date(valor) : null);
+  if (!fecha || Number.isNaN(fecha.getTime())) return 'Nunca enviada';
+  return `Último envío: ${fecha.toLocaleDateString('es-AR')} · ${fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}`;
+};
+
 const SECCIONES = [
   { id: 'temporadas', titulo: 'Temporadas', descripcion: 'Nuevas aventuras y caminos por descubrir.', icono: 'event', tarjetas: [{ id: 'temporada-1', titulo: 'Temporada activa', texto: 'Descubre el nuevo camino de Menta.', fecha: '2026-08-20', detalle: 'Una nueva temporada llega con desafíos, recompensas y pequeñas historias para acompañarte durante tus partidas. Revisa las novedades y prepara todo para no perderte ninguna actividad.' }] },
   { id: 'eventos', titulo: 'Eventos', descripcion: 'Actividades especiales para compartir y disfrutar.', icono: 'celebration', tarjetas: [{ id: 'evento-1', titulo: 'Evento especial', texto: 'Hay una nueva actividad para disfrutar.', fecha: '2026-08-20', detalle: 'Durante este evento podrás participar en actividades especiales y encontrar sorpresas preparadas por Menta. Estate atento a las fechas y disfruta cada momento.' }] },
@@ -66,6 +73,9 @@ export const AvisosModal = ({ visible, onClose }) => {
   const [tituloComunidad, setTituloComunidad] = useState(MENSAJES_COMUNIDAD[0].titulo);
   const [cuerpoComunidad, setCuerpoComunidad] = useState(MENSAJES_COMUNIDAD[0].cuerpo);
   const [enviandoComunidad, setEnviandoComunidad] = useState(false);
+  const [modoComunidad, setModoComunidad] = useState('directo');
+  const [notificacionesFirestore, setNotificacionesFirestore] = useState([]);
+  const [firestoreDisponible, setFirestoreDisponible] = useState(true);
   const [proximoEnvio, setProximoEnvio] = useState(0);
   const [relojComunidad, setRelojComunidad] = useState(Date.now());
   const usuarioEsAdmin = auth.currentUser?.email?.toLowerCase() === ADMIN_EMAIL;
@@ -144,8 +154,16 @@ export const AvisosModal = ({ visible, onClose }) => {
     httpsCallable(functions, 'adminCommunityBroadcast')({ action: 'status' }).then(result => {
       if (activo) setProximoEnvio(Number(result.data?.nextAllowedAt) || 0);
     }).catch(() => {});
+    httpsCallable(functions, 'adminCommunityBroadcast')({ action: 'ensure_templates' }).catch(() => {});
+    const unsubscribe = onSnapshot(collection(db, 'notificaciones'), snapshot => {
+      if (!activo) return;
+      setFirestoreDisponible(true);
+      setNotificacionesFirestore(snapshot.docs.map(item => ({ id: item.id, ...item.data() })).sort((a, b) => String(a.nombre || a.id).localeCompare(String(b.nombre || b.id))));
+    }, () => {
+      if (activo) setFirestoreDisponible(false);
+    });
     const interval = setInterval(() => setRelojComunidad(Date.now()), 1000);
-    return () => { activo = false; clearInterval(interval); };
+    return () => { activo = false; unsubscribe(); clearInterval(interval); };
   }, [visible, seccionActiva, usuarioEsAdmin]);
 
   const esperaComunidad = Math.max(0, proximoEnvio - relojComunidad);
@@ -200,11 +218,24 @@ export const AvisosModal = ({ visible, onClose }) => {
                 <Text style={styles.detailSignature}>- Administración de Amor.</Text>
               </ScrollView>
             </View> : usuarioEsAdmin && seccionActiva === 'comunidad' ? <View style={styles.communityAdmin}>
-              <View style={styles.communityAdminHeader}><View style={styles.communityAdminIcon}><MaterialIcons name="campaign" size={17} color="#fff6d7" /></View><View><Text style={styles.communityAdminTitle}>MENSAJE PARA TODOS</Text><Text style={styles.communityAdminSubtitle}>Disponible una vez por hora</Text></View></View>
-              <View style={styles.communityTemplates}>{MENSAJES_COMUNIDAD.map((mensaje, index) => <TouchableOpacity key={mensaje.titulo} style={[styles.communityTemplate, tituloComunidad === mensaje.titulo && styles.communityTemplateActive]} onPress={() => { setTituloComunidad(mensaje.titulo); setCuerpoComunidad(mensaje.cuerpo); }}><Text style={styles.communityTemplateText}>{index === 0 ? '🌰 Lote' : index === 1 ? '✨ Regreso' : '🎁 Sorpresa'}</Text></TouchableOpacity>)}</View>
-              <TextInput style={styles.communityTitleInput} value={tituloComunidad} onChangeText={setTituloComunidad} maxLength={60} placeholder="Título de la notificación" placeholderTextColor="#9a8b79" />
-              <TextInput style={styles.communityBodyInput} value={cuerpoComunidad} onChangeText={setCuerpoComunidad} maxLength={180} multiline placeholder="Escribe un mensaje bonito…" placeholderTextColor="#9a8b79" />
-              <TouchableOpacity style={[styles.communitySend, (enviandoComunidad || esperaComunidad > 0) && styles.communitySendDisabled]} disabled={enviandoComunidad || esperaComunidad > 0} onPress={enviarComunidad}><MaterialIcons name={textoEspera ? 'schedule' : 'send'} size={13} color="#fff8df" /><Text style={styles.communitySendText}>{enviandoComunidad ? 'ENVIANDO…' : textoEspera ? `DISPONIBLE EN ${textoEspera}` : 'ENVIAR A TODA LA COMUNIDAD'}</Text></TouchableOpacity>
+              <View style={styles.communityAdminHeader}><View style={styles.communityAdminIcon}><MaterialIcons name="campaign" size={17} color="#fff6d7" /></View><View><Text style={styles.communityAdminTitle}>MENSAJE PARA TODOS</Text><Text style={styles.communityAdminSubtitle}>Dos formas seguras de enviarlo</Text></View></View>
+              <View style={styles.communityModes}><TouchableOpacity style={[styles.communityMode, modoComunidad === 'directo' && styles.communityModeActive]} onPress={() => setModoComunidad('directo')}><MaterialIcons name="send" size={9} color={modoComunidad === 'directo' ? '#fff8df' : '#66869b'} /><Text style={[styles.communityModeText, modoComunidad === 'directo' && styles.communityModeTextActive]}>DESDE AMOR</Text></TouchableOpacity><TouchableOpacity style={[styles.communityMode, modoComunidad === 'firestore' && styles.communityModeActive]} onPress={() => setModoComunidad('firestore')}><MaterialIcons name="cloud-queue" size={10} color={modoComunidad === 'firestore' ? '#fff8df' : '#66869b'} /><Text style={[styles.communityModeText, modoComunidad === 'firestore' && styles.communityModeTextActive]}>FIRESTORE</Text></TouchableOpacity></View>
+              {modoComunidad === 'directo' ? <>
+                <View style={styles.communityTemplates}>{MENSAJES_COMUNIDAD.map((mensaje, index) => <TouchableOpacity key={mensaje.titulo} style={[styles.communityTemplate, tituloComunidad === mensaje.titulo && styles.communityTemplateActive]} onPress={() => { setTituloComunidad(mensaje.titulo); setCuerpoComunidad(mensaje.cuerpo); }}><Text style={styles.communityTemplateText}>{index === 0 ? '🌰 Lote' : index === 1 ? '✨ Regreso' : '🎁 Sorpresa'}</Text></TouchableOpacity>)}</View>
+                <TextInput style={styles.communityTitleInput} value={tituloComunidad} onChangeText={setTituloComunidad} maxLength={60} placeholder="Título de la notificación" placeholderTextColor="#9a8b79" />
+                <TextInput style={styles.communityBodyInput} value={cuerpoComunidad} onChangeText={setCuerpoComunidad} maxLength={180} multiline placeholder="Escribe un mensaje bonito…" placeholderTextColor="#9a8b79" />
+                <TouchableOpacity style={[styles.communitySend, (enviandoComunidad || esperaComunidad > 0) && styles.communitySendDisabled]} disabled={enviandoComunidad || esperaComunidad > 0} onPress={enviarComunidad}><MaterialIcons name={textoEspera ? 'schedule' : 'send'} size={13} color="#fff8df" /><Text style={styles.communitySendText}>{enviandoComunidad ? 'ENVIANDO…' : textoEspera ? `DISPONIBLE EN ${textoEspera}` : 'ENVIAR A TODA LA COMUNIDAD'}</Text></TouchableOpacity>
+              </> : <View style={styles.firestoreAdmin}>
+                <View style={styles.firestoreHint}><MaterialIcons name="auto-awesome" size={11} color="#a16e3f" /><Text style={styles.firestoreHintText}>Edita una plantilla y cambia <Text style={styles.firestoreCode}>enviar: “si”</Text>. Amor hará el resto y volverá el campo a “no”.</Text></View>
+                <ScrollView style={styles.firestoreList} contentContainerStyle={styles.firestoreListContent} showsVerticalScrollIndicator={false}>
+                  {!firestoreDisponible ? <View style={styles.firestoreEmpty}><MaterialIcons name="cloud-off" size={15} color="#9c7b68" /><Text style={styles.firestoreEmptyText}>No pudimos leer las plantillas todavía.</Text></View> : notificacionesFirestore.length === 0 ? <View style={styles.firestoreEmpty}><MaterialIcons name="hourglass-empty" size={15} color="#7894a5" /><Text style={styles.firestoreEmptyText}>Creando plantillas predeterminadas…</Text></View> : notificacionesFirestore.map(item => {
+                    const procesando = ['procesando', 'esperando_entregas'].includes(item.estado);
+                    const esperando = item.estado === 'esperando_cooldown';
+                    const error = item.estado === 'error';
+                    return <View key={item.id} style={[styles.firestoreItem, procesando && styles.firestoreItemWorking, esperando && styles.firestoreItemWaiting, error && styles.firestoreItemError]}><View style={[styles.firestoreStateIcon, procesando && styles.firestoreStateWorking, esperando && styles.firestoreStateWaiting, error && styles.firestoreStateError]}><MaterialIcons name={error ? 'error-outline' : procesando ? 'notifications-active' : esperando ? 'schedule' : 'check'} size={11} color="#fff" /></View><View style={styles.firestoreItemCopy}><Text style={styles.firestoreItemName}>{item.nombre || item.id}</Text><Text style={styles.firestoreItemTitle} numberOfLines={1}>{item.titulo}</Text><Text style={styles.firestoreItemMeta}>{item.estadoTexto || 'Lista para enviar'} · {textoHoraEnvio(item.ultimaVezEnviada)}</Text></View><View style={styles.firestoreReached}><Text style={styles.firestoreReachedValue}>{Number(item.dispositivosLlegados) || 0}</Text><Text style={styles.firestoreReachedLabel}>LLEGARON</Text></View></View>;
+                  })}
+                </ScrollView>
+              </View>}
             </View> : <View style={styles.carousel}>
               <View style={styles.touchArea} onStartShouldSetResponder={() => true} onResponderGrant={({ nativeEvent }) => { swipeStart.current = nativeEvent.pageY; }} onResponderRelease={({ nativeEvent }) => {
                 const distancia = nativeEvent.pageY - swipeStart.current;
@@ -278,13 +309,41 @@ const styles = StyleSheet.create({
   indicators: { position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', gap: 6 },
   indicator: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#7ca6c2', borderWidth: 1, borderColor: '#edf5fb' },
   indicatorActive: { height: 15, backgroundColor: '#5d89ab' },
-  communityAdmin: { height: 215, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 8 },
-  communityAdminHeader: { height: 29, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
+  communityAdmin: { height: 215, paddingHorizontal: 14, paddingTop: 5, paddingBottom: 6 },
+  communityAdminHeader: { height: 25, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7 },
   communityAdminIcon: { width: 25, height: 25, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5d89ab' },
   communityAdminTitle: { color: '#476982', fontFamily: 'Delius', fontSize: 8, fontWeight: '900', letterSpacing: 0.7, transform: [{ translateY: 2 }] }, communityAdminSubtitle: { color: '#7ca0b8', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '700', marginTop: 2 },
-  communityTemplates: { height: 27, flexDirection: 'row', justifyContent: 'center', gap: 5, marginTop: 3 },
-  communityTemplate: { height: 22, paddingHorizontal: 8, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e4edf2', borderWidth: 1, borderColor: '#cadce7' }, communityTemplateActive: { backgroundColor: '#cfe4f1', borderColor: '#6f9dbb' }, communityTemplateText: { color: '#52748c', fontFamily: 'Delius', fontSize: 6, fontWeight: '900' },
-  communityTitleInput: { height: 27, paddingHorizontal: 9, paddingTop: 4, paddingBottom: 2, borderRadius: 8, color: '#405e76', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', backgroundColor: '#f7f1df', borderWidth: 1, borderColor: '#d8cba9' },
-  communityBodyInput: { height: 52, marginTop: 5, paddingHorizontal: 9, paddingTop: 8, paddingBottom: 4, borderRadius: 8, color: '#526b7c', fontFamily: 'Delius', fontSize: 6.3, lineHeight: 8, fontWeight: '700', textAlignVertical: 'top', backgroundColor: '#f7f1df', borderWidth: 1, borderColor: '#d8cba9' },
-  communitySend: { alignSelf: 'center', minWidth: 190, height: 28, marginTop: 6, paddingHorizontal: 12, borderRadius: 10, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5d89ab', borderWidth: 1, borderColor: '#476982' }, communitySendDisabled: { opacity: 0.58 }, communitySendText: { color: '#fff8df', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.45 },
+  communityModes: { alignSelf: 'center', height: 23, marginTop: 2, marginBottom: 3, padding: 2, borderRadius: 9, flexDirection: 'row', gap: 2, backgroundColor: '#dce8ed', borderWidth: 1, borderColor: '#bfd2dc' },
+  communityMode: { minWidth: 94, height: 17, paddingHorizontal: 8, borderRadius: 7, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center' },
+  communityModeActive: { backgroundColor: '#5d89ab', shadowColor: '#385b74', shadowOpacity: 0.22, shadowRadius: 2, elevation: 2 },
+  communityModeText: { color: '#66869b', fontFamily: 'Delius', fontSize: 5.4, fontWeight: '900', letterSpacing: 0.35 },
+  communityModeTextActive: { color: '#fff8df' },
+  communityTemplates: { height: 22, flexDirection: 'row', justifyContent: 'center', gap: 5 },
+  communityTemplate: { height: 19, paddingHorizontal: 8, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e4edf2', borderWidth: 1, borderColor: '#cadce7' }, communityTemplateActive: { backgroundColor: '#cfe4f1', borderColor: '#6f9dbb' }, communityTemplateText: { color: '#52748c', fontFamily: 'Delius', fontSize: 5.7, fontWeight: '900' },
+  communityTitleInput: { height: 24, paddingHorizontal: 9, paddingTop: 3, paddingBottom: 1, borderRadius: 8, color: '#405e76', fontFamily: 'Delius', fontSize: 6.7, fontWeight: '900', backgroundColor: '#f7f1df', borderWidth: 1, borderColor: '#d8cba9' },
+  communityBodyInput: { height: 42, marginTop: 4, paddingHorizontal: 9, paddingTop: 6, paddingBottom: 3, borderRadius: 8, color: '#526b7c', fontFamily: 'Delius', fontSize: 6, lineHeight: 7.5, fontWeight: '700', textAlignVertical: 'top', backgroundColor: '#f7f1df', borderWidth: 1, borderColor: '#d8cba9' },
+  communitySend: { alignSelf: 'center', minWidth: 190, height: 25, marginTop: 4, paddingHorizontal: 12, borderRadius: 9, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5d89ab', borderWidth: 1, borderColor: '#476982' }, communitySendDisabled: { opacity: 0.58 }, communitySendText: { color: '#fff8df', fontFamily: 'Delius', fontSize: 6.2, fontWeight: '900', letterSpacing: 0.4 },
+  firestoreAdmin: { flex: 1, minHeight: 0 },
+  firestoreHint: { minHeight: 29, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8, flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: '#f3e6c8', borderWidth: 1, borderColor: '#d8bc84' },
+  firestoreHintText: { flex: 1, color: '#806244', fontFamily: 'Delius', fontSize: 5.3, lineHeight: 7, fontWeight: '700' },
+  firestoreCode: { color: '#a55b48', fontWeight: '900' },
+  firestoreList: { flex: 1, marginTop: 4 },
+  firestoreListContent: { gap: 4, paddingBottom: 3 },
+  firestoreItem: { minHeight: 47, paddingHorizontal: 7, borderRadius: 9, flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: '#e8f0df', borderWidth: 1, borderColor: '#bcd0aa' },
+  firestoreItemWorking: { backgroundColor: '#e0edf5', borderColor: '#90b4ca' },
+  firestoreItemWaiting: { backgroundColor: '#f2e8cd', borderColor: '#d0b575' },
+  firestoreItemError: { backgroundColor: '#f2dfd9', borderColor: '#cf988b' },
+  firestoreStateIcon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#7e9b63' },
+  firestoreStateWorking: { backgroundColor: '#5d89ab' },
+  firestoreStateWaiting: { backgroundColor: '#b58a45' },
+  firestoreStateError: { backgroundColor: '#b76a5e' },
+  firestoreItemCopy: { flex: 1, minWidth: 0 },
+  firestoreItemName: { color: '#587043', fontFamily: 'Delius', fontSize: 5, lineHeight: 6, fontWeight: '900', letterSpacing: 0.45 },
+  firestoreItemTitle: { color: '#456079', fontFamily: 'Delius', fontSize: 6.6, lineHeight: 8, fontWeight: '900' },
+  firestoreItemMeta: { color: '#7d8790', fontFamily: 'Delius', fontSize: 4.3, lineHeight: 6, fontWeight: '700' },
+  firestoreReached: { width: 37, alignItems: 'center', justifyContent: 'center' },
+  firestoreReachedValue: { color: '#4f7188', fontFamily: 'Delius', fontSize: 11, lineHeight: 12, fontWeight: '900' },
+  firestoreReachedLabel: { color: '#7893a5', fontFamily: 'Delius', fontSize: 3.5, fontWeight: '900', letterSpacing: 0.3 },
+  firestoreEmpty: { height: 70, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  firestoreEmptyText: { color: '#7b8790', fontFamily: 'Delius', fontSize: 6, fontWeight: '800' },
 });

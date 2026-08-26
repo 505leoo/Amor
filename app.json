@@ -2,7 +2,7 @@
   "expo": {
     "name": "Amor",
     "slug": "Amor",
-    "version": "1.0.21",
+    "version": "1.0.22",
     "orientation": "landscape",
     "icon": "./assets/16.png",
     "userInterfaceStyle": "light",
@@ -43,6 +43,7 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.VIBRATE",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
@@ -93,7 +94,7 @@
         "projectId": "1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec"
       },
       "expo-navigation-bar": {},
-      "updateVersion": "1.0.21"
+      "updateVersion": "1.0.22"
     },
     "owner": "leitof7"
   }

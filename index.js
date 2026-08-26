@@ -1,17 +1,28 @@
 import { registerRootComponent } from 'expo';
 import RNPushy from 'pushy-react-native';
+import { Vibration } from 'react-native';
 
 import App from './App';
 
 RNPushy.setNotificationListener(async (data) => {
   try {
     const Notifications = require('expo-notifications');
+    await Notifications.setNotificationChannelAsync('amor-notifications', {
+      name: 'Notificaciones de Amor',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 220, 120, 280],
+      lightColor: '#D9577F',
+      sound: 'default',
+    });
+    if (data.vibrate !== false && data.vibrate !== 'false') Vibration.vibrate([0, 220, 120, 280]);
     await Notifications.scheduleNotificationAsync({
       content: {
         title: data.title || '💕',
         body: data.message || '',
+        data,
+        sound: 'default',
       },
-      trigger: null,
+      trigger: { channelId: 'amor-notifications' },
     });
   } catch (e) {}
 });
