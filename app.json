@@ -15,7 +15,7 @@
       "checkAutomatically": "NEVER",
       "fallbackToCacheTimeout": 0,
       "channel": "production",
-      "url": "https://u.expo.dev/1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec"
+      "url": "https://u.expo.dev/3e224fbe-d6f2-48c1-8903-61bf13953cf2"
     },
     "assetBundlePatterns": [
       "**/*"
@@ -92,11 +92,11 @@
     "runtimeVersion": "0.2",
     "extra": {
       "eas": {
-        "projectId": "1c2f3fe2-d0a3-4fb9-bcc8-be09be0577ec"
+        "projectId": "3e224fbe-d6f2-48c1-8903-61bf13953cf2"
       },
       "expo-navigation-bar": {},
       "updateVersion": "1.1.1"
     },
-    "owner": "leitof7"
+    "owner": "505leoo"
   }
 }
