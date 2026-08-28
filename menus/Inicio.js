@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, memo, useState, createContext, useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Dimensions, Modal, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
 import { Image } from 'expo-image';
 import LottieView from 'lottie-react-native';
 import { LibroJuegos } from '../components/botones';
@@ -70,6 +70,25 @@ const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
     </TouchableOpacity>
   );
 });
+
+const IconoRuleta = () => <Svg width="30" height="30" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="17" fill="#9c6ac1" stroke="#633d82" strokeWidth="2" /><Path d="M20 20 L20 4 A16 16 0 0 1 34 12 Z" fill="#ffd879" /><Path d="M20 20 L34 12 A16 16 0 0 1 34 28 Z" fill="#ee8aaa" /><Path d="M20 20 L34 28 A16 16 0 0 1 20 36 Z" fill="#7cbae3" /><Path d="M20 20 L20 36 A16 16 0 0 1 6 28 Z" fill="#8dcf9a" /><Path d="M20 20 L6 28 A16 16 0 0 1 6 12 Z" fill="#f3ad70" /><Path d="M20 20 L6 12 A16 16 0 0 1 20 4 Z" fill="#ee8aaa" /><Circle cx="20" cy="20" r="4" fill="#fff4d6" stroke="#633d82" strokeWidth="1.5" /></Svg>;
+const IconoProximo = () => <Svg width="29" height="29" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="17" fill="#d8c6e8" stroke="#80659a" strokeWidth="2" /><SvgText x="20" y="28" textAnchor="middle" fontSize="26" fontWeight="900" fill="#76558c">?</SvgText><Circle cx="31" cy="9" r="3" fill="#fff4d6" opacity="0.8" /></Svg>;
+const IconoRegalo = () => <Svg width="31" height="31" viewBox="0 0 40 40"><Rect x="7" y="16" width="26" height="18" rx="3" fill="#ef8ba6" stroke="#a94667" strokeWidth="2" /><Rect x="5" y="12" width="30" height="8" rx="3" fill="#f6a7ba" stroke="#a94667" strokeWidth="2" /><Path d="M18 12 C10 11 10 4 15 5 C19 6 20 12 20 12 M22 12 C30 11 30 4 25 5 C21 6 20 12 20 12" fill="#ffd58b" stroke="#a94667" strokeWidth="1.7" /><Path d="M18 13 H22 V34 H18Z" fill="#ffd58b" /><Circle cx="13" cy="24" r="1.5" fill="#fff0f4" opacity="0.9" /></Svg>;
+
+const AccesosRegalos = memo(({ onRegaloDiario }) => (
+  <View style={styles.accesosRegalos}>
+    <TouchableOpacity style={styles.accesoRegalo} disabled activeOpacity={1} accessibilityLabel="Ruleta próximamente">
+      <IconoRuleta />
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloProximo]} disabled activeOpacity={1} accessibilityLabel="Próximo acceso">
+      <IconoProximo />
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloDiario]} onPress={onRegaloDiario} activeOpacity={0.78} accessibilityLabel="Abrir regalo diario">
+      <IconoRegalo />
+      <View style={styles.accesoRegaloDot} />
+    </TouchableOpacity>
+  </View>
+));
 
 // ─── Recompensas diarias ────────────────────────────────────────────────────
 // Hook useRecompensaDiaria maneja:
@@ -141,7 +160,7 @@ const ContadorReinicio = memo(({ overlayActive }) => {
   );
 });
 
-const CajasRecompensa = memo(({ onOverlayChange, overlayActive }) => {
+const CajasRecompensa = memo(({ onOverlayChange, overlayActive, compactModal = false }) => {
   const { diaActual, puedeReclamar, loading, reclamar, userData } = useRecompensaDiaria({ paused: overlayActive });
   const [showRecompensaOverlay, setShowRecompensaOverlay] = useState(false);
   const [reclamando, setReclamando] = useState(false);
@@ -180,7 +199,7 @@ const CajasRecompensa = memo(({ onOverlayChange, overlayActive }) => {
   }
 
   return (
-    <View style={styles.cajasWrap}>
+    <View style={[styles.cajasWrap, compactModal && styles.cajasWrapModal]}>
       {dias.map((dia, index) => {
         let esHoy = false;
         if (diaActual === 1) {
@@ -616,6 +635,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   const [misionesAbiertas, setMisionesAbiertas] = useState(false);
   const [misionesNuevas, setMisionesNuevas] = useState(false);
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
+  const [regalosAbiertos, setRegalosAbiertos] = useState(false);
   const [reporteSemanalAbierto, setReporteSemanalAbierto] = useState(Boolean(openReporteSemanal));
   const puedeAbrirColeccion = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
   const { pendientesReclamar } = useMisiones();
@@ -623,6 +643,10 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     selectEstadoInicio,
     undefined,
     equalEstadoInicio,
+  );
+  const { data: parejaInicio } = useUserDocument(
+    data => data ? { nombre: data.nombre || data.datosCompletos?.nombre || 'Tu pareja', exp: Number(data.exp) || 0, ultimaActividad: data.ultimaActividad } : null,
+    estadoInicio?.pareja || '',
   );
 
   useEffect(() => {
@@ -706,6 +730,14 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
           insignia: pendientesReclamar > 0 ? 'RECLAMAR' : 'VER',
           accion: () => setMisionesAbiertas(true),
         };
+    if (parejaInicio) {
+      const nivelPareja = 1 + Math.floor(parejaInicio.exp / 100);
+      return {
+        icono: 'favorite', titulo: `${parejaInicio.nombre} está en nivel ${nivelPareja}`,
+        detalle: 'Mirá cómo sigue creciendo su historia.', insignia: 'PAREJA',
+        accion: () => navigation?.navigate('perfil', { uid: estadoInicio?.pareja }),
+      };
+    }
     if (comercianteNuevo) return {
             icono: 'storefront', titulo: 'El Comerciante renovó', detalle: 'Hay nuevos objetos esperando.', insignia: 'NUEVO',
             accion: abrirComerciante,
@@ -714,7 +746,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
             icono: 'extension', titulo: mensajeJuego.titulo, detalle: mensajeJuego.detalle, insignia: faltanParaBonus === 1 ? '1 MÁS' : '+5 EXP',
             accion: () => navigation?.navigate('conexiones'),
           };
-  }, [abrirComerciante, comercianteNuevo, estadoInicio?.animalito, faltanParaBonus, misionesNuevas, navigation, nivelJuego, partidasCompletadas, pendientesReclamar]);
+  }, [abrirComerciante, comercianteNuevo, estadoInicio?.animalito, estadoInicio?.pareja, faltanParaBonus, misionesNuevas, navigation, nivelJuego, parejaInicio, partidasCompletadas, pendientesReclamar]);
 
   if (tutorialActivo) return <TutorialInicio navigation={navigation} />;
 
@@ -731,6 +763,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
         <MoneyMenu />
         <QuickMenu />
         <SiguientePaso icono={siguientePaso.icono} titulo={siguientePaso.titulo} detalle={siguientePaso.detalle} insignia={siguientePaso.insignia} onPress={siguientePaso.accion} />
+        <AccesosRegalos onRegaloDiario={() => { setRegalosAbiertos(true); setOverlayActive(true); }} />
         <Player containerStyle={styles.player} disabled={overlayActive} />
         <TouchableOpacity style={styles.changeButton} onPress={() => navigation?.navigate('animalitos')} activeOpacity={0.78}>
           <MaterialIcons name="swap-horiz" size={20} color="#c58b2d" />
@@ -782,9 +815,19 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
             {comercianteNuevo && <View style={styles.unreadDotVerde} />}
           </TouchableOpacity>
         </View>
-        <RegaloDaily overlayActive={overlayActive} />
-
-        <CajasRecompensa onOverlayChange={setOverlayActive} overlayActive={overlayActive} />
+        <Modal visible={regalosAbiertos} transparent animationType="fade" onRequestClose={() => { setRegalosAbiertos(false); setOverlayActive(false); }}>
+          <View style={styles.regaloDiarioModalFondo}>
+            <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => { setRegalosAbiertos(false); setOverlayActive(false); }} />
+            <View style={styles.regaloDiarioModalCard}>
+              <View style={styles.regaloDiarioModalHeader}>
+                <View style={styles.regaloDiarioModalIcon}><MaterialIcons name="card-giftcard" size={20} color="#fff8dc" /></View>
+                <View style={styles.regaloDiarioModalInfo}><Text style={styles.regaloDiarioModalTitle}>REGALO DIARIO</Text><Text style={styles.regaloDiarioModalSub}>UNA SORPRESA PARA CADA DÍA</Text></View>
+                <TouchableOpacity style={styles.regaloDiarioModalClose} onPress={() => { setRegalosAbiertos(false); setOverlayActive(false); }}><MaterialIcons name="close" size={18} color="#76552f" /></TouchableOpacity>
+              </View>
+              <CajasRecompensa onOverlayChange={NOOP} overlayActive={false} compactModal />
+            </View>
+          </View>
+        </Modal>
         <TouchableOpacity style={styles.jugarBtn} activeOpacity={0.82} onPress={() => {
           const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
           navigation?.navigate(isAdmin ? 'juegos' : 'conexiones');
@@ -816,7 +859,7 @@ const styles = StyleSheet.create({
   quickMenuAla: { position: 'absolute', left: -8, bottom: 4, width: 18, height: 18, borderRadius: 3, backgroundColor: '#f1e1bd', borderLeftWidth: 1.5, borderBottomWidth: 1.5, borderColor: '#d0ad70', transform: [{ rotate: '45deg' }], zIndex: -1 },
   quickMenuPunta: { position: 'absolute', right: 32, bottom: -5, width: 11, height: 11, borderRadius: 2, backgroundColor: '#e9b85f', borderRightWidth: 1, borderBottomWidth: 1, borderColor: '#9b6a35', transform: [{ rotate: '45deg' }], zIndex: -1 },
   quickMenuBrillo: { position: 'absolute', top: 1, left: 5, right: 8, height: 1, backgroundColor: 'rgba(255,255,255,0.62)', borderRadius: 1 },
-  siguientePaso: { position: 'absolute', top: '18%', right: 14, width: 210, height: 34, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, borderRadius: 10, backgroundColor: '#fff4d6', borderWidth: 1.5, borderColor: '#c89a55', shadowColor: '#4b2f18', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 18, zIndex: 215 },
+  siguientePaso: { position: 'absolute', top: '42%', right: 14, width: 210, height: 34, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, borderRadius: 10, backgroundColor: '#fff4d6', borderWidth: 1.5, borderColor: '#c89a55', shadowColor: '#4b2f18', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6, elevation: 18, zIndex: 215 },
   siguientePasoIcono: { width: 25, height: 25, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#9b6a35', borderWidth: 1, borderColor: '#e9b85f' },
   siguientePasoInfo: { flex: 1, marginLeft: 6 },
   siguientePasoEtiqueta: { color: '#b07a43', fontFamily: 'Delius', fontSize: 4.2, lineHeight: 5, fontWeight: '900', letterSpacing: 0.7 },
@@ -827,6 +870,19 @@ const styles = StyleSheet.create({
   siguienteLuz: { position: 'absolute', width: 4, height: 4, borderRadius: 2, backgroundColor: '#f6d477', borderWidth: 0.5, borderColor: '#9b6a35' },
   siguienteLuzUno: { left: -2, top: 6 },
   siguienteLuzDos: { right: -2, bottom: 6 },
+  accesosRegalos: { position: 'absolute', right: 14, top: '20%', flexDirection: 'row', gap: 6, zIndex: 215, elevation: 18 },
+  accesoRegalo: { width: 54, height: 54, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#fff4d6', borderWidth: 1.5, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, elevation: 8 },
+  accesoRegaloProximo: { backgroundColor: '#f3ecfa', borderColor: '#b59bc9' },
+  accesoRegaloDiario: { borderColor: '#df90a7', backgroundColor: '#fff0f3' },
+  accesoRegaloDot: { position: 'absolute', top: 5, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e2577a', borderWidth: 1, borderColor: '#fff7df' },
+  regaloDiarioModalFondo: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(25,15,10,0.72)' },
+  regaloDiarioModalCard: { width: 420, height: 225, borderRadius: 20, overflow: 'hidden', backgroundColor: '#fff5dd', borderWidth: 3, borderColor: '#d4b06c', shadowColor: '#1c1008', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.42, shadowRadius: 14, elevation: 25 },
+  regaloDiarioModalHeader: { height: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, backgroundColor: '#f0dcae', borderBottomWidth: 1, borderBottomColor: '#d3af6b' },
+  regaloDiarioModalIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#c76882', borderWidth: 1, borderColor: '#fff1dc' },
+  regaloDiarioModalInfo: { flex: 1, marginLeft: 9 },
+  regaloDiarioModalTitle: { color: '#704b2d', fontFamily: 'Delius', fontSize: 11, fontWeight: '900', letterSpacing: 0.7 },
+  regaloDiarioModalSub: { color: '#9c7644', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '800', letterSpacing: 0.55, marginTop: 1 },
+  regaloDiarioModalClose: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: 'rgba(255,249,231,0.72)', borderWidth: 1, borderColor: '#d7b977' },
   accesosInicioWrap: { position: 'absolute', left: '50%', bottom: 6, transform: [{ translateX: -72 }], flexDirection: 'row', alignItems: 'center', zIndex: 220, elevation: 12 },
   accesoInicioBtn: { width: 50, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 0, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 12 },
   accesoInicioFirst: { borderTopLeftRadius: 8, borderBottomLeftRadius: 8 },
@@ -935,6 +991,7 @@ const styles = StyleSheet.create({
     zIndex: 150,
     elevation: 150,
   },
+  cajasWrapModal: { left: 0, right: 0, bottom: 27, zIndex: 2, elevation: 2, gap: 12 },
   caja: {
     width: 44,
     height: 65,

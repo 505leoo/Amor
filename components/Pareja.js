@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, memo } from 'react';
 import { Animated, View, Text, StyleSheet, TouchableOpacity, FlatList, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path, Rect, Defs, ClipPath, LinearGradient, Stop, G, Text as SvgText, Ellipse, Filter, FeGaussianBlur } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, query, where, deleteDoc } from 'firebase/firestore';
@@ -247,7 +248,12 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
   }
 
   return (
-    <View style={styles.wrap}>
+    <TouchableOpacity
+      style={styles.wrap}
+      onPress={() => parejaData && navigation?.navigate('perfil', { uid: parejaData.id })}
+      disabled={!parejaData}
+      activeOpacity={0.84}
+    >
       <FondoMenuPareja />
 
       {pareja && parejaData ? (
@@ -256,25 +262,11 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
           <View style={styles.usuarioRow}>
             <ProfileFrame avatar={parejaData.iconoUrl || parejaData.photoURL || ICONO_DEFAULT} frameId={parejaData.marcoPerfil || 'corazon'} compact />
             <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
-              <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{parejaData.nombre}</Text>
-              <IndicadorOnline usuario={parejaData} ahora={ahora} />
+              <View style={styles.parejaNombreLinea}><Text style={[styles.usuarioNombre, styles.parejaNameStyle]} numberOfLines={1}>{parejaData.nombre}</Text><IndicadorOnline usuario={parejaData} ahora={ahora} /></View>
+              <View style={styles.parejaProgresoCompacto}><Text style={styles.parejaNivelCompacto}>Nivel {1 + Math.floor((parejaData.exp || 0) / 100)}</Text><View style={styles.parejaBarraCompacta}><View style={[styles.parejaBarraFillCompacta, { width: `${progresoNivelPareja}%` }]} /></View><Text style={styles.parejaExpCompacta}>{progresoNivelPareja}/100</Text></View>
             </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} style={styles.parejaChevron} activeOpacity={0.75}><MaterialIcons name="chevron-right" size={22} color="#80512e" /></TouchableOpacity>
           </View>
-          <Text style={styles.partnerLoveTitle}>Nivel de pareja</Text>
-          <View style={styles.partnerLoveBar}>
-            <Svg width="108" height="22" viewBox="0 0 140 28">
-              <Defs><LinearGradient id="partnerGrad" x1="0%" y1="0%" x2="0%" y2="100%"><Stop offset="0%" stopColor="#e8dcc8" /><Stop offset="100%" stopColor="#dcd0bb" /></LinearGradient><LinearGradient id="partnerHeart" x1="0%" y1="0%" x2="0%" y2="100%"><Stop offset="0%" stopColor="#ff5a8f" /><Stop offset="50%" stopColor="#ff6b9d" /><Stop offset="100%" stopColor="#d9577f" /></LinearGradient><ClipPath id="partnerTrackClip"><Path d="M 20 4 L 135 4 Q 138 4 138 14 Q 138 24 135 24 L 20 24 Q 17 24 17 14 Q 17 4 20 4 Z" /></ClipPath></Defs>
-              <Path d="M 20 4 L 135 4 Q 138 4 138 14 Q 138 24 135 24 L 20 24 Q 17 24 17 14 Q 17 4 20 4 Z" fill="url(#partnerGrad)" stroke="#c9b8a0" strokeWidth="1.5" />
-              <Rect x="17" y="4" width={121 * (progresoNivelPareja / 100)} height="20" fill="#df477e" clipPath="url(#partnerTrackClip)" />
-              <G transform="translate(-2, -2)"><Path d="M 18 30 C 8 22 2 15 2 10 C 2 5 5 2 9 2 C 12 2 14.5 3.5 18 7 C 21.5 3.5 24 2 27 2 C 31 2 34 5 34 10 C 34 15 28 22 18 30 Z" fill="url(#partnerHeart)" /><Path d="M 9 4 Q 11 2 13 5 Q 11.5 1 9 2 C 5 2 3 4.5 3 8" fill="#ffffff" opacity="0.5" /><Ellipse cx="11" cy="7" rx="3" ry="3.5" fill="#ffffff" opacity="0.35" /><SvgText x="18" y="20" fontSize="12" fontWeight="bold" fill="#ffffff" textAnchor="middle" dominantBaseline="middle">{String(1 + Math.floor((parejaData.exp || 0) / 100))}</SvgText></G>
-            </Svg>
-          </View>
-          <TouchableOpacity style={styles.verPerfilBtn} onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.8}>
-            <View style={styles.verPerfilInner}>
-              <Text style={styles.verPerfilText}>Ver perfil</Text>
-              <View style={styles.verPerfilDot} />
-            </View>
-          </TouchableOpacity>
         </Animated.View>
       ) : (
         // Sin pareja — lista de usuarios
@@ -343,7 +335,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
           </TouchableOpacity>
         </Animated.View>
       )}
-    </View>
+    </TouchableOpacity>
   );
 });
 
@@ -351,11 +343,11 @@ const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
     right: 14,
-    top: '32%',
+    top: '55%',
     transform: [{ translateY: -2 }],
-    width: 150,
-    height: 158,
-    borderRadius: 14,
+    width: 205,
+    height: 62,
+    borderRadius: 12,
     overflow: 'hidden',
     justifyContent: 'flex-start',
     alignItems: 'center',
@@ -397,20 +389,22 @@ const styles = StyleSheet.create({
   parejaNombre: { fontSize: 13, color: '#5a2a3a', fontFamily: 'Globo', fontWeight: '700' },
 
   // Sin pareja
-  listaWrap: { width: '100%', height: '100%', paddingHorizontal: 4, paddingTop: 21, justifyContent: 'flex-start', flexDirection: 'column' },
+  listaWrap: { width: '100%', height: '100%', paddingHorizontal: 6, paddingTop: 10, justifyContent: 'flex-start', flexDirection: 'column' },
   lista: { height: 59, maxHeight: 59 },
   usuarioRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 1,
-    paddingLeft: 8,
-    marginTop: 4,
+    paddingVertical: 0,
+    paddingLeft: 0,
+    marginTop: 0,
+    transform: [{ translateY: 2 }],
   },
   usuarioNombre: { width: 49.5, fontSize: 8, fontFamily: 'Globo', color: '#5a2a3a', marginLeft: 2, marginRight: 4 },
   usuarioNombreLink: { textDecorationLine: 'underline', color: '#c9748f' },
-  parejaNameStyle: { width: 'auto', fontSize: 9, fontFamily: 'Globo', color: '#d9577f', fontWeight: '700', letterSpacing: 0.3 },
-  parejaInfoContainer: { flex: 1, marginLeft: 2 },
-  onlineIndicator: { flexDirection: 'row', alignItems: 'center', marginTop: 2, marginBottom: 2, gap: 4 },
+  parejaNameStyle: { width: 'auto', fontSize: 10, fontFamily: 'Globo', color: '#d9577f', fontWeight: '700', letterSpacing: 0.3 },
+  parejaInfoContainer: { flex: 1, marginLeft: 5 },
+  parejaNombreLinea: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  onlineIndicator: { flexDirection: 'row', alignItems: 'center', marginTop: 0, marginBottom: 0, gap: 4 },
   onlineIndicatorOffline: { opacity: 0.72 },
   onlineDot: {
     width: 6,
@@ -419,8 +413,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
   },
   onlineDotOffline: { backgroundColor: '#aaa49a' },
-  onlineText: { fontSize: 8, color: '#4CAF50', fontFamily: 'Globo', fontWeight: '500' },
+  onlineText: { fontSize: 6.5, color: '#4CAF50', fontFamily: 'Globo', fontWeight: '500' },
   onlineTextOffline: { color: '#aaa49a' },
+  parejaProgresoCompacto: { flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 3 },
+  parejaNivelCompacto: { color: '#6a3d18', fontSize: 6.3, fontFamily: 'Globo', fontWeight: '700' },
+  parejaBarraCompacta: { flex: 1, height: 8, overflow: 'hidden', borderRadius: 5, backgroundColor: '#dfd0b6', borderWidth: 1, borderColor: '#c6ad8c' },
+  parejaBarraFillCompacta: { height: '100%', borderRadius: 4, backgroundColor: '#df477e' },
+  parejaExpCompacta: { color: '#977553', fontSize: 5, fontFamily: 'Globo', fontWeight: '700' },
+  parejaChevron: { width: 18, height: 28, alignItems: 'center', justifyContent: 'center' },
   addBtnHidden: { display: 'none' },
   addBtn: {
     width: 22,

@@ -113,7 +113,10 @@ export default function Canjear({ navigation }) {
     }
   };
 
-  const handleKey    = (key) => { if (cargando || recompensa || input.length >= 16) return; setInput(p => p + key); };
+  const handleKey = key => {
+    if (cargando || recompensa || !/^[a-z0-9]$/i.test(key)) return;
+    setInput(previous => previous.length >= 16 ? previous : `${previous}${key.toUpperCase()}`);
+  };
   const handleDelete = ()    => { if (cargando || recompensa) return; setInput(p => p.slice(0, -1)); };
   const handleConfirmar = () => { if (!input || cargando || recompensa) return; validarCodigo(input); };
   const abrirTeclado = () => { if (!cargando && !recompensa) inputRef.current?.focus(); };
@@ -164,35 +167,28 @@ export default function Canjear({ navigation }) {
         <View style={[s.center, width < 700 && s.centerSmall]}>
           <View style={s.sectionLabel}><MaterialIcons name="keyboard" size={14} color="#a87840" /><Text style={s.sectionLabelText}>ESCRIBIR CÓDIGO</Text></View>
 
-          <View style={s.nativeInputClip} pointerEvents="none">
+          <Animated.View style={[s.inputRow, { transform: [{ translateX: shakeAnim }] }]}>
             <TextInput
               ref={inputRef}
               value={input}
-              onChangeText={t => { if (!cargando && !recompensa) setInput(t.toUpperCase().slice(0, 16)); }}
+              onChangeText={text => {
+                if (!cargando && !recompensa) setInput(text.toUpperCase().slice(0, 16));
+              }}
               onSubmitEditing={handleConfirmar}
-              style={s.hiddenInput}
+              style={s.codeInput}
               autoCapitalize="characters"
+              autoCorrect={false}
+              spellCheck={false}
+              autoComplete="off"
               returnKeyType="done"
-              caretHidden
-              contextMenuHidden
-              showSoftInputOnFocus
               underlineColorAndroid="transparent"
-              selectionColor="transparent"
+              selectionColor="#c8844d"
               textContentType="none"
               importantForAutofill="no"
+              placeholder="CÓDIGO"
+              placeholderTextColor="#b8997c"
               editable={!cargando && !recompensa}
             />
-          </View>
-
-          <Animated.View style={[s.inputRow, { transform: [{ translateX: shakeAnim }] }]}>
-            <TouchableOpacity onPress={abrirTeclado} activeOpacity={0.7} style={s.barsRow}>
-              {Array.from({ length: Math.max(5, input.length) }, (_, i) => (
-                <View key={i} style={s.barSlot}>
-                  <Text style={s.barChar}>{input[i] ?? ''}</Text>
-                  <View style={[s.barLine, input.length === i && s.barLineActive]} />
-                </View>
-              ))}
-            </TouchableOpacity>
           </Animated.View>
 
           {input.length > 0 && !recompensa && (
@@ -288,14 +284,7 @@ const s = StyleSheet.create({
 
   topSection: { alignItems: 'center', gap: 10 },
 
-  nativeInputClip: { position: 'absolute', width: 0, height: 0, overflow: 'hidden' },
-  hiddenInput: { position: 'absolute', width: 0, height: 0, opacity: 0, color: 'transparent', backgroundColor: 'transparent', borderWidth: 0, fontSize: 1, textDecorationLine: 'none' },
-
-  barsRow: { flexDirection: 'row', gap: 5, alignItems: 'flex-end', paddingVertical: 9, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#f7e9c8', borderWidth: 1, borderColor: '#e3c991', maxWidth: '100%', overflow: 'hidden' },
-  barSlot: { alignItems: 'center', gap: 4 },
-  barChar: { fontSize: 18, fontWeight: '900', color: '#ffffff', minWidth: 20, textAlign: 'center', includeFontPadding: false, textShadowColor: 'transparent', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 0 },
-  barLine: { width: 20, height: 1.5, backgroundColor: '#d0ad70', borderRadius: 2 },
-  barLineActive: { backgroundColor: '#a87840' },
+  codeInput: { width: 164, height: 42, paddingHorizontal: 12, paddingVertical: 0, borderRadius: 10, backgroundColor: '#ffffff', borderWidth: 1.5, borderColor: '#d8b670', color: '#6d4327', fontFamily: 'Delius', fontSize: 16, fontWeight: '900', letterSpacing: 1.4, textAlign: 'center' },
 
   inputRow: { flexDirection: 'row', alignItems: 'flex-end' },
 
