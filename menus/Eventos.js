@@ -5,7 +5,6 @@ import { useTemporadaActual } from '../hooks/useTemporadaActual';
 
 const EVENTOS_POR_TEMPORADA = {
   t1: {
-    historia: { id: 'historia1', categoria: 'EVENTO DE HISTORIA', titulo: 'HISTORIA', destino: 'historia1', descripcion: 'Descubrí la historia de esta temporada.', imagen: require('../assets/temporadas/libro/Temporada1/Historia/eventohis1.png'), tema: 'blanco' },
     evento: { id: 'chicles', categoria: 'EVENTOS', titulo: 'CHICLES', destino: 'capsula1', descripcion: 'Resuelve misiones, completa el camino compartiendo chicles.', imagen: require('../assets/inicio/eventos/eventochicle.png') },
   },
   t2: {
