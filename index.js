@@ -1,11 +1,14 @@
 import { registerRootComponent } from 'expo';
 import RNPushy from 'pushy-react-native';
-import { Vibration } from 'react-native';
+import { AppState, Vibration } from 'react-native';
 
 import App from './App';
 
 RNPushy.setNotificationListener(async (data) => {
   try {
+    // En segundo plano PushReceiver.kt muestra la notificación directamente.
+    // No la reprogrames desde Headless JS: quedaría pendiente hasta abrir la app.
+    if (AppState.currentState !== 'active') return;
     const Notifications = require('expo-notifications');
     await Notifications.setNotificationChannelAsync('amor-notifications-v2', {
       name: 'Notificaciones de Amor',

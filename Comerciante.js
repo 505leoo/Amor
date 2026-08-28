@@ -7,6 +7,7 @@ import { httpsCallable } from 'firebase/functions';
 import { onAuthStateChanged } from 'firebase/auth';
 import RoomBackground from './components/RoomBackground';
 import TabButtons from './components/TabButtons';
+import RecompensaOverlay from './components/RecompensaOverlay';
 import { auth, db, functions } from './firebaseConfig';
 import { contenidoDisponible, numeroTemporada, useTemporadaActual } from './hooks/useTemporadaActual';
 import { useMisiones } from './MisionesContext';
@@ -63,6 +64,7 @@ export default function Comerciante({ navigation, temporada }) {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState(null);
   const [confirmarSaldar, setConfirmarSaldar] = useState(false);
+  const [recompensa, setRecompensa] = useState(null);
   const [animalitosDesbloqueados, setAnimalitosDesbloqueados] = useState([]);
   const [animalitosEstado, setAnimalitosEstado] = useState({});
   const [productosFadeAnim] = useState(new Animated.Value(0));
@@ -300,6 +302,7 @@ export default function Comerciante({ navigation, temporada }) {
       actualizarPasoTutorial(uid, 4).catch(() => {});
       global.showToast?.({ text1: `${producto.nombre} añadido`, type: 'success' });
       setProductoSeleccionado(null);
+      setRecompensa(producto);
     } catch (error) {
       global.showToast?.({ text1: error.message === 'monedas' ? 'No tienes suficientes monedas' : 'Ese producto ya no está disponible', type: 'error' });
     } finally {
@@ -462,6 +465,13 @@ export default function Comerciante({ navigation, temporada }) {
           </View>
         </View>
       </Modal>
+      <RecompensaOverlay visible={Boolean(recompensa)} onClose={() => setRecompensa(null)}>
+        {recompensa?.imagen
+          ? <Image source={recompensa.imagen} style={styles.recompensaImagen} contentFit="contain" />
+          : <View style={styles.recompensaIcono}><MaterialIcons name={recompensa?.icon || 'auto-awesome'} size={45} color="#a56b16" /></View>}
+        <Text style={styles.recompensaTitulo}>{recompensa?.tipo === 'icono' ? 'Icono especial' : recompensa?.nombre}</Text>
+        {recompensa?.cantidadLabel && <Text style={styles.recompensaCantidad}>{recompensa.cantidadLabel}</Text>}
+      </RecompensaOverlay>
     </View>
   );
 }
@@ -518,6 +528,10 @@ const styles = StyleSheet.create({
   compraConfirmar: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 9, backgroundColor: '#c99d42', borderWidth: 1, borderColor: '#8d6926' },
   compraConfirmarBloqueado: { opacity: 0.48 },
   compraConfirmarTexto: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  recompensaImagen: { width: 112, height: 82 },
+  recompensaIcono: { width: 76, height: 76, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#f5e2ab', borderWidth: 2, borderColor: '#c3933e' },
+  recompensaTitulo: { marginTop: 6, color: '#683714', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', textAlign: 'center' },
+  recompensaCantidad: { marginTop: 1, color: '#b16d25', fontFamily: 'Delius', fontSize: 11, fontWeight: '900' },
   moneda: { fontSize: 7, marginRight: 1 },
   productoPrecioTexto: { color: '#76552f', fontFamily: 'Delius', fontSize: 4.8, fontWeight: '900' },
   creditoPanel: { width: '100%', minHeight: 43, flexDirection: 'row', alignItems: 'center', marginTop: 7, paddingHorizontal: 6, borderRadius: 11, backgroundColor: '#f1e1bd', borderWidth: 1.5, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 7 },

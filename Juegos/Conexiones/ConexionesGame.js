@@ -37,7 +37,8 @@ const PATH_COLORS = {
   violet: '#d3c4fb',
   gold:   '#ffe3a5',
 };
-const MAX_LEVELS = 99;
+// El juego es procedural: no hay un último nivel fijo.
+const MAX_LEVELS = Infinity;
 const EXP_POR_VICTORIA = 5;
 const LEVEL_CACHE = new Map();
 const LEVEL_GENERATION_VERSION = 'rutas-profundas-v3';

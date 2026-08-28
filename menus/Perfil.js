@@ -182,7 +182,7 @@ const FrameDecoration = ({ frame, compact, catalog }) => {
   return <><LinearGradient colors={['#6e7ed2', '#34357f']} style={[styles.frameInfinitySeal, compact && styles.frameSealCompact]}><MaterialIcons name="all-inclusive" size={compact ? 9 : 17} color="#eef3ff" /></LinearGradient>{!compact && <><View style={[styles.frameConstellationStar, styles.frameConstellationOne]} /><View style={[styles.frameConstellationStar, styles.frameConstellationTwo]} /><View style={[styles.frameConstellationStar, styles.frameConstellationThree]} /><LinearGradient colors={['#666fc0', '#28275f']} style={styles.frameInfinityPlate}><MaterialIcons name="auto-awesome" size={8} color="#f4e7ff" /></LinearGradient></>}</>;
 };
 
-const ProfileFrame = ({ avatar, frameId, compact = false, catalog = false, onPress }) => {
+export const ProfileFrame = ({ avatar, frameId, compact = false, catalog = false, onPress }) => {
   const frame = FRAME_OPTIONS.find(item => item.id === frameId) || FRAME_OPTIONS[0];
   const Wrapper = onPress ? TouchableOpacity : View;
   return (

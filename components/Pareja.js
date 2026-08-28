@@ -6,6 +6,7 @@ import Svg, { Path, Rect, Defs, ClipPath, LinearGradient, Stop, G, Text as SvgTe
 import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, query, where, deleteDoc } from 'firebase/firestore';
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
+import { ProfileFrame } from '../menus/Perfil';
 
 let usuariosCache = null;
 let usuariosRequest = null;
@@ -253,7 +254,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
         // Tiene pareja — mostrar solo ella en la lista
         <Animated.View style={[styles.listaWrap, { opacity: contentReveal }]}>
           <View style={styles.usuarioRow}>
-            <Avatar uri={parejaData.iconoUrl || parejaData.photoURL} size={28} />
+            <ProfileFrame avatar={parejaData.iconoUrl || parejaData.photoURL || ICONO_DEFAULT} frameId={parejaData.marcoPerfil || 'corazon'} compact />
             <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
               <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{parejaData.nombre}</Text>
               <IndicadorOnline usuario={parejaData} ahora={ahora} />
@@ -285,7 +286,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
             scrollEnabled={false}
             renderItem={({ item, index }) => (
               <View style={styles.usuarioRow}>
-                <Avatar uri={item.iconoUrl || item.photoURL} size={28} />
+                <ProfileFrame avatar={item.iconoUrl || item.photoURL || ICONO_DEFAULT} frameId={item.marcoPerfil || 'corazon'} compact />
                 <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: item.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
                   <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{item.nombre}</Text>
                   <IndicadorOnline usuario={item} ahora={ahora} />

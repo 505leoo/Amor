@@ -164,20 +164,29 @@ export default function Canjear({ navigation }) {
         <View style={[s.center, width < 700 && s.centerSmall]}>
           <View style={s.sectionLabel}><MaterialIcons name="keyboard" size={14} color="#a87840" /><Text style={s.sectionLabelText}>ESCRIBIR CÓDIGO</Text></View>
 
-          <TextInput
-            ref={inputRef}
-            value={input}
-            onChangeText={t => { if (!cargando && !recompensa) setInput(t.toUpperCase().slice(0, 16)); }}
-            onSubmitEditing={handleConfirmar}
-            style={s.hiddenInput}
-            autoCapitalize="characters"
-            returnKeyType="done"
-            editable={!cargando && !recompensa}
-          />
+          <View style={s.nativeInputClip} pointerEvents="none">
+            <TextInput
+              ref={inputRef}
+              value={input}
+              onChangeText={t => { if (!cargando && !recompensa) setInput(t.toUpperCase().slice(0, 16)); }}
+              onSubmitEditing={handleConfirmar}
+              style={s.hiddenInput}
+              autoCapitalize="characters"
+              returnKeyType="done"
+              caretHidden
+              contextMenuHidden
+              showSoftInputOnFocus
+              underlineColorAndroid="transparent"
+              selectionColor="transparent"
+              textContentType="none"
+              importantForAutofill="no"
+              editable={!cargando && !recompensa}
+            />
+          </View>
 
           <Animated.View style={[s.inputRow, { transform: [{ translateX: shakeAnim }] }]}>
             <TouchableOpacity onPress={abrirTeclado} activeOpacity={0.7} style={s.barsRow}>
-              {[0,1,2,3,4].map(i => (
+              {Array.from({ length: Math.max(5, input.length) }, (_, i) => (
                 <View key={i} style={s.barSlot}>
                   <Text style={s.barChar}>{input[i] ?? ''}</Text>
                   <View style={[s.barLine, input.length === i && s.barLineActive]} />
@@ -279,11 +288,12 @@ const s = StyleSheet.create({
 
   topSection: { alignItems: 'center', gap: 10 },
 
-  hiddenInput: { position: 'absolute', width: 0, height: 0, opacity: 0 },
+  nativeInputClip: { position: 'absolute', width: 0, height: 0, overflow: 'hidden' },
+  hiddenInput: { position: 'absolute', width: 0, height: 0, opacity: 0, color: 'transparent', backgroundColor: 'transparent', borderWidth: 0, fontSize: 1, textDecorationLine: 'none' },
 
-  barsRow: { flexDirection: 'row', gap: 7, alignItems: 'flex-end', paddingVertical: 9, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#f7e9c8', borderWidth: 1, borderColor: '#e3c991' },
+  barsRow: { flexDirection: 'row', gap: 5, alignItems: 'flex-end', paddingVertical: 9, paddingHorizontal: 10, borderRadius: 10, backgroundColor: '#f7e9c8', borderWidth: 1, borderColor: '#e3c991', maxWidth: '100%', overflow: 'hidden' },
   barSlot: { alignItems: 'center', gap: 4 },
-  barChar: { fontSize: 18, fontWeight: '900', color: '#704b2d', minWidth: 20, textAlign: 'center' },
+  barChar: { fontSize: 18, fontWeight: '900', color: '#ffffff', minWidth: 20, textAlign: 'center', includeFontPadding: false, textShadowColor: 'transparent', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 0 },
   barLine: { width: 20, height: 1.5, backgroundColor: '#d0ad70', borderRadius: 2 },
   barLineActive: { backgroundColor: '#a87840' },
 

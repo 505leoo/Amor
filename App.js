@@ -14,7 +14,6 @@ import NotificationSystem from './utils/NotificationSystem';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
 import { MisionesProvider } from './MisionesContext';
-import Toast from './components/Toast';
 import Intro from './Intro';
 import Login from './pantallas/Login';
 import Register from './pantallas/Register';
@@ -81,7 +80,6 @@ export default function App() {
   const [versionActualizacion, setVersionActualizacion] = useState(null);
   const [bootVisible, setBootVisible] = useState(true);
   const bootOpacity = useRef(new Animated.Value(1)).current;
-  const toastRef = useRef(null);
   const userRef = useRef(null);
   const globalClickEffectRef = useRef(null);
   const updateCheckInFlightRef = useRef(false);
@@ -169,7 +167,9 @@ export default function App() {
     }
   }, [estadoActualizacion]);
 
-  useEffect(() => { global.showToast = (opts) => toastRef.current?.show(opts); }, []);
+  // Toast desactivado temporalmente de forma global. Las pantallas pueden
+  // seguir llamando a global.showToast sin mostrar avisos mientras tanto.
+  useEffect(() => { global.showToast = () => {}; }, []);
 
   // navigation estable — useCallback + ref para que nunca cambie de referencia
   // y no cause re-renders en cascada en todos los hijos
@@ -555,8 +555,6 @@ export default function App() {
               onAccept={instalarActualizacion}
             />
           )}
-          <Toast ref={toastRef} />
-
         </MusicProvider>
         </MisionesProvider>
       </TrofeosProvider>

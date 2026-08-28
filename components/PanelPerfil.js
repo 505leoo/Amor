@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import Svg, { Path, Defs, LinearGradient, Stop, G, Text as SvgText, Ellipse } from 'react-native-svg';
 import { auth } from '../firebaseConfig';
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
+import { ProfileFrame } from '../menus/Perfil';
 
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
 const ICONO_ARDILLA = require('../assets/inicio/iconos/icono-ardilla-bellota.png');
@@ -24,13 +25,15 @@ export default memo(function PanelPerfil({ navigation }) {
     data => ({
       nombre: data?.datosCompletos?.nombre || data?.nombre,
       avatarUri: resolverAvatar(data),
+      frameId: data?.marcoPerfil || 'corazon',
       exp: data?.exp,
     }),
     undefined,
-    (a, b) => a?.nombre === b?.nombre && a?.avatarUri === b?.avatarUri && a?.exp === b?.exp,
+    (a, b) => a?.nombre === b?.nombre && a?.avatarUri === b?.avatarUri && a?.frameId === b?.frameId && a?.exp === b?.exp,
   );
   const [nombre, setNombre] = useState(nombreInicial);
   const [avatarUri, setAvatarUri] = useState(avatarInicial);
+  const [frameId, setFrameId] = useState(datosIniciales?.marcoPerfil || 'corazon');
   const [profileLoaded, setProfileLoaded] = useState(Boolean(datosIniciales));
   const profileReveal = useRef(new Animated.Value(datosIniciales ? 1 : 0)).current;
   const [nivel, setNivel] = useState(1 + Math.floor(expInicial / 100));
@@ -42,6 +45,7 @@ export default memo(function PanelPerfil({ navigation }) {
     const d = userData || {};
     setNombre(d.nombre || auth.currentUser?.displayName || 'amigo');
     setAvatarUri(d.avatarUri || ICONO_DEFAULT);
+    setFrameId(d.frameId || 'corazon');
     const currentExp = numeroSeguro(d.exp);
     setExp(currentExp);
     setNivel(1 + Math.floor(currentExp / 100));
@@ -66,13 +70,7 @@ export default memo(function PanelPerfil({ navigation }) {
       <View pointerEvents="none" style={styles.tabPunta} />
       <View pointerEvents="none" style={styles.tabBrillo} />
       <View style={styles.avatarBox}>
-        {avatarUri && <Image
-          source={typeof avatarUri === 'string' ? { uri: avatarUri } : avatarUri}
-          style={styles.avatar}
-          contentFit="cover"
-          cachePolicy="memory-disk"
-          transition={0}
-        />}
+        {avatarUri && <ProfileFrame avatar={avatarUri} frameId={frameId} compact />}
       </View>
       <Animated.View style={[styles.greetingBox, { opacity: profileReveal }]}>
         <Text style={styles.nombre} numberOfLines={1}>{nombre}</Text>
@@ -110,9 +108,9 @@ const styles = StyleSheet.create({
   tabPunta: { position: 'absolute', left: 42, bottom: -5, width: 12, height: 12, borderRadius: 2, backgroundColor: '#e9b85f', borderWidth: 1, borderColor: '#9b6a35', transform: [{ rotate: '45deg' }], zIndex: 6, elevation: 265, shadowColor: '#5f4428', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.3, shadowRadius: 2 },
   tabBrillo: { position: 'absolute', top: 1, left: 8, right: 5, height: 1, backgroundColor: 'rgba(255,255,255,0.62)', borderRadius: 1 },
   avatarBox: {
-    width: 37, height: 37, borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: '#fff7e6', borderWidth: 1.5, borderColor: '#d5b475',
+    width: 34, height: 34, borderRadius: 8,
+    overflow: 'visible',
+    backgroundColor: 'transparent', borderWidth: 0,
   },
   avatar: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
   greetingBox: { marginLeft: 9, maxWidth: 125, flex: 1 },

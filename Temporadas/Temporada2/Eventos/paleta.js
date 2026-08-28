@@ -18,13 +18,13 @@ const LILA  = '#cda6ff';
 
 // Probabilidades de explosión por intento (cada intento es independiente)
 const EXPLOSION_PROBABILITIES = [
-  { intento: 1, probabilidad: 0.05 },   // 5% en el primer intento
-  { intento: 2, probabilidad: 0.10 },   // 10% en el segundo
-  { intento: 3, probabilidad: 0.20 },   // 20% en el tercero
-  { intento: 4, probabilidad: 0.35 },   // 35% en el cuarto
-  { intento: 5, probabilidad: 0.55 },   // 55% en el quinto
-  { intento: 6, probabilidad: 0.75 },   // 75% en el sexto
-  { intento: 7, probabilidad: 0.85 },   // 85% en el séptimo
+  { intento: 1, probabilidad: 0.25 },
+  { intento: 2, probabilidad: 0.40 },
+  { intento: 3, probabilidad: 0.55 },
+  { intento: 4, probabilidad: 0.70 },
+  { intento: 5, probabilidad: 0.85 },
+  { intento: 6, probabilidad: 1.00 },
+  { intento: 7, probabilidad: 1.00 },
 ];
 
 // Calcular probabilidades relativas que sumen 100%
@@ -36,8 +36,6 @@ const calcularProbabilidadesRelativas = () => {
   }));
 };
 
-const PROBABILIDADES_DISPLAY = calcularProbabilidadesRelativas();
-
 // ── Misiones del evento Paleta ────────────────────────────────────────────────
 // Usa el contexto global — misiones externas al juego que dan globos como recompensa.
 
@@ -46,9 +44,9 @@ const PROBABILIDADES_DISPLAY = calcularProbabilidadesRelativas();
 // Extra temprano: 3% por explosión (garantizado en 50)
 // Menor temprano: 1.5% por explosión (garantizado en 75)
 // Mayor temprano: 0.5% por explosión (garantizado en 100)
-const PROB_EXTRA_TEMPRANO  = 0.03;   // 3%
-const PROB_MENOR_TEMPRANO  = 0.015;  // 1.5%
-const PROB_MAYOR_TEMPRANO  = 0.005;  // 0.5%
+const PROB_EXTRA_TEMPRANO  = 0.06;
+const PROB_MENOR_TEMPRANO  = 0.03;
+const PROB_MAYOR_TEMPRANO  = 0.01;
 
 const RECOMPENSAS_INFO = [
   { id: 'basica',  emoji: '🪙', label: 'Básica',        sub: '25–50 🪙  25–50 ⏏️',  prob: 100,  color: '#ff9bb3' },
@@ -58,25 +56,19 @@ const RECOMPENSAS_INFO = [
 ];
 
 // ── Componente de Premio ───────────────────────────────────────────────────
-function PremioCard({ tipo, iconoUrl }) {
+function PremioCard({ tipo, iconoUrl, garantia }) {
   const isMayor = tipo === 'mayor';
   const isMenor = tipo === 'menor';
   const isExtra = tipo === 'extra';
   
   if (isExtra) {
     return (
-      <View style={sp.premioExtra}>
-        <Text style={sp.premioExtraLabel}>Premios Extra</Text>
-        <View style={sp.premioExtraItems}>
-          <View style={sp.premioExtraItemLeft}>
-            <Text style={sp.premioExtraEmoji}>🪙</Text>
-            <Text style={sp.premioExtraValorTexto}>250</Text>
-          </View>
-          <View style={sp.premioExtraDivider} />
-          <View style={sp.premioExtraItemRight}>
-            <Text style={sp.premioExtraEmoji}>⏏️</Text>
-            <Text style={sp.premioExtraValorTexto}>100</Text>
-          </View>
+      <View style={[sp.premioCard, sp.premioExtraCard]}>
+        <View style={sp.premioTopRow}><Text style={sp.premioPaso}>03</Text><Text style={sp.premioPunto}>●</Text></View>
+        <View style={sp.premioCardContent}>
+          <Text style={[sp.premioLabel, sp.premioExtraLabel]}>EXTRA</Text>
+          <Text style={[sp.premioValor, sp.premioExtraValor]}>250 🪙 + 100 ⏏️</Text>
+          <Text style={[sp.premioGarantia, sp.premioExtraGarantia]}>CADA {garantia} GIROS</Text>
         </View>
       </View>
     );
@@ -84,27 +76,21 @@ function PremioCard({ tipo, iconoUrl }) {
 
   return (
     <View style={[sp.premioCard, isMayor && sp.premioMayor, isMenor && sp.premioMenor]}>
-      {/* Premio Mayor: imagen de fondo */}
+      {/* El icono acompaña al premio sin tapar la información */}
       {isMayor && iconoUrl && (
         <ExpoImage
           source={{ uri: iconoUrl }}
-          style={sp.premioImagenFull}
-          contentFit="cover"
+          style={sp.premioImagenIcono}
+          contentFit="contain"
           cachePolicy="memory"
         />
       )}
-      {/* Premio Menor: "2500 🪙" grande como fondo */}
-      {isMenor && (
-        <View style={sp.premioMenorFondo}>
-          <Text style={sp.premioMenorFondoTexto}>2500</Text>
-          <Text style={sp.premioMenorFondoEmoji}>🪙</Text>
-        </View>
-      )}
-      {/* Capa de opacidad oscura encima del fondo */}
-      <View style={sp.premioOverlayCapa} />
-      {/* Candado y label encima de todo */}
-      <Text style={sp.candadoEmoji}>🔒</Text>
-      <Text style={sp.premioLabel}>{isMayor ? 'PREMIO MAYOR' : 'PREMIO MENOR'}</Text>
+      <View style={sp.premioTopRow}><Text style={[sp.premioPaso, isMenor ? sp.premioPasoMenor : sp.premioPasoMayor]}>{isMayor ? '01' : '02'}</Text><Text style={sp.premioPunto}>●</Text></View>
+      <View style={sp.premioCardContent}>
+        <Text style={[sp.premioLabel, isMayor ? sp.premioLabelMayor : sp.premioLabelMenor]}>{isMayor ? 'PREMIO ESPECIAL' : 'RECOMPENSA'}</Text>
+        {isMayor ? <Text style={sp.premioIcono}>🎈</Text> : <Text style={sp.premioValor}>2500 🪙</Text>}
+        <Text style={[sp.premioGarantia, isMayor ? sp.premioGarantiaMayor : sp.premioGarantiaMenor]}>CADA {garantia} GIROS</Text>
+      </View>
     </View>
   );
 }
@@ -498,9 +484,9 @@ export default function Paleta({ navigation, route }) {
         <GloboGigante scale={megaScale} burst={burst} />
       </View>
 
-      {/* Botón de información */}
+      {/* Ayuda visible y amigable */}
       <TouchableOpacity onPress={() => setShowInfo(true)} style={s.infoButton} activeOpacity={0.7}>
-        <Text style={s.infoButtonText}>!</Text>
+        <Text style={s.infoButtonText}>¿Cómo se juega?</Text>
       </TouchableOpacity>
       
       {/* Contador de intentos */}
@@ -511,15 +497,16 @@ export default function Paleta({ navigation, route }) {
 
       {/* Columna de premios + botones alineados */}
       <View style={s.columnaBotones}>
-        {/* Premios Mayor y Menor */}
-        <View style={{ flexDirection: 'row', gap: 12 }}>
-          <View style={{ flex: 1 }}><PremioCard tipo="mayor" iconoUrl={iconoPremioMayor} /></View>
-          <View style={{ flex: 1 }}><PremioCard tipo="menor" /></View>
+        <View style={s.premiosHeader}>
+          <Text style={s.premiosHeaderTitle}>PREMIOS DEL GLOBO</Text>
+          <Text style={s.premiosHeaderHint}>lo que puede tocarte</Text>
         </View>
-        <View style={{ height: 8 }} />
-        {/* Premio Extra — mismo ancho que la fila de arriba */}
-        <PremioCard tipo="extra" />
-        <View style={{ height: 8 }} />
+        <View style={s.premiosGrid}>
+          <PremioCard tipo="mayor" iconoUrl={iconoPremioMayor} garantia={50} />
+          <PremioCard tipo="menor" garantia={25} />
+          <PremioCard tipo="extra" garantia={10} />
+        </View>
+        <View style={{ height: 9 }} />
         {/* Botones */}
         <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
           <BtnVamos onPress={handleVamos} disabled={paletas <= 0} />
@@ -581,26 +568,13 @@ export default function Paleta({ navigation, route }) {
 
             {/* ── Página 1: explosión ── */}
             {paginaModal === 1 && (
-              <View style={s.probabilidadesList}>
-                {PROBABILIDADES_DISPLAY.map((item) => (
-                  <View key={item.intento} style={s.probItem}>
-                    <View style={s.probItemLeft}>
-                      <Text style={s.probEmoji}>🎈</Text>
-                      <Text style={s.probIntento}>
-                        {item.intento === 1
-                          ? 'En el 1er pinchazo'
-                          : `A los ${item.intento} pinchazos`}
-                      </Text>
-                    </View>
-                    <View style={s.probItemRight}>
-                      <Text style={s.probPorcentaje}>{item.probabilidadRelativa}%</Text>
-                      <View style={s.probBar}>
-                        <View style={[s.probBarFill, { width: `${parseFloat(item.probabilidadRelativa)}%` }]} />
-                      </View>
-                    </View>
-                  </View>
-                ))}
-                <Text style={s.modalNota}>Cada pinchazo es independiente. Cuantos más pinchazos sin explotar, mayor la chance de que explote.</Text>
+              <View style={s.instruccionesLista}>
+                <Text style={s.instruccionesTitulo}>¿Cómo se juega?</Text>
+                <Text style={s.instruccionesTexto}>🎈 Tocá <Text style={s.instruccionesResaltado}>VAMOS</Text> para pinchar el globo gigante.</Text>
+                <Text style={s.instruccionesTexto}>✨ Cada giro consume 1 globo y hace crecer la sorpresa.</Text>
+                <Text style={s.instruccionesTexto}>💥 Si explota, recibís las recompensas acumuladas.</Text>
+                <Text style={s.instruccionesTexto}>🎁 Si no explota todavía, podés seguir intentando: el próximo giro será más favorable.</Text>
+                <Text style={s.modalNota}>La explosión está asegurada como máximo en el sexto giro.</Text>
               </View>
             )}
 
@@ -616,15 +590,9 @@ export default function Paleta({ navigation, route }) {
                         <Text style={s.probSubLabel}>{item.sub}</Text>
                       </View>
                     </View>
-                    <View style={s.probItemRight}>
-                      <Text style={[s.probPorcentaje, { color: item.color }]}>{item.prob}%</Text>
-                      <View style={[s.probBar, { backgroundColor: `${item.color}22` }]}>
-                        <View style={[s.probBarFill, { width: `${Math.min(item.prob, 100)}%`, backgroundColor: item.color }]} />
-                      </View>
-                    </View>
                   </View>
                 ))}
-                <Text style={s.modalNota}>La básica cae siempre al explotar. Los demás tienen su propia probabilidad por explosión, y si no caen antes, se garantizan al llegar al límite de giros.</Text>
+                <Text style={s.modalNota}>La recompensa básica aparece siempre. Las recompensas especiales pueden llegar antes o aparecer gracias a sus giros de garantía.</Text>
               </View>
             )}
 
@@ -653,7 +621,8 @@ const s = StyleSheet.create({
   columnaBotones: {
     position: 'absolute',
     bottom: 28,
-    left: 120,
+    left: 78,
+    width: 300,
   },
   garantiasWrap: {
     position: 'absolute',
@@ -725,9 +694,10 @@ const s = StyleSheet.create({
   infoButton: {
     position: 'absolute',
     top: 50,
-    right: 40,
-    width: 28,
+    left: 60,
+    minWidth: 118,
     height: 28,
+    paddingHorizontal: 10,
     borderRadius: 14,
     backgroundColor: 'rgba(255,155,179,0.9)',
     justifyContent: 'center',
@@ -742,10 +712,23 @@ const s = StyleSheet.create({
   },
   infoButtonText: {
     fontFamily: 'Omori',
-    fontSize: 16,
+    fontSize: 10,
     color: '#fff',
     fontWeight: 'bold',
+    letterSpacing: 0.4,
   },
+  premiosHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginBottom: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8,
+    backgroundColor: 'rgba(42,19,48,0.84)', borderLeftWidth: 3, borderLeftColor: '#ff9bb3',
+  },
+  premiosHeaderTitle: { fontFamily: 'Omori', fontSize: 10, color: '#fff7ef', letterSpacing: 0.8 },
+  premiosHeaderHint: { fontFamily: 'Omori', fontSize: 7, color: '#ffd1a8' },
+  premiosGrid: { flexDirection: 'row', gap: 6, width: '100%' },
+  instruccionesLista: { flex: 1, gap: 9, paddingHorizontal: 5, paddingTop: 4 },
+  instruccionesTitulo: { fontFamily: 'Omori', fontSize: 14, color: '#e8607a', textAlign: 'center', marginBottom: 2 },
+  instruccionesTexto: { fontFamily: 'Omori', fontSize: 9.5, lineHeight: 14, color: '#805d6c' },
+  instruccionesResaltado: { color: '#d74d6c', fontWeight: 'bold' },
   contadorWrap: {
     position: 'absolute',
     bottom: 50,
@@ -940,31 +923,47 @@ const sv = StyleSheet.create({
 
 const sp = StyleSheet.create({
   premioCard: {
-    borderRadius: 10,
+    borderRadius: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
     shadowRadius: 6,
     elevation: 5,
-    height: 100,
+    height: 96,
     flex: 1,
     overflow: 'hidden',
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#2a1330',
+    backgroundColor: '#fffaf6',
+    borderWidth: 2,
+    borderColor: '#8fe3e6',
+    position: 'relative',
   },
   premioMayor: {
-    shadowColor: '#000',
+    shadowColor: '#4a9ea4',
+    backgroundColor: '#e9fbf7',
+    borderColor: '#8fe3e6',
   },
   premioMenor: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff7df',
+    borderColor: '#ffd66b',
+    shadowColor: '#b78a38',
+  },
+  premioExtraCard: {
+    backgroundColor: '#f6efff',
+    borderColor: '#cda6ff',
+    shadowColor: '#7651a8',
+  },
+  premioImagenIcono: {
+    position: 'absolute', right: 4, top: 4, width: 38, height: 38,
+    opacity: 0.28, zIndex: 1,
   },
   premioImagenFull: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
     width: '100%',
     height: '100%',
-    opacity: 0.35,
+    opacity: 0.18,
   },
   // Fondo del Premio Menor: "2500 🪙" grande y centrado
   premioMenorFondo: {
@@ -990,31 +989,45 @@ const sp = StyleSheet.create({
   premioOverlayCapa: {
     position: 'absolute',
     top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(42,19,48,0.65)',
-    opacity: 0.65,
+    backgroundColor: 'transparent',
+    opacity: 0,
   },
   premioImagenWrap: {
     display: 'none',
   },
   premioContenido: { display: 'none' },
   premioOverlay: { display: 'none' },
-  candadoEmoji: {
-    fontSize: 26,
-    marginBottom: 4,
+  premioCardContent: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  premioTopRow: {
+    position: 'absolute', top: 6, left: 8, right: 8,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', zIndex: 3,
   },
+  premioPaso: { fontFamily: 'Omori', fontSize: 7, color: '#8a7b86', letterSpacing: 0.5 },
+  premioPasoMayor: { color: '#3e9b91' },
+  premioPasoMenor: { color: '#b17f2d' },
+  premioPunto: { fontSize: 6, color: '#d8cbd2' },
+  premioIcono: { fontSize: 19, marginTop: 2 },
   premioLabel: {
     fontFamily: 'Omori',
     fontSize: 8,
-    color: '#fff',
+    color: '#398b94',
     letterSpacing: 0.8,
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    textShadowColor: 'transparent',
   },
   premioEmojiGrande: {
     fontSize: 16,
   },
+  premioLabelMayor: { color: '#258f88' },
+  premioLabelMenor: { color: '#b07820' },
+  premioGarantia: { marginTop: 1, color: '#6b9c9b', fontFamily: 'Omori', fontSize: 5.5, letterSpacing: 0.45 },
+  premioGarantiaMayor: { color: '#579b93' },
+  premioGarantiaMenor: { color: '#b18a4b' },
+  premioExtraValor: {
+    marginTop: 4, color: '#7651a8', fontFamily: 'Omori', fontSize: 11,
+    fontWeight: 'bold', textAlign: 'center',
+  },
+  premioExtraGarantia: { color: '#987bbb', fontSize: 5.5 },
   premioInfo: {
     alignItems: 'center',
   },
@@ -1033,13 +1046,11 @@ const sp = StyleSheet.create({
     marginBottom: 2,
   },
   premioValor: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(255,155,179,0.15)',
-    borderRadius: 5,
-    paddingVertical: 2,
-    paddingHorizontal: 5,
+    marginTop: 3,
+    color: '#b87820',
+    fontFamily: 'Omori',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
   premioValorEmoji: {
     fontSize: 8,
