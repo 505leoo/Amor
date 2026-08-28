@@ -2,7 +2,7 @@
   "expo": {
     "name": "Amor",
     "slug": "Amor",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "orientation": "landscape",
     "icon": "./assets/16.png",
     "userInterfaceStyle": "light",
@@ -95,7 +95,7 @@
         "projectId": "3e224fbe-d6f2-48c1-8903-61bf13953cf2"
       },
       "expo-navigation-bar": {},
-      "updateVersion": "1.1.4"
+      "updateVersion": "1.1.5"
     },
     "owner": "505leoo"
   }
