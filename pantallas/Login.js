@@ -11,6 +11,16 @@ import { auth, db } from '../firebaseConfig';
 const { width } = Dimensions.get('window');
 
 const PIN_LENGTH = 6;
+const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+
+const getUserName = user => String(
+  user?.datosCompletos?.nombre || user?.nombre || user?.displayName || ''
+).trim();
+
+const getUserAvatar = user => {
+  if (user?.iconoLocalId === 'ardilla_bellota') return require('../assets/inicio/iconos/icono-ardilla-bellota.png');
+  return user?.iconoUrl || user?.photoURL || ICONO_DEFAULT;
+};
 
 const BubbleKey = React.memo(({ label, onPress, isDel }) => {
   const scale = useRef(new Animated.Value(1)).current;
@@ -100,7 +110,7 @@ export default function Login({ navigation, temporada = 't1' }) {
         const snap = await getDocs(collection(db, 'usuarios'));
         const all = snap.docs.map(d => ({ uid: d.id, ...d.data() }));
         const isAdmin = u => u.correo === 'admin@gmail.com' || u.email === 'admin@gmail.com' || u.nombre === 'Admin' || u.displayName === 'Administración';
-        const hasName = u => Boolean(String(u.displayName || u.datosCompletos?.nombre || u.nombre || '').trim());
+        const hasName = u => Boolean(getUserName(u));
         const regular = all.filter(u => !isAdmin(u) && hasName(u)).slice(0, 2);
         const admin = all.find(isAdmin);
         const list = admin ? [...regular, { ...admin, _isAdmin: true }] : regular;
@@ -143,7 +153,7 @@ export default function Login({ navigation, temporada = 't1' }) {
     if (next.length === PIN_LENGTH) {
       setLoading(true);
       try {
-        const email = selectedUser.correo || selectedUser.email || `${selectedUser.displayName?.toLowerCase().replace(/\s/g, '')}@gmail.com`;
+        const email = selectedUser.correo || selectedUser.email || `${getUserName(selectedUser).toLowerCase().replace(/\s/g, '')}@gmail.com`;
         const credential = await signInWithEmailAndPassword(auth, email, next);
         // Esperar el token antes de navegar: las funciones protegidas necesitan
         // que Firebase ya haya restaurado por completo la sesión.
@@ -161,8 +171,8 @@ export default function Login({ navigation, temporada = 't1' }) {
     }
   }, [pin, selectedUser, navigation]);
 
-  const avatarUrl = selectedUser?.selectedSticker?.imageUrl || selectedUser?.currentStickerUrl || selectedUser?.photoURL || null;
-  const displayName = selectedUser?.displayName || selectedUser?.datosCompletos?.nombre || selectedUser?.nombre || '';
+  const avatar = selectedUser ? getUserAvatar(selectedUser) : ICONO_DEFAULT;
+  const displayName = getUserName(selectedUser);
 
   return (
     <View style={s.root}>
@@ -178,13 +188,13 @@ export default function Login({ navigation, temporada = 't1' }) {
           ) : (
           <View style={s.profilesRow}>
             {users.map(user => {
-              const name = user._isAdmin ? 'Admin' : (user.displayName || user.datosCompletos?.nombre || user.nombre || '');
-              const avatar = !user._isAdmin && (user.selectedSticker?.imageUrl || user.currentStickerUrl || user.photoURL || null);
+              const name = user._isAdmin ? 'Admin' : getUserName(user);
+              const avatar = !user._isAdmin ? getUserAvatar(user) : null;
               return (
                 <TouchableOpacity key={user.uid} style={s.profileCard} onPress={() => handleSelectUser(user)} activeOpacity={0.8}>
                   <View style={[s.avatarWrap, user._isAdmin && s.avatarWrapAdmin]}>
                     {avatar
-                      ? <Image source={{ uri: avatar }} style={s.avatar} contentFit="cover" />
+                      ? <Image source={typeof avatar === 'string' ? { uri: avatar } : avatar} style={s.avatar} contentFit="cover" />
                       : <View style={[s.avatarPlaceholder, user._isAdmin && s.avatarPlaceholderAdmin]}><Text style={s.avatarInitial}>{name[0]?.toUpperCase()}</Text></View>
                     }
                   </View>
@@ -214,10 +224,7 @@ export default function Login({ navigation, temporada = 't1' }) {
           <Animated.View style={[s.centerPin, { opacity: pinFade }]}>
             <View style={s.sideColCard}>
               <View style={s.miniAvatarWrap}>
-                {avatarUrl
-                  ? <Image source={{ uri: avatarUrl }} style={s.miniAvatar} contentFit="contain" />
-                  : <View style={s.miniAvatarPlaceholder}><Text style={s.miniInitial}>{displayName[0]?.toUpperCase()}</Text></View>
-                }
+                <Image source={typeof avatar === 'string' ? { uri: avatar } : avatar} style={s.miniAvatar} contentFit="cover" />
               </View>
               <Text style={s.miniName}>{displayName}</Text>
             </View>
