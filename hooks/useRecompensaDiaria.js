@@ -5,16 +5,17 @@ import { useUserDocument } from './useUserDocument';
 
 const recompensaCache = new Map();
 
-// El primer día entrega el Halcón. Después alterna recursos y cartas
-// universales, que sirven para mejorar cualquier animalito desbloqueado.
+// El primer día entrega el Halcón. Después alterna recursos, cartas y tickets
+// para que la ruleta también tenga una forma especial de conseguir más giros.
 export const getRecompensaDiariaDelDia = (dia, userData) => {
   // Día 1 siempre representa el Halcón, incluso en el historial de un usuario
   // que ya lo desbloqueó.
   if (dia === 1) return { tipo: 'halcon', cantidad: 1, etiqueta: 'x1' };
-  const ciclo = (dia - 2) % 4;
+  const ciclo = (dia - 2) % 5;
   if (ciclo === 0) return { tipo: 'dinero', cantidad: 250, emoji: '🪙', etiqueta: '+250' };
   if (ciclo === 1) return { tipo: 'exp', cantidad: 125, emoji: '⏏️', etiqueta: '+125' };
-  if (ciclo === 2) return { tipo: 'cartasAnimalitos', cantidad: 3, emoji: '✦', etiqueta: 'x3' };
+  if (ciclo === 2) return { tipo: 'ticketRuleta', cantidad: 1, etiqueta: 'x1' };
+  if (ciclo === 3) return { tipo: 'cartasAnimalitos', cantidad: 3, emoji: '✦', etiqueta: 'x3' };
   return { tipo: 'diamantes', cantidad: 25, emoji: '💎', etiqueta: 'x25' };
 };
 
@@ -106,6 +107,12 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
         skin: 'default',
         skinsDesbloqueadas: {},
         desbloqueadoAt: serverTimestamp(),
+      }, { merge: true });
+    } else if (recompensa.tipo === 'ticketRuleta') {
+      await setDoc(doc(db, 'usuarios', uid, 'inventario', 'ticket_ruleta'), {
+        tipo: 'ticket_ruleta',
+        nombre: 'Ticket de Ruleta',
+        cantidad: increment(recompensa.cantidad),
       }, { merge: true });
     } else {
       await setDoc(userRef, { [recompensa.tipo]: increment(recompensa.cantidad) }, { merge: true });

@@ -251,6 +251,158 @@ exports.sendPushyNotification = functions.https.onCall(
       }
     });
 
+// Ruleta diaria: el premio y el límite se resuelven en servidor para que el
+// cliente no pueda repetir giros ni modificar la recompensa.
+const RECOMPENSAS_COLECCION_RULETA = [
+  {tipo: "animal", animalId: "ardilla", legacyUnlockField: "ardillaDesbloqueada", loteId: "ardilla", premioLoteId: "personaje", nombre: "Ardilla"},
+  {tipo: "animal", animalId: "ajolote", legacyUnlockField: "ajoloteDesbloqueado", loteId: "ajolote", premioLoteId: "personaje", nombre: "Ajolote"},
+  {tipo: "animal", animalId: "erizo", legacyUnlockField: "erizoDesbloqueado", loteId: "erizo", premioLoteId: "personaje", nombre: "Erizo"},
+  {tipo: "skin", animalId: "ardilla", skinId: "ardillat1", loteId: "ardilla", premioLoteId: "ardillat1", nombre: "Bellota Dorada"},
+  {tipo: "skin", animalId: "ardilla", skinId: "ardillat2", loteId: "ardilla", premioLoteId: "ardillat2", nombre: "Guardiana del Bosque"},
+  {tipo: "skin", animalId: "ajolote", skinId: "ajolotet1", loteId: "ajolote", premioLoteId: "ajolotet1", nombre: "Algodón de Azúcar"},
+  {tipo: "skin", animalId: "ajolote", skinId: "ajolotet2", loteId: "ajolote", premioLoteId: "ajolotet2", nombre: "Guardián de Caramelo"},
+  {tipo: "skin", animalId: "erizo", skinId: "erizot1", loteId: "erizo", premioLoteId: "erizot1", nombre: "Cupcake de Arándanos"},
+  {tipo: "skin", animalId: "erizo", skinId: "erizot2", loteId: "erizo", premioLoteId: "erizot2", nombre: "Maestro Chocolatero"},
+  {tipo: "icono", iconoId: "ardilla_bellota", loteId: "ardilla", premioLoteId: "icono", nombre: "Bellota Dorada"},
+  {tipo: "icono", iconoId: "ajolote_caramelo", loteId: "ajolote", premioLoteId: "icono", nombre: "Reino de Caramelo"},
+  {tipo: "icono", iconoId: "erizo_dulce_medianoche", loteId: "erizo", premioLoteId: "icono", nombre: "Dulce Medianoche"},
+];
+
+const ejecutarGiroRuletaDiaria = async (uid) => {
+  const db = admin.firestore();
+  const dayKey = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(new Date());
+  const premios = [
+    {id: "pierdes_300", tipo: "perdida", cantidad: 300, peso: 20},
+    {id: "sin_premio", tipo: "nada", cantidad: 0, peso: 10},
+    {id: "monedas_75", tipo: "dinero", cantidad: 75, peso: 23},
+    {id: "cartas_3", tipo: "cartasAnimalitos", cantidad: 3, peso: 15},
+    {id: "monedas_150", tipo: "dinero", cantidad: 150, peso: 14},
+    {id: "cartas_5", tipo: "cartasAnimalitos", cantidad: 5, peso: 6},
+    {id: "diamantes_10", tipo: "diamantes", cantidad: 10, peso: 8},
+    {id: "diamantes_25", tipo: "diamantes", cantidad: 25, peso: 4},
+    {id: "sorpresa_coleccion", tipo: "coleccion", cantidad: 1, peso: 0.2},
+  ];
+  const total = premios.reduce((sum, item) => sum + item.peso, 0);
+  let roll = Math.random() * total;
+  const premio = premios.find((item) => {
+    roll -= item.peso;
+    return roll <= 0;
+  }) || premios[0];
+  const selectorColeccion = Math.random();
+  const userRef = db.collection("usuarios").doc(uid);
+  const ruletaRef = userRef.collection("minijuegos").doc("ruleta_diaria");
+  const ticketRef = userRef.collection("inventario").doc("ticket_ruleta");
+  let cantidadAplicada = premio.cantidad;
+  let recompensaColeccion = null;
+  let premioAplicado = premio;
+  await db.runTransaction(async (tx) => {
+    const animalRefs = Object.fromEntries(["ardilla", "ajolote", "erizo"].map((animalId) => [animalId, userRef.collection("animalitos").doc(animalId)]));
+    const loteRefs = Object.fromEntries(["ardilla", "ajolote", "erizo"].map((animalId) => [animalId, userRef.collection("lotes").doc(animalId)]));
+    const [userSnap, ruletaSnap, ticketSnap, ...coleccionSnaps] = await Promise.all([
+      tx.get(userRef), tx.get(ruletaRef), tx.get(ticketRef),
+      ...Object.values(animalRefs).map((ref) => tx.get(ref)),
+      ...Object.values(loteRefs).map((ref) => tx.get(ref)),
+    ]);
+    if (!userSnap.exists) throw new HttpsError("not-found", "Usuario no encontrado.");
+    const ruletaData = ruletaSnap.data() || {};
+    const usarGiroDiario = ruletaData.ultimoGiroDia !== dayKey;
+    const ticketData = ticketSnap.data() || {};
+    const ticketsDisponibles = Math.max(0, Number(ticketData.cantidad) || 0);
+    if (!usarGiroDiario && ticketsDisponibles < 1) {
+      throw new HttpsError("failed-precondition", "No tienes giros disponibles.");
+    }
+    if (!usarGiroDiario) {
+      tx.set(ticketRef, {cantidad: ticketsDisponibles - 1}, {merge: true});
+    }
+    const userData = userSnap.data() || {};
+    const saldo = Math.max(0, Number(userData.dinero) || 0);
+    const animalData = Object.fromEntries(Object.keys(animalRefs).map((animalId, index) => [animalId, coleccionSnaps[index].data() || {}]));
+    const loteData = Object.fromEntries(Object.keys(loteRefs).map((animalId, index) => [animalId, coleccionSnaps[index + 3].data() || {}]));
+
+    if (premio.tipo === "coleccion") {
+      const desbloqueado = (animalId) => {
+        const animal = animalData[animalId] || {};
+        const config = RECOMPENSAS_COLECCION_RULETA.find((item) => item.tipo === "animal" && item.animalId === animalId);
+        return animal.desbloqueado === true || userData.animalito === animalId || Boolean(config && config.legacyUnlockField && userData[config.legacyUnlockField]) || Number(animal.nivel) > 0 || Number(animal.cartas !== undefined ? animal.cartas : animal.copias) > 0;
+      };
+      const disponibles = RECOMPENSAS_COLECCION_RULETA.filter((item) => {
+        if (item.tipo === "animal") return !desbloqueado(item.animalId);
+        if (item.tipo === "skin") return desbloqueado(item.animalId) && !((animalData[item.animalId].skinsDesbloqueadas || {})[item.skinId]) && !(((userData.skinsDesbloqueadas || {})[item.animalId] || {})[item.skinId]) && !(userData.animalito === item.animalId && userData.skin === item.skinId);
+        return !((userData.iconosDesbloqueados || {})[item.iconoId]) && userData.iconoLocalId !== item.iconoId;
+      });
+      const elegida = disponibles[Math.min(disponibles.length - 1, Math.floor(selectorColeccion * disponibles.length))];
+      if (elegida) {
+        recompensaColeccion = elegida;
+        if (elegida.tipo === "animal") {
+          tx.set(userRef, {[elegida.legacyUnlockField]: true}, {merge: true});
+          tx.set(animalRefs[elegida.animalId], {desbloqueado: true, nivel: Math.max(1, Number(animalData[elegida.animalId].nivel) || 1)}, {merge: true});
+        } else if (elegida.tipo === "skin") {
+          tx.set(animalRefs[elegida.animalId], {skinsDesbloqueadas: {...(animalData[elegida.animalId].skinsDesbloqueadas || {}), [elegida.skinId]: true}}, {merge: true});
+        } else {
+          tx.set(userRef, {iconosDesbloqueados: {...(userData.iconosDesbloqueados || {}), [elegida.iconoId]: true}}, {merge: true});
+        }
+        tx.set(loteRefs[elegida.loteId], {
+          animalId: elegida.loteId,
+          premiosUnicos: {...(loteData[elegida.loteId].premiosUnicos || {}), [elegida.premioLoteId]: true},
+          ultimaRecompensaRuleta: admin.firestore.FieldValue.serverTimestamp(),
+        }, {merge: true});
+      } else {
+        premioAplicado = {id: "cartas_5", tipo: "cartasAnimalitos", cantidad: 5};
+      }
+    }
+
+    cantidadAplicada = premioAplicado.tipo === "perdida" ? Math.min(premioAplicado.cantidad, saldo) : premioAplicado.cantidad;
+    if (premioAplicado.tipo === "perdida" && cantidadAplicada > 0) {
+      tx.update(userRef, {dinero: admin.firestore.FieldValue.increment(-cantidadAplicada)});
+    } else if (premioAplicado.tipo !== "nada" && premioAplicado.tipo !== "coleccion") {
+      tx.update(userRef, {[premioAplicado.tipo]: admin.firestore.FieldValue.increment(cantidadAplicada)});
+    }
+    tx.set(ruletaRef, {
+      ultimoPremio: premioAplicado.id,
+      ultimoGiroEn: admin.firestore.FieldValue.serverTimestamp(),
+      ultimoTipoGiro: usarGiroDiario ? "diario" : "ticket",
+      ...(usarGiroDiario ? {ultimoGiroDia: dayKey} : {}),
+      girosTotales: admin.firestore.FieldValue.increment(1),
+    }, {merge: true});
+  });
+  return {id: premioAplicado.id, tipo: premioAplicado.tipo, cantidad: cantidadAplicada, recompensa: recompensaColeccion};
+};
+
+exports.girarRuletaDiaria = onCall(async (request) => {
+  let uid = request.auth && request.auth.uid;
+  const authToken = request.data && request.data.authToken;
+  if (!uid && authToken) {
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(authToken);
+      uid = decodedToken.uid;
+    } catch (_) {
+      throw new HttpsError("unauthenticated", "Tu sesión ya no es válida.");
+    }
+  }
+  if (!uid) throw new HttpsError("unauthenticated", "Inicia sesión para girar.");
+  return ejecutarGiroRuletaDiaria(uid);
+});
+
+// Compatibilidad con React Native: las demás callables estables de la app
+// usan esta generación y reciben el token de Auth sin problemas.
+exports.girarRuletaDiariaV1 = functions.https.onCall(async (data, context) => {
+  let uid = context.auth && context.auth.uid;
+  const payload = (data && data.data) || data || {};
+  if (!uid && payload.authToken) {
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(payload.authToken);
+      uid = decodedToken.uid;
+    } catch (_) {
+      throw new functions.https.HttpsError("unauthenticated", "Tu sesión ya no es válida.");
+    }
+  }
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Inicia sesión para girar.");
+  return ejecutarGiroRuletaDiaria(uid);
+});
+
 // Mensajes globales de Comunidad. La identidad, el cooldown y los destinatarios
 // se validan en servidor; el cliente únicamente presenta el compositor.
 exports.adminCommunityBroadcast = onCall(async (request) => {
@@ -478,6 +630,38 @@ exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{no
     await broadcastStateRef.set({firestoreSendingUntil: 0}, {merge: true}).catch(() => {});
     return null;
   }
+});
+
+// Actividad breve para que la pareja pueda ver los momentos importantes sin
+// depender de textos fijos en Inicio. Solo registra cambios relevantes.
+exports.registrarActividadPareja = onDocumentUpdated("usuarios/{userId}", async (event) => {
+  const before = event.data.before.data() || {};
+  const after = event.data.after.data() || {};
+  const numero = (value) => Number(value) || 0;
+  const expAntes = numero(before.exp);
+  const expDespues = numero(after.exp);
+  const monedasAntes = numero(before.dinero);
+  const monedasDespues = numero(after.dinero);
+  const diamantesAntes = numero(before.diamantes || before.diamante);
+  const diamantesDespues = numero(after.diamantes || after.diamante);
+  let actividad = null;
+
+  const nivelAntes = 1 + Math.floor(expAntes / 100);
+  const nivelDespues = 1 + Math.floor(expDespues / 100);
+  if (nivelDespues > nivelAntes) {
+    actividad = {tipo: "nivel", nivel: nivelDespues};
+  } else if (diamantesDespues - diamantesAntes >= 10) {
+    actividad = {tipo: "epico", cantidad: diamantesDespues - diamantesAntes};
+  } else if (monedasDespues - monedasAntes >= 50) {
+    actividad = {tipo: "monedas", cantidad: monedasDespues - monedasAntes};
+  } else if (monedasAntes - monedasDespues >= 1) {
+    actividad = {tipo: "compra", cantidad: monedasAntes - monedasDespues};
+  }
+  if (!actividad) return null;
+  return event.data.after.ref.collection("actividad").add({
+    ...actividad,
+    creadoEn: admin.firestore.FieldValue.serverTimestamp(),
+  });
 });
 
 // Pushy informa qué Android todavía no recibió el mensaje. Durante cinco

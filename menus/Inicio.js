@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, memo, useState, createContext, useContext } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Dimensions, Modal, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path, Circle, Rect, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { Image } from 'expo-image';
 import LottieView from 'lottie-react-native';
 import { LibroJuegos } from '../components/botones';
@@ -9,9 +9,10 @@ import Player from '../Player';
 import Pareja from '../components/Pareja';
 import PanelPerfil from '../components/PanelPerfil';
 import RecompensaOverlay from '../components/RecompensaOverlay';
+import RuletaDiariaModal from '../components/RuletaDiariaModal';
 import { getRecompensaDiariaDelDia, useRecompensaDiaria } from '../hooks/useRecompensaDiaria';
 import { auth, db } from '../firebaseConfig';
-import { collection, doc, onSnapshot, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useUserDocument } from '../hooks/useUserDocument';
 import { BuzonModal } from './Buzon';
@@ -32,16 +33,21 @@ const NOOP = () => {};
 const INICIO_BACKGROUND = require('../assets/inicio/inicio.png');
 const INICIO_BACKGROUND_T2 = require('../assets/inicio/iniciot2.png');
 const HALCON_IMAGE = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
+const ICONO_ARDILLA_LOTE = require('../assets/inicio/iconos/icono-ardilla-bellota.png');
+const AJOLOTE_LOTE = require('../assets/inicio/iconos/icono-ajolote-caramelo.png');
+const ERIZO_LOTE = require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.png');
 const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
 const JUGAR_IMAGE = require('../assets/inicio/jugar.png');
 const selectEstadoInicio = data => ({
   animalito: data?.animalito || null,
   halconDesbloqueado: Boolean(data?.halconDesbloqueado),
   pareja: data?.pareja || null,
+  diamantes: Number(data?.diamantes ?? data?.diamante) || 0,
 });
 const equalEstadoInicio = (a, b) => a?.animalito === b?.animalito
   && a?.halconDesbloqueado === b?.halconDesbloqueado
-  && a?.pareja === b?.pareja;
+  && a?.pareja === b?.pareja
+  && a?.diamantes === b?.diamantes;
 
 const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
   const pulso = useRef(new Animated.Value(0)).current;
@@ -72,20 +78,31 @@ const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
 });
 
 const IconoRuleta = () => <Svg width="30" height="30" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="17" fill="#9c6ac1" stroke="#633d82" strokeWidth="2" /><Path d="M20 20 L20 4 A16 16 0 0 1 34 12 Z" fill="#ffd879" /><Path d="M20 20 L34 12 A16 16 0 0 1 34 28 Z" fill="#ee8aaa" /><Path d="M20 20 L34 28 A16 16 0 0 1 20 36 Z" fill="#7cbae3" /><Path d="M20 20 L20 36 A16 16 0 0 1 6 28 Z" fill="#8dcf9a" /><Path d="M20 20 L6 28 A16 16 0 0 1 6 12 Z" fill="#f3ad70" /><Path d="M20 20 L6 12 A16 16 0 0 1 20 4 Z" fill="#ee8aaa" /><Circle cx="20" cy="20" r="4" fill="#fff4d6" stroke="#633d82" strokeWidth="1.5" /></Svg>;
-const IconoProximo = () => <Svg width="29" height="29" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="17" fill="#d8c6e8" stroke="#80659a" strokeWidth="2" /><SvgText x="20" y="28" textAnchor="middle" fontSize="26" fontWeight="900" fill="#76558c">?</SvgText><Circle cx="31" cy="9" r="3" fill="#fff4d6" opacity="0.8" /></Svg>;
+const IconoLoteAjolote = () => <View style={styles.iconoAjoloteWrap}><Svg width="35" height="35" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="18" fill="#f3a0c4" stroke="#8b4e81" strokeWidth="2" /><Circle cx="20" cy="20" r="14.8" fill="#ffe5f0" stroke="#d36f9e" strokeWidth="1.2" /><Path d="M7 10 l2 4 4 2-4 2-2 4-2-4-4-2 4-2z M33 23 l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" fill="#fff0a4" /></Svg><Image source={AJOLOTE_LOTE} style={styles.iconoAjoloteImagen} contentFit="contain" cachePolicy="memory-disk" /></View>;
+const IconoLoteErizo = () => <View style={styles.iconoErizoWrap}><View style={styles.iconoErizoAura} /><Image source={ERIZO_LOTE} style={styles.iconoErizoImagen} contentFit="cover" cachePolicy="memory-disk" /></View>;
 const IconoRegalo = () => <Svg width="31" height="31" viewBox="0 0 40 40"><Rect x="7" y="16" width="26" height="18" rx="3" fill="#ef8ba6" stroke="#a94667" strokeWidth="2" /><Rect x="5" y="12" width="30" height="8" rx="3" fill="#f6a7ba" stroke="#a94667" strokeWidth="2" /><Path d="M18 12 C10 11 10 4 15 5 C19 6 20 12 20 12 M22 12 C30 11 30 4 25 5 C21 6 20 12 20 12" fill="#ffd58b" stroke="#a94667" strokeWidth="1.7" /><Path d="M18 13 H22 V34 H18Z" fill="#ffd58b" /><Circle cx="13" cy="24" r="1.5" fill="#fff0f4" opacity="0.9" /></Svg>;
+const IconoLotes = () => <View style={styles.iconoLotesWrap}><Svg width="35" height="35" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="18" fill="#f7cb68" stroke="#9c5b20" strokeWidth="2" /><Circle cx="20" cy="20" r="14.8" fill="#fff3bd" stroke="#e0a23a" strokeWidth="1.3" /><Path d="M6 10 l2 5 5 2-5 2-2 5-2-5-5-2 5-2z M33 22 l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="#c47a22" /></Svg><Image source={ICONO_ARDILLA_LOTE} style={styles.iconoLotesArdilla} contentFit="contain" cachePolicy="memory-disk" /></View>;
 
-const AccesosRegalos = memo(({ onRegaloDiario }) => (
+const AccesosRegalos = memo(({ onRuleta, onRegaloDiario, onLotes, onLoteAjolote, onLoteErizo, regaloDisponible, loteDisponible, loteAjoloteDisponible, loteErizoDisponible }) => (
   <View style={styles.accesosRegalos}>
-    <TouchableOpacity style={styles.accesoRegalo} disabled activeOpacity={1} accessibilityLabel="Ruleta próximamente">
+    <TouchableOpacity style={styles.accesoRegalo} onPress={onRuleta} activeOpacity={0.78} accessibilityLabel="Abrir ruleta diaria">
       <IconoRuleta />
-    </TouchableOpacity>
-    <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloProximo]} disabled activeOpacity={1} accessibilityLabel="Próximo acceso">
-      <IconoProximo />
     </TouchableOpacity>
     <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloDiario]} onPress={onRegaloDiario} activeOpacity={0.78} accessibilityLabel="Abrir regalo diario">
       <IconoRegalo />
-      <View style={styles.accesoRegaloDot} />
+      {regaloDisponible && <View style={styles.accesoRegaloDot} />}
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloAjolote]} onPress={onLoteAjolote} activeOpacity={0.78} accessibilityLabel="Abrir lote de Ajolote">
+      <IconoLoteAjolote />
+      {loteAjoloteDisponible && <View style={[styles.accesoRegaloDot, styles.accesoAjoloteDot]} />}
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloErizo]} onPress={onLoteErizo} activeOpacity={0.78} accessibilityLabel="Abrir lote Dulce Medianoche de Erizo">
+      <IconoLoteErizo />
+      {loteErizoDisponible && <View style={[styles.accesoRegaloDot, styles.accesoErizoDot]} />}
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloLotes]} onPress={onLotes} activeOpacity={0.78} accessibilityLabel="Abrir lotes">
+      <IconoLotes />
+      {loteDisponible && <View style={[styles.accesoRegaloDot, styles.accesoLoteDot]} />}
     </TouchableOpacity>
   </View>
 ));
@@ -117,6 +134,9 @@ const RecompensaCaja = memo(({ dia, esHoy, userData }) => {
   }
   if (recompensa.tipo === 'diamantes') {
     return <MaterialIcons name="diamond" size={esHoy ? 23 : 20} color="#32b9d5" style={esHoy ? styles.cajaDiamanteHoy : styles.cajaDiamante} />;
+  }
+  if (recompensa.tipo === 'ticketRuleta') {
+    return <MaterialIcons name="confirmation-number" size={esHoy ? 23 : 20} color="#b8792d" style={esHoy ? styles.cajaDiamanteHoy : styles.cajaDiamante} />;
   }
   return <Text style={esHoy ? styles.cajaEmojiHoy : styles.cajaEmoji}>{recompensa.emoji}</Text>;
 });
@@ -285,6 +305,8 @@ const CajasRecompensa = memo(({ onOverlayChange, overlayActive, compactModal = f
                 ? <View style={overlayStyles.cartaRegaloGrande}><Text style={overlayStyles.cartaRegaloMarcaGrande}>✦</Text></View>
                 : recompensaDeHoy.tipo === 'diamantes'
                   ? <MaterialIcons name="diamond" size={72} color="#39c7e6" style={overlayStyles.overlayDiamante} />
+                  : recompensaDeHoy.tipo === 'ticketRuleta'
+                    ? <MaterialIcons name="confirmation-number" size={66} color="#bd7b2c" style={overlayStyles.overlayDiamante} />
                 : <Text style={overlayStyles.overlayEmoji}>{recompensaDeHoy.emoji}</Text>}
               <Text style={overlayStyles.overlayCantidad}>{recompensaDeHoy.etiqueta}</Text>
               <Text style={overlayStyles.overlayTexto}>¡Recompensa diaria!</Text>
@@ -631,11 +653,13 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     }, error => console.warn('[Inicio] No se pudo actualizar el progreso de Conexiones', error?.message || error));
   }, []);
   const [overlayActive, setOverlayActive] = useState(false);
+  const { puedeReclamar: regaloDisponible } = useRecompensaDiaria({ paused: overlayActive });
   const [comercianteNuevo, setComercianteNuevo] = useState(false);
   const [misionesAbiertas, setMisionesAbiertas] = useState(false);
   const [misionesNuevas, setMisionesNuevas] = useState(false);
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
   const [regalosAbiertos, setRegalosAbiertos] = useState(false);
+  const [ruletaAbierta, setRuletaAbierta] = useState(false);
   const [reporteSemanalAbierto, setReporteSemanalAbierto] = useState(Boolean(openReporteSemanal));
   const puedeAbrirColeccion = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
   const { pendientesReclamar } = useMisiones();
@@ -648,6 +672,23 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     data => data ? { nombre: data.nombre || data.datosCompletos?.nombre || 'Tu pareja', exp: Number(data.exp) || 0, ultimaActividad: data.ultimaActividad } : null,
     estadoInicio?.pareja || '',
   );
+  const [actividadPareja, setActividadPareja] = useState(null);
+
+  useEffect(() => {
+    const uidPareja = estadoInicio?.pareja;
+    if (!uidPareja) {
+      setActividadPareja(null);
+      return undefined;
+    }
+    const actividadRef = query(
+      collection(db, 'usuarios', uidPareja, 'actividad'),
+      orderBy('creadoEn', 'desc'),
+      limit(1),
+    );
+    return onSnapshot(actividadRef, snap => {
+      setActividadPareja(snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() });
+    }, () => setActividadPareja(null));
+  }, [estadoInicio?.pareja]);
 
   useEffect(() => {
     setMisionesNuevas(pendientesReclamar > 0);
@@ -723,6 +764,18 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
         icono: 'pets', titulo: 'Elige un Animalito', detalle: 'Tu compañero te está esperando.', insignia: 'ELEGIR',
         accion: () => navigation?.navigate('animalitos'),
       };
+    if (parejaInicio && actividadPareja) {
+      const nombrePareja = parejaInicio.nombre || 'Tu pareja';
+      const actividad = actividadPareja;
+      const mensajesActividad = {
+        nivel: { icono: 'trending-up', titulo: `${nombrePareja} subió al nivel ${actividad.nivel}`, detalle: 'Su historia sigue creciendo.', insignia: 'NIVEL' },
+        compra: { icono: 'shopping-bag', titulo: `${nombrePareja} gastó ${actividad.cantidad} monedas`, detalle: 'Encontró algo bonito en el Comerciante.', insignia: 'COMPRA' },
+        epico: { icono: 'auto-awesome', titulo: `${nombrePareja} consiguió algo épico`, detalle: `Ganó ${actividad.cantidad} diamantes.`, insignia: 'ÉPICO' },
+        monedas: { icono: 'monetization-on', titulo: `${nombrePareja} obtuvo ${actividad.cantidad} monedas`, detalle: 'Una recompensa se sumó a su aventura.', insignia: 'MONEDAS' },
+      };
+      const mensajeActividad = mensajesActividad[actividad.tipo];
+      if (mensajeActividad) return { ...mensajeActividad, accion: () => navigation?.navigate('perfil', { uid: estadoInicio?.pareja }) };
+    }
     if (misionesNuevas || pendientesReclamar > 0) return {
           icono: pendientesReclamar > 0 ? 'redeem' : 'assignment',
           titulo: pendientesReclamar > 0 ? `${pendientesReclamar} recompensa${pendientesReclamar === 1 ? '' : 's'} lista${pendientesReclamar === 1 ? '' : 's'}` : 'Revisa tus misiones',
@@ -746,7 +799,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
             icono: 'extension', titulo: mensajeJuego.titulo, detalle: mensajeJuego.detalle, insignia: faltanParaBonus === 1 ? '1 MÁS' : '+5 EXP',
             accion: () => navigation?.navigate('conexiones'),
           };
-  }, [abrirComerciante, comercianteNuevo, estadoInicio?.animalito, estadoInicio?.pareja, faltanParaBonus, misionesNuevas, navigation, nivelJuego, parejaInicio, partidasCompletadas, pendientesReclamar]);
+  }, [abrirComerciante, actividadPareja, comercianteNuevo, estadoInicio?.animalito, estadoInicio?.pareja, faltanParaBonus, misionesNuevas, navigation, nivelJuego, parejaInicio, partidasCompletadas, pendientesReclamar]);
 
   if (tutorialActivo) return <TutorialInicio navigation={navigation} />;
 
@@ -763,7 +816,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
         <MoneyMenu />
         <QuickMenu />
         <SiguientePaso icono={siguientePaso.icono} titulo={siguientePaso.titulo} detalle={siguientePaso.detalle} insignia={siguientePaso.insignia} onPress={siguientePaso.accion} />
-        <AccesosRegalos onRegaloDiario={() => { setRegalosAbiertos(true); setOverlayActive(true); }} />
+        <AccesosRegalos onRuleta={() => { setRuletaAbierta(true); setOverlayActive(true); }} regaloDisponible={regaloDisponible} loteDisponible={estadoInicio?.diamantes >= 50} loteAjoloteDisponible={estadoInicio?.diamantes >= 50} loteErizoDisponible={estadoInicio?.diamantes >= 50} onRegaloDiario={() => { setRegalosAbiertos(true); setOverlayActive(true); }} onLotes={() => navigation?.navigate('lotes', { animalId: 'ardilla' })} onLoteAjolote={() => navigation?.navigate('lotes', { animalId: 'ajolote' })} onLoteErizo={() => navigation?.navigate('lotes', { animalId: 'erizo' })} />
         <Player containerStyle={styles.player} disabled={overlayActive} />
         <TouchableOpacity style={styles.changeButton} onPress={() => navigation?.navigate('animalitos')} activeOpacity={0.78}>
           <MaterialIcons name="swap-horiz" size={20} color="#c58b2d" />
@@ -828,6 +881,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
             </View>
           </View>
         </Modal>
+        <RuletaDiariaModal visible={ruletaAbierta} onClose={() => { setRuletaAbierta(false); setOverlayActive(false); }} />
         <TouchableOpacity style={styles.jugarBtn} activeOpacity={0.82} onPress={() => {
           const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
           navigation?.navigate(isAdmin ? 'juegos' : 'conexiones');
@@ -870,11 +924,24 @@ const styles = StyleSheet.create({
   siguienteLuz: { position: 'absolute', width: 4, height: 4, borderRadius: 2, backgroundColor: '#f6d477', borderWidth: 0.5, borderColor: '#9b6a35' },
   siguienteLuzUno: { left: -2, top: 6 },
   siguienteLuzDos: { right: -2, bottom: 6 },
-  accesosRegalos: { position: 'absolute', right: 14, top: '20%', flexDirection: 'row', gap: 6, zIndex: 215, elevation: 18 },
-  accesoRegalo: { width: 54, height: 54, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: '#fff4d6', borderWidth: 1.5, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, elevation: 8 },
+  accesosRegalos: { position: 'absolute', right: 14, top: '20%', flexDirection: 'row', gap: 5, zIndex: 215, elevation: 18 },
+  accesoRegalo: { width: 45, height: 45, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: '#fff4d6', borderWidth: 1.5, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, elevation: 8 },
   accesoRegaloProximo: { backgroundColor: '#f3ecfa', borderColor: '#b59bc9' },
+  accesoRegaloAjolote: { backgroundColor: '#ffe8f2', borderColor: '#d77da8' },
+  accesoRegaloErizo: { backgroundColor: '#eee5f8', borderColor: '#76559a' },
   accesoRegaloDiario: { borderColor: '#df90a7', backgroundColor: '#fff0f3' },
+  accesoRegaloLotes: { borderColor: '#d19a35', backgroundColor: '#fff1bf' },
+  iconoLotesWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  iconoLotesArdilla: { position: 'absolute', width: 25, height: 25, borderRadius: 8 },
+  iconoAjoloteWrap: { width: 35, height: 35, alignItems: 'center', justifyContent: 'center' },
+  iconoAjoloteImagen: { position: 'absolute', width: 25, height: 25, borderRadius: 8 },
+  iconoErizoWrap: { width: 35, height: 35, alignItems: 'center', justifyContent: 'center' },
+  iconoErizoAura: { position: 'absolute', width: 34, height: 34, borderRadius: 11, backgroundColor: '#3b254c', borderWidth: 1.5, borderColor: '#b88ad2' },
+  iconoErizoImagen: { width: 27, height: 27, borderRadius: 9, borderWidth: 1, borderColor: '#e4c578' },
   accesoRegaloDot: { position: 'absolute', top: 5, right: 6, width: 7, height: 7, borderRadius: 4, backgroundColor: '#e2577a', borderWidth: 1, borderColor: '#fff7df' },
+  accesoLoteDot: { backgroundColor: '#e6a52d', borderColor: '#fff4bf' },
+  accesoAjoloteDot: { backgroundColor: '#d64f91', borderColor: '#ffe9f5' },
+  accesoErizoDot: { backgroundColor: '#f0bd4f', borderColor: '#3b254c' },
   regaloDiarioModalFondo: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(25,15,10,0.72)' },
   regaloDiarioModalCard: { width: 420, height: 225, borderRadius: 20, overflow: 'hidden', backgroundColor: '#fff5dd', borderWidth: 3, borderColor: '#d4b06c', shadowColor: '#1c1008', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.42, shadowRadius: 14, elevation: 25 },
   regaloDiarioModalHeader: { height: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, backgroundColor: '#f0dcae', borderBottomWidth: 1, borderBottomColor: '#d3af6b' },

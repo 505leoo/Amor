@@ -24,7 +24,7 @@ const pausarSeguro = player => {
   }
 };
 
-export default function RecompensaOverlay({ visible, onClose, children, imagen, texto }) {
+export default function RecompensaOverlay({ visible, onClose, children, imagen, texto, encabezado = "¡TE TOCÓ!", mensaje = "La recompensa ya está guardada en tu cuenta." }) {
   const { player: musicPlayer } = useMusicPlayer();
   const rewardPlayer = useAudioPlayer(REWARD_SOUND, { downloadFirst: true, updateInterval: 100 });
   const rewardStatus = useAudioPlayerStatus(rewardPlayer);
@@ -122,11 +122,11 @@ export default function RecompensaOverlay({ visible, onClose, children, imagen, 
           opacity: entrada,
           transform: [{ scale: entrada.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1] }) }],
         }]}>
-          <Text style={styles.eyebrow}>¡TE TOCÓ!</Text>
+          <Text style={styles.eyebrow}>{encabezado}</Text>
           <View style={styles.artwork}>
             <Animated.View style={[styles.content, { opacity: entrada }]}>{contenido}</Animated.View>
           </View>
-          <Text style={styles.message}>La recompensa ya está guardada en tu cuenta.</Text>
+          <Text style={styles.message}>{mensaje}</Text>
           <TouchableOpacity style={styles.button} activeOpacity={0.8} onPress={onClose}>
             <Text style={styles.buttonText}>CONTINUAR</Text>
           </TouchableOpacity>

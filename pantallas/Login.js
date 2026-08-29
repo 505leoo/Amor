@@ -5,6 +5,7 @@ import { Image } from 'expo-image';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { collection, getDocs } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { resolverAvatarUsuario } from '../data/iconosLocales';
 
 
 
@@ -17,10 +18,7 @@ const getUserName = user => String(
   user?.datosCompletos?.nombre || user?.nombre || user?.displayName || ''
 ).trim();
 
-const getUserAvatar = user => {
-  if (user?.iconoLocalId === 'ardilla_bellota') return require('../assets/inicio/iconos/icono-ardilla-bellota.png');
-  return user?.iconoUrl || user?.photoURL || ICONO_DEFAULT;
-};
+const getUserAvatar = user => resolverAvatarUsuario(user, ICONO_DEFAULT);
 
 const BubbleKey = React.memo(({ label, onPress, isDel }) => {
   const scale = useRef(new Animated.Value(1)).current;

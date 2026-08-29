@@ -31,6 +31,24 @@ const ICONO_ARDILLA = {
   seccion: 'animales',
   temporada: 't1',
 };
+const ICONO_AJOLOTE = {
+  id: 'ajolote_caramelo',
+  nombre: 'ajolote_caramelo',
+  url: null,
+  local: true,
+  source: require('../assets/inicio/iconos/icono-ajolote-caramelo.png'),
+  seccion: 'animales',
+  temporada: 't2',
+};
+const ICONO_ERIZO = {
+  id: 'erizo_dulce_medianoche',
+  nombre: 'erizo_dulce_medianoche',
+  url: null,
+  local: true,
+  source: require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.png'),
+  seccion: 'animales',
+  temporada: 't2',
+};
 
 const SECCIONES = ['temporada', 'evento', 'animales'];
 const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', animales: '🐾 Animalito' };
@@ -38,6 +56,8 @@ const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', ani
 const nombreVisibleIcono = icono => {
   if (icono.id === ICONO_DEFAULT_ID) return 'Original';
   if (icono.id === 'ardilla_bellota') return 'Bellota dorada';
+  if (icono.id === 'ajolote_caramelo') return 'Reino de Caramelo';
+  if (icono.id === 'erizo_dulce_medianoche') return 'Dulce Medianoche';
   const match = String(icono.nombre || '').match(/^icono_([tea])_(\d+)$/i);
   if (match) {
     const category = { t: 'Temporada', e: 'Evento', a: 'Animalito' }[match[1].toLowerCase()];
@@ -436,7 +456,7 @@ const Iconos = ({ navigation }) => {
     acc[sec] = sortByNombre(iconos.filter(ic => ic.seccion === sec));
     return acc;
   }, {});
-  porSeccion.animales = [...porSeccion.animales, ICONO_ARDILLA];
+  porSeccion.animales = [...porSeccion.animales, ICONO_ARDILLA, ICONO_AJOLOTE, ICONO_ERIZO];
   const sinSeccion = [ICONO_DEFAULT, ...sortByNombre(iconos.filter(ic => !ic.seccion || !SECCIONES.includes(ic.seccion)))];
   const catalogoCompleto = [...SECCIONES.flatMap(section => porSeccion[section]), ...sinSeccion];
   const iconosObtenidos = catalogoCompleto.filter(icono => {

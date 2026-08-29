@@ -11,7 +11,7 @@ import Loading from './components/Loading';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { contenidoDisponible, useTemporadaActual } from './hooks/useTemporadaActual';
 import { actualizarPasoTutorial } from './components/Tutorial';
-import { ANIMALITOS, SKINS } from './data/animalitos';
+import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
 const COSTO_MEJORA = nivel => 120 * nivel;
@@ -53,6 +53,20 @@ const RECOMPENSAS_NIVEL = {
     { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
     { nivel: 100, tipo: 'skin', skinId: 'ardillat1', icono: '🌰', titulo: 'Bellota Dorada' },
   ],
+  ajolote: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1000, icono: '🪙', titulo: '1.000 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 40, icono: '◆', titulo: '40 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'ajolote_icon', icono: '✦', titulo: 'Icono de Ajolote', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+    { nivel: 100, tipo: 'skin', skinId: 'ajolotet1', icono: '☁️', titulo: 'Algodón de Azúcar' },
+  ],
+  erizo: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1200, icono: '🪙', titulo: '1.200 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 45, icono: '◆', titulo: '45 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'erizo_icon', icono: '✦', titulo: 'Icono de Erizo', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+    { nivel: 100, tipo: 'skin', skinId: 'erizot1', icono: '🫐', titulo: 'Cupcake de Arándanos' },
+  ],
 };
 
 const Animalitos = ({ navigation, mode }) => {
@@ -63,7 +77,7 @@ const Animalitos = ({ navigation, mode }) => {
   const [nombreUsuario, setNombreUsuario] = useState(auth.currentUser?.displayName || 'Usuario');
   const [diasNacimiento, setDiasNacimiento] = useState('1 día de nacimiento');
   const [equipadaSkin, setEquipadaSkin] = useState('default');
-  const [skinsEquipadas, setSkinsEquipadas] = useState({ halcon: 'default', ardilla: 'default' });
+  const [skinsEquipadas, setSkinsEquipadas] = useState(() => Object.fromEntries(ANIMALITOS.map(animal => [animal.id, 'default'])));
   const [animalesEstado, setAnimalesEstado] = useState({});
   const [dinero, setDinero] = useState(0);
   const [cartasAnimalitos, setCartasAnimalitos] = useState(0);
@@ -101,9 +115,9 @@ const Animalitos = ({ navigation, mode }) => {
       // Los usuarios que ya tenían al Halcón reciben un paquete inicial de
       // tres cartas al migrar a las cartas universales.
       setCartasAnimalitos(Math.max(0, Number(data.cartasAnimalitos ?? (data.halconDesbloqueado ? 3 : 0)) || 0));
-      const lista = [];
-      if (data.halconDesbloqueado || data.animalito === 'halcon') lista.push('halcon');
-      if (data.ardillaDesbloqueada) lista.push('ardilla');
+      const lista = ANIMALITOS
+        .filter(animal => animalitoEstaDesbloqueado(animal, data, data.animalitos?.[animal.id] || {}))
+        .map(animal => animal.id);
       Object.entries(data.animalitos || {}).forEach(([animalId, estado]) => {
         if (estado?.desbloqueado || Number(estado?.nivel) > 0 || Number(estado?.cartas ?? estado?.copias) > 0) lista.push(animalId);
       });
@@ -328,8 +342,8 @@ const Animalitos = ({ navigation, mode }) => {
   const progresoCartas = Math.min(100, (estadoMostrado.totalCartas / Math.max(1, cartasNecesarias)) * 100);
   const recompensasMostradas = RECOMPENSAS_NIVEL[animalMostradoId] || [];
   const animalitosOrdenados = [...animalitosFiltrados].sort((a, b) => {
-    if (ordenCatalogo === 'nivel') return estadoAnimal(b.id === 'default' ? 'halcon' : b.id).nivel - estadoAnimal(a.id === 'default' ? 'halcon' : a.id).nivel;
-    return (a.id === 'halcon' || a.id === 'default' ? 0 : 1) - (b.id === 'halcon' || b.id === 'default' ? 0 : 1);
+    if (ordenCatalogo === 'nivel') return estadoAnimal(b.id).nivel - estadoAnimal(a.id).nivel;
+    return ANIMALITOS.findIndex(animal => animal.id === a.id) - ANIMALITOS.findIndex(animal => animal.id === b.id);
   });
   const animalitosCatalogo = ANIMALITOS
     .filter(animal => contenidoDisponible(animal.temporada || 't1', temporadaActual))

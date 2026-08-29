@@ -12,8 +12,27 @@ import NotificationSystem from '../utils/NotificationSystem';
 const AVATAR = require('../assets/inicio/iconos/icono1.jpg');
 const HALCON = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
 const ARDILLA = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png');
+const AJOLOTE = require('../assets/temporadas/libro/Temporada2/Animales/Ajolote/ajolote1.png');
+const AJOLOTE_ALGODON = require('../assets/temporadas/libro/Temporada2/Animales/Ajolote/skins/ajolotet1.png');
+const AJOLOTE_GUARDIAN = require('../assets/temporadas/libro/Temporada2/Animales/Ajolote/skins/ajolotet2.png');
+const ERIZO = require('../assets/temporadas/libro/Temporada2/Animales/Erizo/erizo1.png');
+const ERIZO_ARANDANOS = require('../assets/temporadas/libro/Temporada2/Animales/Erizo/skins/erizot1.png');
+const ERIZO_CHOCOLATERO = require('../assets/temporadas/libro/Temporada2/Animales/Erizo/skins/erizot2.png');
 
 const NOTICIAS = [
+  {
+    id: 'lotes-animalitos-temporada-2',
+    titulo: 'Nuevos Animalitos',
+    resumen: 'Ajolote y Erizo ya tienen lote',
+    categoria: 'LOTES DE TEMPORADA',
+    fecha: 'AHORA',
+    icono: 'auto-awesome',
+    color: '#956aac',
+    etiqueta: 'DOS COLECCIONES PARA DESCUBRIR',
+    titular: 'Ajolote y Erizo llegaron a los lotes',
+    descripcion: 'Dos Animalitos, dos lotes y una forma más linda de completar tu colección.',
+    cierre: 'Cada lote tiene un giro gratis y premios únicos que no vuelven a aparecer al conseguirlos.',
+  },
   {
     id: 'cumpleanos-aurora',
     titulo: 'Cumpleaños de Aurora',
@@ -59,6 +78,7 @@ export const NOTICIAS_ID = NOTICIAS[0].id;
 export const NOTICIAS_IDS = NOTICIAS.map(noticia => noticia.id);
 const INVITACION_ID = 'invitacion-halcon-tarde';
 const CUMPLEANOS_ID = 'cumpleanos-aurora';
+const LOTES_ANIMALITOS_ID = 'lotes-animalitos-temporada-2';
 const COSTO_CONFIRMACION = 500;
 const FECHA_INVITACION = '2026-08-26';
 const HORA_INVITACION = '13:00';
@@ -106,6 +126,20 @@ const BirthdayBody = () => <View style={styles.birthdayBody}>
   <View style={styles.birthdayNote}><MaterialIcons name="favorite" size={13} color="#d66f9d" /><Text style={styles.birthdayNoteText}>Cada foto queda como una pequeña prueba de que ese día fue suyo.</Text></View>
 </View>;
 
+const AnimalitosLotesBody = () => <View style={styles.animalitosLotesBody}>
+  <LinearGradient colors={['#ffe7f2', '#eadcf8', '#f6e0ba']} style={styles.animalitosLotesHero}>
+    <Text style={styles.animalitosLotesKicker}>LOTES DE TEMPORADA 2</Text>
+    <Text style={styles.animalitosLotesTitle}>Dos nuevos amigos</Text>
+    <Text style={styles.animalitosLotesText}>Un giro gratis y premios únicos en cada lote.</Text>
+    <ExpoImage source={AJOLOTE} style={styles.animalitosLotesAjolote} contentFit="contain" cachePolicy="memory-disk" />
+    <ExpoImage source={ERIZO} style={styles.animalitosLotesErizo} contentFit="contain" cachePolicy="memory-disk" />
+  </LinearGradient>
+  <View style={styles.animalitosLotesFila}>
+    <View style={[styles.animalitosLoteMini, styles.animalitosLoteAjolote]}><ExpoImage source={AJOLOTE_ALGODON} style={styles.animalitosLoteMiniImage} contentFit="contain" cachePolicy="memory-disk" /><View><Text style={styles.animalitosLoteMiniKicker}>AJOLOTE</Text><Text style={styles.animalitosLoteMiniTitle}>Reino de Caramelo</Text></View></View>
+    <View style={[styles.animalitosLoteMini, styles.animalitosLoteErizo]}><ExpoImage source={ERIZO_CHOCOLATERO} style={styles.animalitosLoteMiniImage} contentFit="contain" cachePolicy="memory-disk" /><View><Text style={[styles.animalitosLoteMiniKicker, styles.animalitosLoteErizoKicker]}>ERIZO</Text><Text style={styles.animalitosLoteMiniTitle}>Dulce Medianoche</Text></View></View>
+  </View>
+</View>;
+
 export default function Noticias({ visible, onDismiss, onContinue, version, initialNoticiaId }) {
   const reveal = useRef(new Animated.Value(0)).current;
   const shine = useRef(new Animated.Value(0)).current;
@@ -124,6 +158,7 @@ export default function Noticias({ visible, onDismiss, onContinue, version, init
   const { data: pareja } = useUserDocument(data => ({ nombre: data?.nombre || data?.displayName || 'Tu pareja' }), parejaUid || '', (a, b) => a?.nombre === b?.nombre);
   const esInvitacion = noticia.id === INVITACION_ID;
   const esCumpleanos = noticia.id === CUMPLEANOS_ID;
+  const esLotesAnimalitos = noticia.id === LOTES_ANIMALITOS_ID;
   const miRespuesta = miNoticia?.respuesta || 'pensando';
   const respuestaPareja = noticiaPareja?.respuesta || 'pensando';
   const invitationScale = invitationPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.018] });
@@ -283,7 +318,7 @@ export default function Noticias({ visible, onDismiss, onContinue, version, init
               <View style={styles.detailHeadingCopy}><Text style={styles.eyebrow}>{noticia.etiqueta}</Text><View style={styles.titleWrap}><Text style={styles.title}>{noticia.titular}</Text><Animated.View pointerEvents="none" style={[styles.titleShine, { transform: [{ translateX: shineX }, { rotate: '-12deg' }] }]} /></View><Text style={styles.description} numberOfLines={2}>{noticia.descripcion}</Text></View>
             </View>
 
-            {esCumpleanos ? <BirthdayBody /> : esInvitacion ? <View style={styles.invitationBody}>
+            {esLotesAnimalitos ? <AnimalitosLotesBody /> : esCumpleanos ? <BirthdayBody /> : esInvitacion ? <View style={styles.invitationBody}>
               <LinearGradient colors={['#f7e2cd', '#efc9bd', '#ddb59f']} style={styles.invitationLetter}>
                 <View pointerEvents="none" style={styles.invitationSun} />
                 <View style={styles.invitationDate}><MaterialIcons name="wb-sunny" size={10} color="#fff0be" /><View><Text style={styles.invitationDateMain}>MAÑANA · 13:00</Text><Text style={styles.invitationDateSub}>UNA TARDE PARA LOS DOS</Text></View></View>
@@ -370,6 +405,32 @@ const styles = StyleSheet.create({
   birthdayIntro: { color: '#79536a', fontSize: 8.5, lineHeight: 12, fontWeight: '700', paddingHorizontal: 3 },
   birthdaySteps: { flex: 1, flexDirection: 'row', gap: 6 }, birthdayStep: { flex: 1, padding: 7, borderRadius: 11, backgroundColor: '#fff6fa', borderWidth: 1, borderColor: '#f0cada' }, birthdayStepIcon: { width: 27, height: 27, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }, birthdayStepTitle: { color: '#75445b', fontSize: 8, fontWeight: '900', marginTop: 5 }, birthdayStepText: { color: '#9a7182', fontSize: 6.5, lineHeight: 9, fontWeight: '700', marginTop: 2 },
   birthdayNote: { minHeight: 31, paddingHorizontal: 9, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fce6ef', borderWidth: 1, borderColor: '#efbfd2' }, birthdayNoteText: { flex: 1, color: '#9b5976', fontSize: 7, lineHeight: 10, fontWeight: '800' },
+  ajoloteBody: { flex: 1, minHeight: 0, paddingHorizontal: 10, paddingVertical: 7, gap: 6 },
+  ajoloteHero: { height: 78, overflow: 'hidden', borderRadius: 14, borderWidth: 1.2, borderColor: '#d986ad', flexDirection: 'row', alignItems: 'center' },
+  ajoloteHeroGlow: { position: 'absolute', right: 15, width: 82, height: 82, borderRadius: 41, backgroundColor: 'rgba(255,248,198,0.42)' },
+  ajoloteHeroCopy: { flex: 1, paddingLeft: 11, zIndex: 2 }, ajoloteKicker: { color: '#9a4875', fontSize: 5.8, fontWeight: '900', letterSpacing: 1 }, ajoloteHeroTitle: { color: '#71345d', fontSize: 14, fontWeight: '900', marginTop: 2 }, ajoloteHeroText: { width: 170, color: '#8b5674', fontSize: 7, lineHeight: 9.5, fontWeight: '700', marginTop: 2 },
+  ajoloteHeroImage: { width: 91, height: 86, marginRight: 3, marginBottom: -8 },
+  ajolotePresentacion: { minHeight: 31, paddingHorizontal: 9, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff0f6', borderWidth: 1, borderColor: '#edbfd4' }, ajolotePresentacionText: { flex: 1, color: '#85536f', fontSize: 6.8, lineHeight: 9.5, fontWeight: '700' },
+  ajoloteTrajesFila: { flex: 1, minHeight: 0, flexDirection: 'row', gap: 6 },
+  ajoloteTraje: { flex: 1, minWidth: 0, padding: 5, borderRadius: 11, borderWidth: 1, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }, ajoloteTrajeEpico: { backgroundColor: '#f3e8fa', borderColor: '#c8a2dc' }, ajoloteTrajeLegendario: { backgroundColor: '#fff0d1', borderColor: '#d9a456' },
+  ajoloteTrajeImage: { width: 56, height: 58 }, ajoloteTrajeCopy: { flex: 1, minWidth: 0, marginLeft: 3 }, ajoloteTrajeRareza: { color: '#9b63ba', fontSize: 5.4, fontWeight: '900', letterSpacing: 0.7 }, ajoloteTrajeRarezaLegendaria: { color: '#b87824' }, ajoloteTrajeNombre: { color: '#71405e', fontSize: 7.1, lineHeight: 8.5, fontWeight: '900', marginTop: 2 }, ajoloteTrajeDetalle: { color: '#966d83', fontSize: 5.5, lineHeight: 7, fontWeight: '700', marginTop: 2 },
+  erizoBody: { flex: 1, minHeight: 0, paddingHorizontal: 10, paddingVertical: 7, gap: 6 },
+  erizoHero: { height: 78, overflow: 'hidden', borderRadius: 14, borderWidth: 1.2, borderColor: '#ba92c8', flexDirection: 'row', alignItems: 'center' },
+  erizoHeroMoon: { position: 'absolute', right: 15, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,226,155,0.25)', borderWidth: 1, borderColor: 'rgba(255,226,155,0.32)' },
+  erizoHeroStars: { position: 'absolute', top: 6, left: 13, color: '#f0c873', fontSize: 7, letterSpacing: 3 },
+  erizoHeroCopy: { flex: 1, paddingLeft: 11, paddingTop: 7, zIndex: 2 }, erizoKicker: { color: '#e7c977', fontSize: 5.8, fontWeight: '900', letterSpacing: 1 }, erizoHeroTitle: { color: '#fff0c7', fontSize: 13.5, fontWeight: '900', marginTop: 2 }, erizoHeroText: { width: 172, color: '#e5d5ea', fontSize: 7, lineHeight: 9.5, fontWeight: '700', marginTop: 2 },
+  erizoHeroImage: { width: 91, height: 87, marginRight: 2, marginBottom: -9 },
+  erizoPresentacion: { minHeight: 31, paddingHorizontal: 9, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#f2eaf6', borderWidth: 1, borderColor: '#cdb1d8' }, erizoPresentacionText: { flex: 1, color: '#614a6d', fontSize: 6.7, lineHeight: 9.2, fontWeight: '700' },
+  erizoTrajesFila: { flex: 1, minHeight: 0, flexDirection: 'row', gap: 6 },
+  erizoTraje: { flex: 1, minWidth: 0, padding: 5, borderRadius: 11, borderWidth: 1, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }, erizoTrajeEpico: { backgroundColor: '#eee4f7', borderColor: '#aa85c5' }, erizoTrajeLegendario: { backgroundColor: '#f6e5cc', borderColor: '#c89448' },
+  erizoTrajeImage: { width: 56, height: 58 }, erizoTrajeCopy: { flex: 1, minWidth: 0, marginLeft: 3 }, erizoTrajeRareza: { color: '#7b55a6', fontSize: 5.4, fontWeight: '900', letterSpacing: 0.7 }, erizoTrajeRarezaLegendaria: { color: '#a56625' }, erizoTrajeNombre: { color: '#4d3658', fontSize: 7.1, lineHeight: 8.5, fontWeight: '900', marginTop: 2 }, erizoTrajeDetalle: { color: '#765f7f', fontSize: 5.5, lineHeight: 7, fontWeight: '700', marginTop: 2 },
+  animalitosLotesBody: { flex: 1, minHeight: 0, paddingHorizontal: 10, paddingVertical: 7, gap: 7 },
+  animalitosLotesHero: { height: 80, overflow: 'hidden', borderRadius: 14, borderWidth: 1.2, borderColor: '#c39ac7', padding: 10 },
+  animalitosLotesKicker: { color: '#7b517e', fontSize: 5.8, fontWeight: '900', letterSpacing: 1 }, animalitosLotesTitle: { color: '#5b375e', fontSize: 14, fontWeight: '900', marginTop: 2 }, animalitosLotesText: { width: 164, color: '#805f80', fontSize: 7, lineHeight: 9.5, fontWeight: '700', marginTop: 2 },
+  animalitosLotesAjolote: { position: 'absolute', right: 65, bottom: -9, width: 75, height: 75 }, animalitosLotesErizo: { position: 'absolute', right: -4, bottom: -10, width: 84, height: 84 },
+  animalitosLotesFila: { flex: 1, minHeight: 0, flexDirection: 'row', gap: 7 },
+  animalitosLoteMini: { flex: 1, minWidth: 0, padding: 5, borderRadius: 11, borderWidth: 1, flexDirection: 'row', alignItems: 'center', overflow: 'hidden' }, animalitosLoteAjolote: { backgroundColor: '#fff0f6', borderColor: '#e5aac6' }, animalitosLoteErizo: { backgroundColor: '#f0e9f8', borderColor: '#b897cb' },
+  animalitosLoteMiniImage: { width: 54, height: 57 }, animalitosLoteMiniKicker: { color: '#c45d90', fontSize: 5.3, fontWeight: '900', letterSpacing: 0.7 }, animalitosLoteErizoKicker: { color: '#76569a' }, animalitosLoteMiniTitle: { width: 72, color: '#5c405d', fontSize: 7.2, lineHeight: 8.7, fontWeight: '900', marginTop: 2 },
   detailBody: { flex: 1, minHeight: 0, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', gap: 7 },
   heroColumn: { width: '38%', minWidth: 0, gap: 6 },
   eyebrow: { color: '#a15c46', fontFamily: 'Delius', fontSize: 6.2, lineHeight: 8, fontWeight: '900', letterSpacing: 0.9 },

@@ -5,12 +5,10 @@ import Svg, { Path, Defs, LinearGradient, Stop, G, Text as SvgText, Ellipse } fr
 import { auth } from '../firebaseConfig';
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 import { ProfileFrame } from '../menus/Perfil';
+import { resolverAvatarUsuario } from '../data/iconosLocales';
 
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
-const ICONO_ARDILLA = require('../assets/inicio/iconos/icono-ardilla-bellota.png');
-const resolverAvatar = data => data?.iconoLocalId === 'ardilla_bellota'
-  ? ICONO_ARDILLA
-  : data?.iconoUrl || data?.photoURL || ICONO_DEFAULT;
+const resolverAvatar = data => resolverAvatarUsuario(data, ICONO_DEFAULT);
 const numeroSeguro = value => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;

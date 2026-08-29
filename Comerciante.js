@@ -12,14 +12,17 @@ import { auth, db, functions } from './firebaseConfig';
 import { contenidoDisponible, numeroTemporada, useTemporadaActual } from './hooks/useTemporadaActual';
 import { useMisiones } from './MisionesContext';
 import { actualizarPasoTutorial } from './components/Tutorial';
+import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const COMERCIO_W = Math.min(SCREEN_W * 0.58, SCREEN_H * 0.45);
 const COMERCIO_IMAGE = require('./assets/inicio/comercio.png');
-const CARTAS_POR_ANIMAL = [
-  { id: 'halcon', nombre: 'Halcón', temporada: 't1', rareza: 'Común', color: '#a9722f', fondo: '#f3e5c8', borde: '#c69a5b', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png') },
-  { id: 'ardilla', nombre: 'Ardilla', temporada: 't1', rareza: 'Épico', color: '#9a68c4', fondo: '#eee0f7', borde: '#b58ad5', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png') },
-];
+const CARTAS_POR_ANIMAL = ANIMALITOS.map(animal => ({
+  ...animal,
+  color: animal.comercio?.color || animal.colorRareza,
+  fondo: animal.comercio?.fondo || '#f3e5c8',
+  borde: animal.comercio?.borde || animal.colorRareza,
+}));
 
 const tiempoRestanteCredito = (vencimientoMs, ahora) => {
   const restante = Number(vencimientoMs) - ahora;
@@ -195,9 +198,7 @@ export default function Comerciante({ navigation, temporada }) {
   const comprasRotacion = usuario?.comercio?.compras?.[rotacion.key] || {};
   const productoComprado = producto => Boolean(comprasRotacion[producto.id]);
   const animalEstaDesbloqueado = animal => Boolean(animal) && (animalitosDesbloqueados.includes(animal.id)
-    || Boolean(usuario?.animalitos?.[animal.id]?.desbloqueado)
-    || (animal.id !== 'ardilla' && usuario?.animalito === animal.id)
-    || (animal.id === 'halcon' && Boolean(usuario?.halconDesbloqueado)));
+    || animalitoEstaDesbloqueado(animal, usuario, animalitosEstado?.[animal.id] || usuario?.animalitos?.[animal.id] || {}));
   const cartasAnimalesDisponibles = CARTAS_POR_ANIMAL
     .filter(animal => animalEstaDesbloqueado(animal) && contenidoDisponible(animal.temporada || 't1', temporadaActual))
     .map(animal => ({
@@ -216,10 +217,24 @@ export default function Comerciante({ navigation, temporada }) {
       bordeAnimal: animal.borde,
       rareza: animal.rareza,
     }));
-  const skinsDisponibles = [
-    ...(!tieneSkin('halcon', 'halcont2') || comprasRotacion.halcont2 ? [{ id: 'halcont2', temporada: 't1', tipo: 'skin', animalId: 'halcon', animalNombre: 'Halcón', skinId: 'halcont2', icon: 'checkroom', nombre: 'Traje celeste', cantidadLabel: 'x1', precio: 2000, imagen: require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png') }] : []),
-    ...(animalEstaDesbloqueado(CARTAS_POR_ANIMAL.find(animal => animal.id === 'ardilla')) && (!tieneSkin('ardilla', 'ardillat2') || comprasRotacion.ardillat2) ? [{ id: 'ardillat2', temporada: 't1', tipo: 'skin', animalId: 'ardilla', animalNombre: 'Ardilla', skinId: 'ardillat2', icon: 'checkroom', nombre: 'Guardiana del Bosque', cantidadLabel: 'x1', precio: 2400, imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat2.png') }] : []),
-  ];
+  const skinsDisponibles = SKINS
+    .filter(skin => skin.comercioPrecio
+      && contenidoDisponible(skin.temporada || 't1', temporadaActual)
+      && animalEstaDesbloqueado(CARTAS_POR_ANIMAL.find(animal => animal.id === skin.animalId))
+      && (!tieneSkin(skin.animalId, skin.storageId) || comprasRotacion[skin.id]))
+    .map(skin => ({
+      id: skin.id,
+      temporada: skin.temporada || 't1',
+      tipo: 'skin',
+      animalId: skin.animalId,
+      animalNombre: skin.animalNombre,
+      skinId: skin.storageId,
+      icon: 'checkroom',
+      nombre: skin.nombre,
+      cantidadLabel: 'x1',
+      precio: skin.comercioPrecio,
+      imagen: skin.imagen,
+    }));
   const productosDisponibles = [
     { id: 'cartas_3', temporada: 't1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 3, cantidadLabel: 'x3', precio: 360 },
     ...cartasAnimalesDisponibles,
@@ -274,7 +289,11 @@ export default function Comerciante({ navigation, temporada }) {
         if (producto.tipo === 'cartasAnimalitos') update.cartasAnimalitos = (data.cartasAnimalitos || 0) + producto.cantidad;
         if (producto.tipo === 'cartasAnimal') {
           const animalData = animalSnap?.exists() ? (animalSnap.data() || {}) : (data.animalitos?.[producto.animalId] || {});
-          const desbloqueado = Boolean(animalData.desbloqueado || Number(animalData.nivel) > 0 || data.animalito === producto.animalId || (producto.animalId === 'halcon' && data.halconDesbloqueado));
+          const desbloqueado = animalitoEstaDesbloqueado(
+            ANIMALITOS.find(animal => animal.id === producto.animalId),
+            data,
+            animalData,
+          );
           if (!desbloqueado) throw new Error('animal_bloqueado');
           const cartasActuales = Math.max(0, Number(animalData.cartas ?? animalData.copias ?? 0) || 0);
           transaction.set(animalRef, { desbloqueado: true, cartas: cartasActuales + producto.cantidad, copias: cartasActuales + producto.cantidad }, { merge: true });
@@ -282,7 +301,11 @@ export default function Comerciante({ navigation, temporada }) {
         if (producto.tipo === 'diamantes') update.diamantes = (data.diamantes ?? data.diamante ?? 0) + producto.cantidad;
         if (producto.tipo === 'skin') {
           const animalData = animalSnap?.exists() ? (animalSnap.data() || {}) : (data.animalitos?.[producto.animalId] || {});
-          const desbloqueado = Boolean(animalData.desbloqueado || Number(animalData.nivel) > 0 || data.animalito === producto.animalId || (producto.animalId === 'halcon' && data.halconDesbloqueado));
+          const desbloqueado = animalitoEstaDesbloqueado(
+            ANIMALITOS.find(animal => animal.id === producto.animalId),
+            data,
+            animalData,
+          );
           if (!desbloqueado) throw new Error('animal_bloqueado');
           if (animalData.skinsDesbloqueadas?.[producto.skinId] || (data.animalito === producto.animalId && data.skin === producto.skinId)) throw new Error('poseido');
           transaction.set(animalRef, { skinsDesbloqueadas: { ...(animalData.skinsDesbloqueadas || {}), [producto.skinId]: true } }, { merge: true });

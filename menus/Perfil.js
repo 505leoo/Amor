@@ -11,7 +11,8 @@ import { collection, deleteField, doc, onSnapshot, runTransaction, setDoc, updat
 import { auth, db } from '../firebaseConfig';
 import TabButtons from '../components/TabButtons';
 import Player, { SinAnimal } from '../Player';
-import { ANIMALITOS, ANIMALITOS_POR_ID, SKINS_POR_ANIMAL } from '../data/animalitos';
+import { ANIMALITOS, ANIMALITOS_POR_ID, SKINS_POR_ANIMAL, animalitoEstaDesbloqueado } from '../data/animalitos';
+import { resolverAvatarUsuario } from '../data/iconosLocales';
 
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
 
@@ -688,9 +689,7 @@ const Perfil = ({ navigation, route }) => {
 
   const ownedAnimals = useMemo(() => ANIMALITOS.filter(animal => {
     const state = animalStates[animal.id] || userData?.animalitos?.[animal.id] || {};
-    if (animal.id === 'halcon' && (userData?.halconDesbloqueado || userData?.animalito === 'halcon')) return true;
-    if (animal.id === 'ardilla' && userData?.ardillaDesbloqueada) return true;
-    return state.desbloqueado === true || (state.desbloqueado !== false && (Number(state.nivel) > 0 || Number(state.cartas ?? state.copias) > 0));
+    return animalitoEstaDesbloqueado(animal, userData || {}, state);
   }), [animalStates, userData]);
 
   const rinconConfig = useMemo(
@@ -815,7 +814,7 @@ const Perfil = ({ navigation, route }) => {
   const d = userData;
   const nivelPerfil = 1 + Math.floor(d.exp / 100);
   const progresoPerfil = d.exp % 100;
-  const avatar = d.iconoLocalId === 'ardilla_bellota' ? require('../assets/inicio/iconos/icono-ardilla-bellota.png') : d.iconoUrl || d.photoURL || ICONO_DEFAULT;
+  const avatar = resolverAvatarUsuario(d, ICONO_DEFAULT);
   const animal = ANIMALITOS_POR_ID[d.animalito] || null;
   const animalState = animal ? (animalStates[animal.id] || d.animalitos?.[animal.id] || {}) : {};
   const animalLevel = Math.max(1, Number(animalState.nivel) || 1);

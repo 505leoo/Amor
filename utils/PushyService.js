@@ -1,6 +1,6 @@
 import { NativeModules, Platform, TurboModuleRegistry } from 'react-native';
 import { httpsCallable } from 'firebase/functions';
-import { functions } from '../firebaseConfig';
+import { auth, functions } from '../firebaseConfig';
 import RNPushy from 'pushy-react-native';
 
 /** API del paquete oficial pushy-react-native (NativeModules.PushyModule). */
@@ -172,6 +172,18 @@ class PushyService {
 
 static async sendCustomNotification(tokens, title, body, data = {}, imageUrl = null, sound = true) {
     try {
+      // Las callable functions exigen un ID token. Durante el inicio/cierre de
+      // sesión puede dispararse una notificación antes de que Auth lo restaure.
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        return { success: false, sent: 0, error: 'auth_not_ready' };
+      }
+      try {
+        await currentUser.getIdToken();
+      } catch (_) {
+        return { success: false, sent: 0, error: 'auth_token_unavailable' };
+      }
+
       if (!this._canSendDedupe(title, body)) {
         return { success: true, sent: 0, dedupe: true };
       }
@@ -193,11 +205,26 @@ static async sendCustomNotification(tokens, title, body, data = {}, imageUrl = n
       const sendNotification = httpsCallable(functions, 'sendPushyNotification');
       const payloadData = { ...data, title, message: body };
 
+      const enviarConSesionRenovada = async token => {
+        try {
+          return await sendNotification({ token, title, body, data: payloadData, collapseKey });
+        } catch (error) {
+          const sinSesion = error?.code === 'functions/unauthenticated' || error?.message?.includes('Authentication is required');
+          if (!sinSesion || !auth.currentUser) throw error;
+          // Un único reintento evita fallos transitorios al refrescar el token,
+          // sin convertir una sesión cerrada en un bucle de solicitudes.
+          await auth.currentUser.getIdToken(true);
+          return sendNotification({ token, title, body, data: payloadData, collapseKey });
+        }
+      };
+
       const results = await Promise.allSettled(
-        tokensToSend.map(token => sendNotification({ token, title, body, data: payloadData, collapseKey }).then(res => {
+        tokensToSend.map(token => enviarConSesionRenovada(token).then(res => {
           return res;
         }).catch(err => {
-          console.error('[PUSHY] sendPushyNotification error for token:', token, err);
+          this._removeQueueEntry(token, collapseKey);
+          const sinSesion = err?.code === 'functions/unauthenticated' || err?.message?.includes('Authentication is required');
+          if (!sinSesion) console.error('[PUSHY] sendPushyNotification error for token:', token, err);
           return { error: err.message || err, token };
         }))
       );

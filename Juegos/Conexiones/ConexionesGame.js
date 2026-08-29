@@ -13,6 +13,7 @@ import RoomBackground from '../../components/RoomBackground';
 import TabButtons from '../../components/TabButtons';
 import { useMisiones } from '../../MisionesContext';
 import { actualizarPasoTutorial } from '../../components/Tutorial';
+import { resolverAvatarUsuario } from '../../data/iconosLocales';
 
 const { width: W, height: H } = Dimensions.get('window');
 const STORAGE_PREFIX = 'conexiones_progreso_v1_';
@@ -347,8 +348,8 @@ const MiniAvatar = memo(({ profile, fallback }) => {
   const name = profile?.nombre || fallback;
   // Iconos.js guarda la elección como iconoUrl. La foto de perfil sólo es el
   // respaldo para cuentas que todavía no eligieron un icono.
-  const avatarUrl = profile?.iconoUrl || profile?.photoURL;
-  if (avatarUrl) return <ExpoImage source={{ uri: avatarUrl }} style={styles.miniAvatar} contentFit="cover" cachePolicy="memory-disk" />;
+  const avatarSource = resolverAvatarUsuario(profile);
+  if (avatarSource) return <ExpoImage source={typeof avatarSource === 'string' ? { uri: avatarSource } : avatarSource} style={styles.miniAvatar} contentFit="cover" cachePolicy="memory-disk" />;
   return <View style={[styles.miniAvatar, styles.miniAvatarFallback]}><Text style={styles.miniAvatarText}>{(name || '?')[0].toUpperCase()}</Text></View>;
 });
 
@@ -570,7 +571,7 @@ export default memo(function ConexionesGame({ navigation }) {
       if (data.juegos?.conexiones) {
         setDoc(doc(db, 'usuarios', uid, 'juegos', 'conexiones'), data.juegos.conexiones, { merge: true }).catch(() => {});
       }
-      setMyOnlineStats(previous => ({ ...(previous || {}), nombre: data.nombre, iconoUrl: data.iconoUrl, photoURL: data.photoURL }));
+      setMyOnlineStats(previous => ({ ...(previous || {}), nombre: data.nombre, iconoLocalId: data.iconoLocalId, iconoUrl: data.iconoUrl, photoURL: data.photoURL }));
     }, () => {});
     return () => { unsubscribeUser(); unsubscribeGame(); unsubscribeProfile(); };
   }, [uid]);
@@ -585,7 +586,7 @@ export default memo(function ConexionesGame({ navigation }) {
     const actualizar = () => setPartner({ ...profile, ...game, nivel: game.nivel || 1 });
     const unsubscribeProfile = onSnapshot(doc(db, 'usuarios', partnerId), other => {
       const otherData = other.data() || {};
-      profile = { nombre: otherData.nombre, iconoUrl: otherData.iconoUrl, photoURL: otherData.photoURL };
+      profile = { nombre: otherData.nombre, iconoLocalId: otherData.iconoLocalId, iconoUrl: otherData.iconoUrl, photoURL: otherData.photoURL };
       if (otherData.juegos?.conexiones && !Object.keys(game).length) game = otherData.juegos.conexiones;
       actualizar();
     }, () => setPartner(null));

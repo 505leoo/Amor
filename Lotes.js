@@ -8,10 +8,21 @@ import { auth, db } from './firebaseConfig';
 import TabButtons from './components/TabButtons';
 
 const ICONO_ARDILLA = require('./assets/inicio/iconos/icono-ardilla-bellota.png');
+const ICONO_AJOLOTE = require('./assets/inicio/iconos/icono-ajolote-caramelo.png');
+const AJOLOTE_BASE = require('./assets/temporadas/libro/Temporada2/Animales/Ajolote/ajolote1.png');
+const AJOLOTE_TRAJE_1 = require('./assets/temporadas/libro/Temporada2/Animales/Ajolote/skins/ajolotet1.png');
+const AJOLOTE_TRAJE_2 = require('./assets/temporadas/libro/Temporada2/Animales/Ajolote/skins/ajolotet2.png');
+const ICONO_ERIZO = require('./assets/inicio/iconos/icono-erizo-dulce-medianoche.png');
+const ERIZO_BASE = require('./assets/temporadas/libro/Temporada2/Animales/Erizo/erizo1.png');
+const ERIZO_TRAJE_1 = require('./assets/temporadas/libro/Temporada2/Animales/Erizo/skins/erizot1.png');
+const ERIZO_TRAJE_2 = require('./assets/temporadas/libro/Temporada2/Animales/Erizo/skins/erizot2.png');
 
 const LOTES = {
   ardilla: {
     id: 'ardilla', nombre: 'Ardilla', subtitulo: 'Lote Bosque Dorado', color: '#d58a2d', oscuro: '#754018', claro: '#fff0b8',
+    edicion: 'EDICIÓN DORADA', titulo: 'Bosque Dorado', descripcion: 'Una colección especial de Ardilla',
+    gradient: ['#fff3bd', '#e6a844', '#a95c1e'], spinGradient: ['#ffd86f', '#d88722'],
+    legacyUnlockField: 'ardillaDesbloqueada', premioPrincipalId: 'ardillat2', ordenCuadricula: ['icono', 'monedas', 'ardillat1', 'universales', 'personaje', 'cartas'],
     personaje: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png'),
     icono: ICONO_ARDILLA,
     premios: [
@@ -22,6 +33,41 @@ const LOTES = {
       { id: 'personaje', tipo: 'animal', nombre: 'Ardilla', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png'), tamano: 'character', peso: 0.25, unico: true },
       { id: 'ardillat1', tipo: 'skin', skinId: 'ardillat1', nombre: 'Bellota Dorada', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png'), tamano: 'large', peso: 0.15, unico: true },
       { id: 'ardillat2', tipo: 'skin', skinId: 'ardillat2', nombre: 'Guardiana', imagen: require('./assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat2.png'), tamano: 'large', peso: 0.1, unico: true },
+    ],
+  },
+  ajolote: {
+    id: 'ajolote', nombre: 'Ajolote', subtitulo: 'Lote Reino de Caramelo', color: '#cf6493', oscuro: '#74345d', claro: '#ffe1ee',
+    edicion: 'EDICIÓN DE TEMPORADA', titulo: 'Reino de Caramelo', tituloCompacto: true, descripcion: 'Una colección dulce y exclusiva de Ajolote',
+    costoGiro: 25, precioOriginal: 50, descuento: 50,
+    gradient: ['#ffe8f2', '#ef9cc1', '#9d5a9e'], spinGradient: ['#ffd6e9', '#d9689c'],
+    legacyUnlockField: 'ajoloteDesbloqueado', premioPrincipalId: 'ajolotet2', ordenCuadricula: ['icono', 'monedas', 'ajolotet1', 'universales', 'personaje', 'cartas'],
+    personaje: AJOLOTE_BASE,
+    icono: ICONO_AJOLOTE,
+    premios: [
+      { id: 'monedas', tipo: 'dinero', cantidad: 40, nombre: 'Monedas', iconoTexto: '🪙', tamano: 'small', peso: 54 },
+      { id: 'universales', tipo: 'cartasAnimalitos', cantidad: 2, nombre: 'Cartas universales', tamano: 'small', peso: 27 },
+      { id: 'cartas', tipo: 'cartasAnimal', cantidad: 3, nombre: 'Cartas de Ajolote', tamano: 'small', peso: 15 },
+      { id: 'icono', tipo: 'icono', iconoId: 'ajolote_caramelo', nombre: 'Icono exclusivo', imagen: ICONO_AJOLOTE, tamano: 'medium', peso: 3.5, unico: true },
+      { id: 'personaje', tipo: 'animal', nombre: 'Ajolote', imagen: AJOLOTE_BASE, tamano: 'character', peso: 0.3, unico: true },
+      { id: 'ajolotet1', tipo: 'skin', skinId: 'ajolotet1', nombre: 'Algodón de Azúcar', imagen: AJOLOTE_TRAJE_1, tamano: 'large', peso: 0.15, unico: true },
+      { id: 'ajolotet2', tipo: 'skin', skinId: 'ajolotet2', nombre: 'Guardián de Caramelo', imagen: AJOLOTE_TRAJE_2, tamano: 'large', peso: 0.05, unico: true },
+    ],
+  },
+  erizo: {
+    id: 'erizo', nombre: 'Erizo', subtitulo: 'Lote Dulce Medianoche', color: '#75559a', oscuro: '#352044', claro: '#f1ddff',
+    edicion: 'EDICIÓN DE TEMPORADA', titulo: 'Dulce Medianoche', tituloCompacto: true, descripcion: 'Cacao, arándanos y una nueva amistad bajo las estrellas',
+    gradient: ['#eee2fa', '#8965aa', '#392444'], spinGradient: ['#f0c56e', '#b36c3f'],
+    legacyUnlockField: 'erizoDesbloqueado', premioPrincipalId: 'erizot2', ordenCuadricula: ['icono', 'monedas', 'erizot1', 'universales', 'personaje', 'cartas'],
+    personaje: ERIZO_BASE,
+    icono: ICONO_ERIZO,
+    premios: [
+      { id: 'monedas', tipo: 'dinero', cantidad: 45, nombre: 'Monedas', iconoTexto: '🪙', tamano: 'small', peso: 52 },
+      { id: 'universales', tipo: 'cartasAnimalitos', cantidad: 3, nombre: 'Cartas universales', tamano: 'small', peso: 28 },
+      { id: 'cartas', tipo: 'cartasAnimal', cantidad: 4, nombre: 'Cartas de Erizo', tamano: 'small', peso: 16 },
+      { id: 'icono', tipo: 'icono', iconoId: 'erizo_dulce_medianoche', nombre: 'Icono Dulce Medianoche', imagen: ICONO_ERIZO, tamano: 'medium', peso: 3.2, unico: true },
+      { id: 'personaje', tipo: 'animal', nombre: 'Erizo', imagen: ERIZO_BASE, tamano: 'character', peso: 0.5, unico: true },
+      { id: 'erizot1', tipo: 'skin', skinId: 'erizot1', nombre: 'Cupcake de Arándanos', imagen: ERIZO_TRAJE_1, tamano: 'large', peso: 0.2, unico: true },
+      { id: 'erizot2', tipo: 'skin', skinId: 'erizot2', nombre: 'Maestro Chocolatero', imagen: ERIZO_TRAJE_2, tamano: 'large', peso: 0.1, unico: true },
     ],
   },
 };
@@ -135,13 +181,14 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
   }, [uid, lote.id]);
 
   const gratisRestantes = Math.max(0, GIROS_GRATIS - (Number(estado.girosGratisUsados) || 0));
+  const costoGiro = lote.costoGiro ?? COSTO_GIRO;
   const obtenidos = estado.premiosUnicos || {};
   const loteCompleto = lote.premios.every(item => Boolean(obtenidos[item.id]));
-  const puedeGirar = estadoCargado && !saliendo && !loteCompleto && (gratisRestantes > 0 || usuario.diamantes >= COSTO_GIRO);
+  const puedeGirar = estadoCargado && !saliendo && !loteCompleto && (gratisRestantes > 0 || usuario.diamantes >= costoGiro);
   const premioSeleccionadoId = premioActual?.id;
   const premios = useMemo(() => lote.premios, [lote]);
-  const premioPrincipal = premios.find(item => item.id === 'ardillat2') || premios[premios.length - 1];
-  const ordenCuadricula = ['icono', 'monedas', 'ardillat1', 'universales', 'personaje', 'cartas'];
+  const premioPrincipal = premios.find(item => item.id === lote.premioPrincipalId) || premios[premios.length - 1];
+  const ordenCuadricula = lote.ordenCuadricula || premios.filter(item => item.id !== premioPrincipal.id).map(item => item.id);
   const premiosCuadricula = ordenCuadricula.map(id => premios.find(item => item.id === id)).filter(Boolean);
   const moverBrilloTitulo = brilloTitulo.interpolate({ inputRange: [0, 1], outputRange: [-65, 250] });
   const compensarBrilloTitulo = brilloTitulo.interpolate({ inputRange: [0, 1], outputRange: [65, -250] });
@@ -165,7 +212,7 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
         const gratisUsados = Math.max(0, Number(loteData.girosGratisUsados) || 0);
         const esGratis = gratisUsados < GIROS_GRATIS;
         const diamantes = Math.max(0, Number(data.diamantes ?? data.diamante) || 0);
-        if (!esGratis && diamantes < COSTO_GIRO) throw new Error('diamantes_insuficientes');
+        if (!esGratis && diamantes < costoGiro) throw new Error('diamantes_insuficientes');
 
         const unicos = { ...(loteData.premiosUnicos || {}) };
         const disponibles = premios.filter(item => !unicos[item.id]);
@@ -173,17 +220,18 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
         const ganado = elegirPremio(disponibles);
         const updateUsuario = {};
         const updateAnimal = {};
-        if (!esGratis) updateUsuario.diamantes = diamantes - COSTO_GIRO;
+        if (!esGratis) updateUsuario.diamantes = diamantes - costoGiro;
         if (ganado.tipo === 'dinero') updateUsuario.dinero = Math.max(0, Number(data.dinero) || 0) + ganado.cantidad;
+        if (ganado.tipo === 'diamantes') updateUsuario.diamantes = diamantes + ganado.cantidad - (esGratis ? 0 : costoGiro);
         if (ganado.tipo === 'cartasAnimalitos') updateUsuario.cartasAnimalitos = Math.max(0, Number(data.cartasAnimalitos) || 0) + ganado.cantidad;
         if (ganado.tipo === 'cartasAnimal') {
           const cartas = Math.max(0, Number(animalData.cartas ?? animalData.copias) || 0) + ganado.cantidad;
           updateAnimal.cartas = cartas;
           updateAnimal.copias = cartas;
         }
-        if (ganado.tipo === 'icono') updateUsuario.iconosDesbloqueados = { ...(data.iconosDesbloqueados || {}), ardilla_bellota: true };
+        if (ganado.tipo === 'icono') updateUsuario.iconosDesbloqueados = { ...(data.iconosDesbloqueados || {}), [ganado.iconoId || 'ardilla_bellota']: true };
         if (ganado.tipo === 'animal') {
-          updateUsuario.ardillaDesbloqueada = true;
+          if (lote.legacyUnlockField) updateUsuario[lote.legacyUnlockField] = true;
           updateAnimal.desbloqueado = true;
           updateAnimal.nivel = Math.max(1, Number(animalData.nivel) || 1);
         }
@@ -225,33 +273,33 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
   return (
     <View style={s.root}>
       <StatusBar hidden />
-      <LinearGradient colors={['#fff3bd', '#e6a844', '#a95c1e']} locations={[0, 0.58, 1]} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={lote.gradient} locations={[0, 0.58, 1]} style={StyleSheet.absoluteFill} />
       <View style={s.radialA} /><View style={s.radialB} /><View style={s.radialC} />
       <TabButtons onExit={salir} userMoney={usuario.dinero} chicles={usuario.cartasAnimalitos} chicleIcono={<Text style={s.universalMini}>✦</Text>} customAddButton={<View />} />
 
       <View style={s.leftPanel}>
-        <View style={s.editionPill}><Text style={s.eyebrow}>EDICIÓN DORADA</Text></View>
+        <View style={[s.editionPill, { borderColor: `${lote.oscuro}55`, backgroundColor: `${lote.claro}99` }]}><Text style={[s.eyebrow, { color: lote.oscuro }]}>{lote.edicion}</Text></View>
         <View style={s.titleOrnament}><View style={s.titleLine} /><Text style={s.titleStar}>✦</Text><View style={s.titleLine} /></View>
         <Text style={s.titlePrefix}>EL LOTE DE</Text>
         <View style={s.titleWrap}>
-          <Text style={s.title}>Bosque Dorado</Text>
+          <Text style={[s.title, lote.tituloCompacto && s.titleCompact, { color: lote.oscuro, textShadowColor: lote.claro }]}>{lote.titulo}</Text>
           <Animated.View style={[s.titleShine, { transform: [{ translateX: moverBrilloTitulo }] }]}>
-            <Animated.Text numberOfLines={1} style={[s.title, s.titleShineText, { transform: [{ translateX: compensarBrilloTitulo }] }]}>Bosque Dorado</Animated.Text>
+            <Animated.Text numberOfLines={1} style={[s.title, s.titleShineText, lote.tituloCompacto && s.titleCompact, { transform: [{ translateX: compensarBrilloTitulo }] }]}>{lote.titulo}</Animated.Text>
           </Animated.View>
         </View>
-        <Text style={s.subtitle}>Una colección especial de Ardilla</Text>
+        <Text style={[s.subtitle, { color: lote.oscuro }]}>{lote.descripcion}</Text>
         <View style={s.titleFlourish}><Text style={s.titleFlourishText}>◆  ✦  ◆</Text></View>
-        <View style={s.diamondBalance}><MaterialIcons name="diamond" size={13} color="#47bfd3" /><Text style={s.diamondBalanceText}>{COSTO_GIRO}</Text></View>
+        <View style={s.precioGiroWrap}><View style={s.diamondBalance}><MaterialIcons name="diamond" size={13} color="#47bfd3" /><Text style={s.diamondBalanceText}>{costoGiro}</Text></View>{lote.descuento && <View style={s.descuentoPill}><Text style={s.descuentoTexto}>{lote.descuento}% OFF</Text>{lote.precioOriginal && <Text style={s.precioAnterior}>{lote.precioOriginal}</Text>}</View>}</View>
         <TouchableOpacity style={[s.spinButton, (!puedeGirar || girando) && s.spinDisabled]} onPress={girar} disabled={!puedeGirar || girando} activeOpacity={0.8}>
-          <LinearGradient colors={['#ffd86f', '#d88722']} style={s.spinGradient}>
+          <LinearGradient colors={lote.spinGradient} style={s.spinGradient}>
             <MaterialIcons name="casino" size={18} color="#6f3b15" />
-            <View><Text style={s.spinText}>{girando ? 'GIRANDO…' : !estadoCargado ? 'PREPARANDO…' : gratisRestantes > 0 ? 'GIRO GRATIS' : 'GIRAR'}</Text><Text style={s.spinSub}>{!estadoCargado ? 'Cargando tu lote' : gratisRestantes > 0 ? `${gratisRestantes} gratis disponible${gratisRestantes === 1 ? '' : 's'}` : `${COSTO_GIRO} diamantes`}</Text></View>
+            <View><Text style={s.spinText}>{girando ? 'GIRANDO…' : !estadoCargado ? 'PREPARANDO…' : gratisRestantes > 0 ? 'GIRO GRATIS' : 'GIRAR'}</Text><Text style={s.spinSub}>{!estadoCargado ? 'Cargando tu lote' : gratisRestantes > 0 ? `${gratisRestantes} gratis disponible${gratisRestantes === 1 ? '' : 's'}` : `${costoGiro} diamantes`}</Text></View>
           </LinearGradient>
         </TouchableOpacity>
-        {estadoCargado && !saliendo && !puedeGirar && <Text style={s.noDiamonds}>{loteCompleto ? '¡Completaste todo el lote!' : `Necesitas ${COSTO_GIRO} diamantes para volver a girar`}</Text>}
+        {estadoCargado && !saliendo && !puedeGirar && <Text style={s.noDiamonds}>{loteCompleto ? '¡Completaste todo el lote!' : `Necesitas ${costoGiro} diamantes para volver a girar`}</Text>}
       </View>
 
-      <View style={s.rewardsPanel}>
+      <View style={[s.rewardsPanel, { borderColor: lote.color, backgroundColor: `${lote.claro}ee` }]}>
         <View style={s.rewardsHeader}><Text style={s.rewardsTitle}>¿QUÉ PUEDE TOCARTE?</Text><Text style={s.rewardsHint}>Premios comunes y tesoros exclusivos</Text></View>
         <View style={s.rewardsGrid}>
           <View style={s.rewardShowcase}>
@@ -267,7 +315,7 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
       </View>
 
       <Modal transparent visible={Boolean(premioActual)} animationType="fade" onRequestClose={() => setPremioActual(null)}>
-        <View style={s.modalBackdrop}><View style={s.modalCard}>
+        <View style={s.modalBackdrop}><View style={[s.modalCard, { borderColor: lote.color, backgroundColor: lote.claro }]}>
           <Text style={s.modalEyebrow}>¡TE TOCÓ!</Text>
           {premioActual?.imagen
             ? <Image source={premioActual.imagen} style={s.modalImage} contentFit="contain" />
@@ -297,14 +345,18 @@ const s = StyleSheet.create({
   titleOrnament: { marginTop: 4, width: 154, height: 10, flexDirection: 'row', alignItems: 'center', gap: 7 },
   titleLine: { flex: 1, height: 1, backgroundColor: 'rgba(126,71,23,0.42)' }, titleStar: { color: '#9e621e', fontSize: 9 },
   titlePrefix: { marginTop: 1, color: '#9a6229', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', letterSpacing: 2.3 },
-  titleWrap: { position: 'relative', height: 29, minWidth: 190, alignItems: 'center', overflow: 'hidden' },
+  titleWrap: { position: 'relative', height: 29, minWidth: 230, alignItems: 'center', overflow: 'hidden' },
   title: { color: '#6a3514', fontFamily: 'Delius', fontSize: 24, lineHeight: 29, fontWeight: '900', letterSpacing: 0.5, textShadowColor: '#ffe6a1', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 5 },
+  titleCompact: { fontSize: 19, lineHeight: 27 },
   titleShine: { position: 'absolute', top: 0, left: 0, width: 27, height: 29, overflow: 'hidden' },
-  titleShineText: { position: 'absolute', top: 0, left: 0, width: 190, color: '#fff4a8', textShadowColor: '#ffe58a', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
+  titleShineText: { position: 'absolute', top: 0, left: 0, width: 230, color: '#fff4a8', textShadowColor: '#ffe58a', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 6 },
   subtitle: { marginTop: 1, color: '#8e5825', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '700', letterSpacing: 0.25 },
   titleFlourish: { marginTop: 3 }, titleFlourishText: { color: 'rgba(132,76,25,0.55)', fontSize: 6, letterSpacing: 2 },
-  diamondBalance: { position: 'absolute', bottom: 50, left: '50%', marginLeft: 42, minWidth: 48, height: 23, borderRadius: 10, paddingHorizontal: 7, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,250,220,0.92)', borderWidth: 1, borderColor: '#c98228', zIndex: 4, elevation: 9 },
+  precioGiroWrap: { position: 'absolute', bottom: 50, left: '50%', marginLeft: 42, flexDirection: 'row', alignItems: 'center', gap: 4, zIndex: 4, elevation: 9 },
+  diamondBalance: { minWidth: 48, height: 23, borderRadius: 10, paddingHorizontal: 7, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,250,220,0.92)', borderWidth: 1, borderColor: '#c98228' },
   diamondBalanceText: { color: '#754018', fontSize: 10, fontWeight: '900' },
+  descuentoPill: { height: 21, paddingHorizontal: 5, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e85d91', borderWidth: 1, borderColor: '#fff1b8', shadowColor: '#74345d', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.28, shadowRadius: 3, elevation: 4 },
+  descuentoTexto: { color: '#fff7d9', fontSize: 6.2, fontWeight: '900', letterSpacing: 0.4 }, precioAnterior: { marginTop: -1, color: '#ffe1ee', fontSize: 5.5, fontWeight: '800', textDecorationLine: 'line-through' },
   universalMini: { color: '#fff4bd', fontSize: 15, fontWeight: '900' },
   spinButton: { position: 'absolute', bottom: 19, width: 160, height: 38, borderRadius: 13, overflow: 'hidden', borderWidth: 1.5, borderColor: '#8c4d18', elevation: 8 },
   spinDisabled: { opacity: 0.55 }, spinGradient: { flex: 1, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' },

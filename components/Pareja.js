@@ -8,6 +8,7 @@ import { auth, db } from '../firebaseConfig';
 import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, query, where, deleteDoc } from 'firebase/firestore';
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 import { ProfileFrame } from '../menus/Perfil';
+import { resolverAvatarUsuario } from '../data/iconosLocales';
 
 let usuariosCache = null;
 let usuariosRequest = null;
@@ -260,7 +261,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
         // Tiene pareja — mostrar solo ella en la lista
         <Animated.View style={[styles.listaWrap, { opacity: contentReveal }]}>
           <View style={styles.usuarioRow}>
-            <ProfileFrame avatar={parejaData.iconoUrl || parejaData.photoURL || ICONO_DEFAULT} frameId={parejaData.marcoPerfil || 'corazon'} compact />
+            <ProfileFrame avatar={resolverAvatarUsuario(parejaData, ICONO_DEFAULT)} frameId={parejaData.marcoPerfil || 'corazon'} compact />
             <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
               <View style={styles.parejaNombreLinea}><Text style={[styles.usuarioNombre, styles.parejaNameStyle]} numberOfLines={1}>{parejaData.nombre}</Text><IndicadorOnline usuario={parejaData} ahora={ahora} /></View>
               <View style={styles.parejaProgresoCompacto}><Text style={styles.parejaNivelCompacto}>Nivel {1 + Math.floor((parejaData.exp || 0) / 100)}</Text><View style={styles.parejaBarraCompacta}><View style={[styles.parejaBarraFillCompacta, { width: `${progresoNivelPareja}%` }]} /></View><Text style={styles.parejaExpCompacta}>{progresoNivelPareja}/100</Text></View>
@@ -278,7 +279,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
             scrollEnabled={false}
             renderItem={({ item, index }) => (
               <View style={styles.usuarioRow}>
-                <ProfileFrame avatar={item.iconoUrl || item.photoURL || ICONO_DEFAULT} frameId={item.marcoPerfil || 'corazon'} compact />
+                <ProfileFrame avatar={resolverAvatarUsuario(item, ICONO_DEFAULT)} frameId={item.marcoPerfil || 'corazon'} compact />
                 <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: item.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
                   <Text style={[styles.usuarioNombre, styles.parejaNameStyle]}>{item.nombre}</Text>
                   <IndicadorOnline usuario={item} ahora={ahora} />

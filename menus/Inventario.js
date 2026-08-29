@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Modal, StyleSheet, Text, TouchableOpacity, View, PanResponder } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 
 const RECURSOS = [
@@ -9,25 +9,41 @@ const RECURSOS = [
   { key: 'diamantes', titulo: 'Diamantes', descripcion: 'Brillan un poquito más cada vez que los guardás para algo especial.', icono: 'diamond', color: '#4d9bb0', fondo: '#d8eff0' },
   { key: 'chicles', titulo: 'Chicles', descripcion: 'Usalos para avanzar en los eventos y completar sus caminos.', icono: 'bubble-chart', color: '#c46d83', fondo: '#f3dce4' },
   { key: 'globos', titulo: 'Globos', descripcion: 'Pequeños premios de eventos, listos para acompañar tus momentos.', icono: 'celebration', color: '#a85f67', fondo: '#f2d9d5' },
+  { key: 'ticketRuleta', titulo: 'Ticket de Ruleta', descripcion: 'Un pase especial para girar la ruleta cuando haya una oportunidad disponible.', icono: 'confirmation-number', color: '#a96c31', fondo: '#f8e3a9' },
 ];
 
 export const InventarioModal = ({ visible, onClose }) => {
-  const [recurso, setRecurso] = useState({ dinero: 0, diamantes: 0, chicles: 0, globos: 0 });
+  const [recurso, setRecurso] = useState({ dinero: 0, diamantes: 0, chicles: 0, globos: 0, ticketRuleta: 0 });
   const [pagina, setPagina] = useState(0);
   const touchStart = useRef(null);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!visible || !uid) return undefined;
-    return onSnapshot(doc(db, 'usuarios', uid), snap => {
+    const usuarioRef = doc(db, 'usuarios', uid);
+    const ticketRef = doc(db, 'usuarios', uid, 'inventario', 'ticket_ruleta');
+    // Los consumibles viven en la subcolección inventario. Se crea vacío una
+    // sola vez para que el Ticket ya exista aunque todavía no se haya ganado.
+    setDoc(ticketRef, {
+      tipo: 'ticket_ruleta',
+      nombre: 'Ticket de Ruleta',
+      cantidad: 0,
+    }, { merge: true }).catch(() => {});
+    const quitarUsuario = onSnapshot(usuarioRef, snap => {
       const data = snap.data() || {};
-      setRecurso({
+      setRecurso(actual => ({
+        ...actual,
         dinero: data.dinero ?? data.monedas ?? 0,
         diamantes: data.diamantes ?? data.diamante ?? 0,
         chicles: data.chicles ?? 0,
         globos: data.globos ?? 0,
-      });
+      }));
     }, () => {});
+    const quitarTicket = onSnapshot(ticketRef, snap => {
+      const cantidad = Number(snap.data()?.cantidad) || 0;
+      setRecurso(actual => ({ ...actual, ticketRuleta: cantidad }));
+    }, () => {});
+    return () => { quitarUsuario(); quitarTicket(); };
   }, [visible]);
 
   useEffect(() => {
