@@ -121,7 +121,7 @@ function run() {
         // entre production, preview y development; --non-interactive impide
         // que una publicación automática quede esperando una respuesta.
         execSync(
-          `eas update --branch production --environment production --message "${newVersion}" --platform android --non-interactive`,
+          `eas update --branch production --environment production --message "${newVersion}" --platform android --non-interactive --no-bytecode`,
           { stdio: 'inherit' },
         );
       } catch (pubErr) {

@@ -296,20 +296,18 @@ export default function Noticias({ visible, onDismiss, onContinue, version, init
 
         <View style={styles.body}>
           <View style={styles.newsList}>
-            <View style={styles.newsListHeading}><Text style={styles.newsListEyebrow}>ARCHIVO</Text><Text style={styles.newsListTitle}>Noticias</Text><Text style={styles.newsListCount}>{NOTICIAS.length} {NOTICIAS.length === 1 ? 'historia' : 'historias'}</Text></View>
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.newsListContent}>
               {NOTICIAS.map(item => {
                 const active = item.id === noticia.id;
                 const isInvitation = item.id === INVITACION_ID;
                 const invitationStyle = isInvitation && !miNoticia?.continuada ? { transform: [{ scale: invitationScale }] } : null;
-                return <Animated.View key={item.id} style={invitationStyle}><TouchableOpacity onPress={() => setNoticiaSeleccionada(item.id)} activeOpacity={0.82} style={[styles.newsListItem, isInvitation && styles.newsListItemInvitation, active && styles.newsListItemActive]}>
-                  <LinearGradient colors={active ? [item.color, '#8f5263'] : isInvitation ? ['#d87b8d', '#a94f68'] : ['#ead4ae', '#d9bd91']} style={[styles.newsListIcon, isInvitation && styles.newsListIconInvitation]}><MaterialIcons name={item.icono} size={isInvitation ? 15 : 17} color={active || isInvitation ? '#fff6dc' : '#856342'} />{isInvitation && <View style={styles.invitationIconSpark}><MaterialIcons name="auto-awesome" size={5} color="#fff2aa" /></View>}</LinearGradient>
-                  <View style={styles.newsListCopy}><View style={styles.newsListMeta}><Text style={[styles.newsListDate, (active || isInvitation) && styles.newsListTextActive]}>{item.fecha}</Text>{isInvitation && !miNoticia?.continuada && <View style={styles.newBadge}><Text style={styles.newBadgeText}>{noticiaPareja?.respuesta ? 'RESPUESTA' : 'SECRETO'}</Text></View>}</View><Text style={[styles.newsListItemTitle, (active || isInvitation) && styles.newsListTextActive]} numberOfLines={1}>{item.titulo}</Text><Text style={[styles.newsListItemSummary, (active || isInvitation) && styles.newsListSummaryActive]} numberOfLines={1}>{isInvitation && noticiaPareja?.respuesta ? `${pareja?.nombre || 'Tu pareja'} ya respondió` : item.resumen}</Text></View>
-                  {active && <MaterialIcons name="chevron-right" size={13} color="#fff3d4" />}
+                return <Animated.View key={item.id} style={invitationStyle}><TouchableOpacity onPress={() => setNoticiaSeleccionada(item.id)} activeOpacity={0.82} accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={`Abrir noticia: ${item.titulo}`} style={[styles.newsCube, active && styles.newsCubeActive, isInvitation && styles.newsCubeInvitation]}>
+                  <LinearGradient colors={active ? [item.color, '#8f5263'] : isInvitation ? ['#d87b8d', '#a94f68'] : [`${item.color}d9`, item.color]} style={styles.newsCubeGradient}><MaterialIcons name={item.icono} size={active ? 23 : 21} color="#fff8e8" /></LinearGradient>
+                  {active && <View style={styles.newsCubeSelected} />}
+                  {isInvitation && !miNoticia?.continuada && <View style={styles.newsCubeAlert}><MaterialIcons name={noticiaPareja?.respuesta ? 'favorite' : 'auto-awesome'} size={7} color="#fff6cd" /></View>}
                 </TouchableOpacity></Animated.View>;
               })}
             </ScrollView>
-            <View style={styles.newsListHint}><MaterialIcons name="history" size={11} color="#987049" /><Text style={styles.newsListHintText}>Las noticias anteriores quedarán guardadas aquí.</Text></View>
           </View>
 
           <View style={styles.newsDetail}>
@@ -370,29 +368,14 @@ const styles = StyleSheet.create({
   versionText: { marginLeft: 8, color: '#a8784b', fontFamily: 'Delius', fontSize: 6.2, fontWeight: '900', letterSpacing: 0.55 },
   close: { marginLeft: 'auto', width: 27, height: 27, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,248,226,0.72)', borderWidth: 1, borderColor: '#d0ac75' },
   body: { flex: 1, minHeight: 0, flexDirection: 'row' },
-  newsList: { width: 137, minWidth: 137, padding: 8, backgroundColor: 'rgba(224,197,157,0.43)', borderRightWidth: 1, borderRightColor: 'rgba(137,87,46,0.24)' },
-  newsListHeading: { height: 49, paddingHorizontal: 3, justifyContent: 'center' },
-  newsListEyebrow: { color: '#a27147', fontFamily: 'Delius', fontSize: 5.2, lineHeight: 6, fontWeight: '900', letterSpacing: 0.9 },
-  newsListTitle: { color: '#583721', fontFamily: 'Delius', fontSize: 14, lineHeight: 16, fontWeight: '900' },
-  newsListCount: { color: '#9a7551', fontFamily: 'Delius', fontSize: 5.4, lineHeight: 7, fontWeight: '700' },
-  newsListContent: { gap: 5, paddingBottom: 8 },
-  newsListItem: { minHeight: 55, paddingHorizontal: 5, paddingVertical: 5, borderRadius: 10, flexDirection: 'row', gap: 5, alignItems: 'center', backgroundColor: 'rgba(255,247,224,0.65)', borderWidth: 1, borderColor: '#d4b689' },
-  newsListItemInvitation: { minHeight: 48, paddingVertical: 4, backgroundColor: '#b65b72', borderColor: '#f1b6b4', shadowColor: '#d85173', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 6, elevation: 5 },
-  newsListItemActive: { backgroundColor: '#a95f6f', borderColor: '#7d4251', shadowColor: '#71404c', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.28, shadowRadius: 3, elevation: 3 },
-  newsListIcon: { width: 31, height: 31, flexShrink: 0, borderRadius: 9, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,243,211,0.65)' },
-  newsListIconInvitation: { width: 28, height: 28, borderRadius: 9, position: 'relative', borderColor: '#ffd5c2' },
-  invitationIconSpark: { position: 'absolute', right: 2, top: 2 },
-  newsListCopy: { flex: 1, minWidth: 0 },
-  newsListMeta: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  newsListDate: { color: '#a07854', fontFamily: 'Delius', fontSize: 4.3, lineHeight: 5, fontWeight: '900', letterSpacing: 0.35 },
-  newBadge: { height: 9, paddingHorizontal: 3, borderRadius: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f1c662' },
-  newBadgeText: { color: '#71451f', fontSize: 3.7, fontWeight: '900', letterSpacing: 0.25 },
-  newsListItemTitle: { color: '#67442d', fontFamily: 'Delius', fontSize: 7.5, lineHeight: 9, fontWeight: '900' },
-  newsListItemSummary: { color: '#987457', fontFamily: 'Delius', fontSize: 4.5, lineHeight: 6, fontWeight: '700' },
-  newsListTextActive: { color: '#fff6dc' },
-  newsListSummaryActive: { color: '#f0d9d8' },
-  newsListHint: { marginTop: 'auto', minHeight: 38, padding: 6, borderRadius: 9, flexDirection: 'row', gap: 5, alignItems: 'center', backgroundColor: 'rgba(255,246,220,0.5)', borderWidth: 1, borderColor: 'rgba(182,145,98,0.42)' },
-  newsListHintText: { flex: 1, color: '#987252', fontFamily: 'Delius', fontSize: 4.6, lineHeight: 6, fontWeight: '700' },
+  newsList: { width: 64, minWidth: 64, paddingHorizontal: 9, paddingTop: 10, paddingBottom: 9, backgroundColor: 'rgba(224,197,157,0.43)', borderRightWidth: 1, borderRightColor: 'rgba(137,87,46,0.24)' },
+  newsListContent: { gap: 8, alignItems: 'center', paddingBottom: 5 },
+  newsCube: { width: 43, height: 43, borderRadius: 13, padding: 2, backgroundColor: 'rgba(255,248,226,0.62)', borderWidth: 1, borderColor: 'rgba(152,104,62,0.28)', shadowColor: '#89593a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 3, elevation: 2 },
+  newsCubeGradient: { flex: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  newsCubeActive: { borderColor: '#70435c', backgroundColor: '#fff0cc', shadowColor: '#6c3e55', shadowOpacity: 0.42, shadowRadius: 5, elevation: 5 },
+  newsCubeInvitation: { borderColor: '#cd7188', shadowColor: '#bd4f72', shadowOpacity: 0.3, shadowRadius: 5, elevation: 4 },
+  newsCubeSelected: { position: 'absolute', left: -5, top: 15, width: 3, height: 13, borderRadius: 2, backgroundColor: '#fff4c7', borderWidth: 0.5, borderColor: '#9b6542' },
+  newsCubeAlert: { position: 'absolute', right: -4, top: -4, width: 15, height: 15, borderRadius: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d65c79', borderWidth: 1.5, borderColor: '#fff1c3', elevation: 5 },
   newsDetail: { flex: 1, minWidth: 0 },
   detailHeader: { minHeight: 60, paddingHorizontal: 11, paddingVertical: 6, flexDirection: 'row', gap: 8, alignItems: 'center', borderBottomWidth: 1, borderBottomColor: 'rgba(146,95,52,0.16)' },
   detailCategory: { width: 48, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },

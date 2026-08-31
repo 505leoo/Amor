@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Image as RNImage, Modal, PanResponder, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Image as RNImage, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
@@ -186,22 +186,18 @@ export default function Anuncios({ visible, onClose, onOpen, renderContent, even
   const closeOpacity = useRef(new Animated.Value(0.45)).current;
   const eventos = ['fechas', ...eventosDisponibles.filter(key => key !== 'fechas' && EVENTOS_ANUNCIOS[key])];
   const [pagina, setPagina] = useState(0);
-  const touchStart = useRef(null);
   useEffect(() => {
     setPagina(0);
   }, [evento, eventosDisponibles]);
   const eventoActual = EVENTOS_ANUNCIOS[eventos[pagina]] || EVENTOS_ANUNCIOS.reporte;
   const eventoKey = eventos[pagina] || 'reporte';
-  const cambiarEvento = direccion => setPagina(actual => Math.max(0, Math.min(eventos.length - 1, actual + direccion)));
-  const swipeResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderGrant: event => { touchStart.current = event.nativeEvent.pageX; },
-    onPanResponderRelease: event => {
-      const distancia = event.nativeEvent.pageX - touchStart.current;
-      if (Math.abs(distancia) >= 28) cambiarEvento(distancia < 0 ? 1 : -1);
-      else onOpen?.(eventoKey);
-    },
-  }).panHandlers;
+  const cerrarAnuncio = () => {
+    if (pagina < eventos.length - 1) {
+      setPagina(actual => actual + 1);
+      return;
+    }
+    onClose?.();
+  };
 
   useEffect(() => {
     const recursos = eventoKey === 'lotes'
@@ -240,13 +236,16 @@ export default function Anuncios({ visible, onClose, onOpen, renderContent, even
         />}
         {eventoKey === 'lotes' && <LoteArdilla />}
         {eventoKey === 'fechas' && <FechaAurora />}
-        {!renderContent && <View style={[styles.backgroundTouch, eventoKey === 'lotes' && styles.backgroundTouchLote]} {...swipeResponder} accessibilityLabel={eventoActual.accesible} />}
-        {!renderContent && <View style={styles.pagination}>
-          <View style={styles.dots}>{eventos.map((key, index) => <View key={key} style={[styles.dot, index === pagina && styles.dotActive]} />)}</View>
-        </View>}
+        {!renderContent && <TouchableOpacity
+          style={[styles.openButtonHit, eventoKey === 'lotes' && styles.openButtonHitLote]}
+          activeOpacity={0.82}
+          onPress={() => onOpen?.(eventoKey)}
+          accessibilityRole="button"
+          accessibilityLabel={eventoActual.accesible}
+        />}
         {renderContent ? renderContent() : null}
         <Animated.View style={[styles.closeLayer, { opacity: closeOpacity }]}>
-          <TouchableOpacity style={styles.close} onPress={onClose} accessibilityLabel="Cerrar anuncio" hitSlop={10}>
+          <TouchableOpacity style={styles.close} onPress={cerrarAnuncio} accessibilityLabel={pagina < eventos.length - 1 ? "Ver siguiente anuncio" : "Cerrar anuncios"} hitSlop={10}>
             <Text style={styles.closeText}>×</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -259,12 +258,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 38, backgroundColor: '#fff5e7' },
   background: { position: 'absolute', top: 0, left: '-5%', width: '110%', height: '120%' },
   backgroundCumple: { left: 0, width: '100%', height: '112%' },
-  backgroundTouch: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 },
-  backgroundTouchLote: { zIndex: 8 },
-  pagination: { position: 'absolute', bottom: 20, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 12, elevation: 12 },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: 'rgba(118,85,47,0.3)' },
-  dotActive: { width: 16, backgroundColor: '#76552f' },
+  openButtonHit: { position: 'absolute', bottom: 30, width: 158, height: 31, borderRadius: 11, zIndex: 9, elevation: 9 },
+  openButtonHitLote: { width: 128 },
   closeLayer: { position: 'absolute', top: 0, right: 0, width: 70, height: 70, zIndex: 10, elevation: 10 },
   close: { position: 'absolute', top: 16, right: 16, width: 29, height: 29, alignItems: 'center', justifyContent: 'center', zIndex: 11 },
   closeText: { color: '#69452d', fontSize: 30, lineHeight: 29, fontWeight: '300' },
