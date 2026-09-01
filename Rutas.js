@@ -585,9 +585,11 @@ export default function Rutas({ navigation }) {
         const item = { ...(items[itemId] || {}) };
         const marcas = { ...(item.marcas || {}) };
         const estadoActual = normalizarMarca(marcas[uid])?.estado;
-        if (!estadoActual) marcas[uid] = { estado: 'confirmado', en: new Date() };
-        else if (estadoActual === 'confirmado') marcas[uid] = { estado: 'no_confirmado', en: new Date() };
-        else delete marcas[uid];
+        if (!estadoActual || estadoActual === 'no_confirmado') {
+          marcas[uid] = { estado: 'confirmado', en: new Date() };
+        } else if (estadoActual === 'confirmado') {
+          marcas[uid] = { estado: 'no_confirmado', en: new Date() };
+        }
         items[itemId] = { marcas };
         const next = { participantes: [uid, pareja].filter(Boolean), items, actualizadoEn: serverTimestamp() };
         transaction.set(checklistRef, next, { merge: true });
