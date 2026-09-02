@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import TabButtons from './components/TabButtons';
+import RecompensaOverlay from './components/RecompensaOverlay';
 
 const ICONO_ARDILLA = require('./assets/inicio/iconos/icono-ardilla-bellota.png');
 const ICONO_AJOLOTE = require('./assets/inicio/iconos/icono-ajolote-caramelo.png');
@@ -139,7 +140,8 @@ const Premio = ({ premio, activo, obtenido, compacto = false, destacado = false 
 );
 
 export default function Lotes({ navigation, animalId = 'ardilla' }) {
-  const lote = LOTES[animalId] || LOTES.ardilla;
+  const [loteId, setLoteId] = useState(LOTES[animalId] ? animalId : 'ardilla');
+  const lote = LOTES[loteId] || LOTES.ardilla;
   const uid = auth.currentUser?.uid;
   const [usuario, setUsuario] = useState({ dinero: 0, diamantes: 0, cartasAnimalitos: 0 });
   const [estado, setEstado] = useState({ girosGratisUsados: 0, girosTotales: 0, premiosUnicos: {} });
@@ -149,6 +151,10 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
   const [premioActual, setPremioActual] = useState(null);
   const giroAnim = useRef(new Animated.Value(0)).current;
   const brilloTitulo = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (LOTES[animalId] && animalId !== loteId) setLoteId(animalId);
+  }, [animalId, loteId]);
 
   useEffect(() => {
     const animacion = Animated.loop(Animated.sequence([
@@ -192,6 +198,11 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
   const premiosCuadricula = ordenCuadricula.map(id => premios.find(item => item.id === id)).filter(Boolean);
   const moverBrilloTitulo = brilloTitulo.interpolate({ inputRange: [0, 1], outputRange: [-65, 250] });
   const compensarBrilloTitulo = brilloTitulo.interpolate({ inputRange: [0, 1], outputRange: [65, -250] });
+  const cambiarLote = direccion => {
+    const ids = Object.keys(LOTES);
+    setLoteId(ids[(ids.indexOf(loteId) + direccion + ids.length) % ids.length]);
+    setPremioActual(null);
+  };
 
   const girar = async () => {
     if (!uid || girando || !puedeGirar) return;
@@ -277,6 +288,12 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
       <View style={s.radialA} /><View style={s.radialB} /><View style={s.radialC} />
       <TabButtons onExit={salir} userMoney={usuario.dinero} chicles={usuario.cartasAnimalitos} chicleIcono={<Text style={s.universalMini}>✦</Text>} customAddButton={<View />} />
 
+      <View style={s.loteSwitcher}>
+        <TouchableOpacity onPress={() => cambiarLote(-1)} style={s.loteArrow} accessibilityLabel="Lote anterior"><MaterialIcons name="chevron-left" size={20} color={lote.oscuro} /></TouchableOpacity>
+        <Text style={[s.loteSwitcherText, { color: lote.oscuro }]}>{lote.nombre.toUpperCase()}</Text>
+        <TouchableOpacity onPress={() => cambiarLote(1)} style={s.loteArrow} accessibilityLabel="Siguiente lote"><MaterialIcons name="chevron-right" size={20} color={lote.oscuro} /></TouchableOpacity>
+      </View>
+
       <View style={s.leftPanel}>
         <View style={[s.editionPill, { borderColor: `${lote.oscuro}55`, backgroundColor: `${lote.claro}99` }]}><Text style={[s.eyebrow, { color: lote.oscuro }]}>{lote.edicion}</Text></View>
         <View style={s.titleOrnament}><View style={s.titleLine} /><Text style={s.titleStar}>✦</Text><View style={s.titleLine} /></View>
@@ -303,10 +320,10 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
         <View style={s.rewardsHeader}><Text style={s.rewardsTitle}>¿QUÉ PUEDE TOCARTE?</Text><Text style={s.rewardsHint}>Premios comunes y tesoros exclusivos</Text></View>
         <View style={s.rewardsGrid}>
           <View style={s.rewardShowcase}>
-            <View style={s.standardGrid}>{premiosCuadricula.map(premio => <Premio key={premio.id} premio={premio} compacto obtenido={Boolean(obtenidos[premio.id])} activo={premioSeleccionadoId === premio.id} />)}</View>
+            <View style={s.standardGrid}>{premiosCuadricula.map(premio => <Premio key={premio.id} premio={premio} compacto obtenido={Boolean(obtenidos[premio.id])} />)}</View>
             <View style={s.grandPrizeWrap}>
               <BrilloPremioEstrella />
-              <Premio premio={premioPrincipal} destacado obtenido={Boolean(obtenidos[premioPrincipal.id])} activo={premioSeleccionadoId === premioPrincipal.id} />
+              <Premio premio={premioPrincipal} destacado obtenido={Boolean(obtenidos[premioPrincipal.id])} />
               <View style={s.grandPrizeLabel}><Text style={s.grandPrizeLabelText}>PREMIO ESTRELLA</Text></View>
             </View>
           </View>
@@ -314,9 +331,7 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
         <Text style={s.probabilityNote}>Cada giro entrega 1 recompensa · Ninguna recompensa se repite</Text>
       </View>
 
-      <Modal transparent visible={Boolean(premioActual)} animationType="fade" onRequestClose={() => setPremioActual(null)}>
-        <View style={s.modalBackdrop}><View style={[s.modalCard, { borderColor: lote.color, backgroundColor: lote.claro }]}>
-          <Text style={s.modalEyebrow}>¡TE TOCÓ!</Text>
+      <RecompensaOverlay visible={Boolean(premioActual)} onClose={() => setPremioActual(null)} encabezado="¡TE TOCÓ!" mensaje="La recompensa ya está guardada en tu cuenta.">
           {premioActual?.imagen
             ? <Image source={premioActual.imagen} style={s.modalImage} contentFit="contain" />
             : premioActual?.tipo === 'cartasAnimalitos'
@@ -326,16 +341,16 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
                 : <Text style={s.modalEmoji}>{premioActual?.iconoTexto}</Text>}
           <Text style={s.modalTitle}>{premioActual?.nombre}</Text>
           {premioActual?.cantidad != null && <Text style={s.modalCantidad}>x{premioActual.cantidad}</Text>}
-          <Text style={s.modalText}>La recompensa ya está guardada en tu cuenta.</Text>
-          <TouchableOpacity style={s.modalButton} onPress={() => setPremioActual(null)}><Text style={s.modalButtonText}>CONTINUAR</Text></TouchableOpacity>
-        </View></View>
-      </Modal>
+      </RecompensaOverlay>
     </View>
   );
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden' },
+  loteSwitcher: { position: 'absolute', top: '3.5%', left: '8%', width: '39%', height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, zIndex: 8 },
+  loteArrow: { width: 25, height: 25, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: 'rgba(255,248,211,0.55)', borderWidth: 1, borderColor: 'rgba(125,75,30,0.32)' },
+  loteSwitcherText: { minWidth: 125, textAlign: 'center', fontSize: 8, fontWeight: '900', letterSpacing: 1.4 },
   radialA: { position: 'absolute', left: '21%', top: '-35%', width: '58%', aspectRatio: 1, borderRadius: 999, backgroundColor: 'rgba(255,255,224,0.32)' },
   radialB: { position: 'absolute', left: '27%', top: '-22%', width: '46%', aspectRatio: 1, borderRadius: 999, borderWidth: 2, borderColor: 'rgba(255,250,202,0.34)' },
   radialC: { position: 'absolute', right: '-13%', bottom: '-62%', width: '58%', aspectRatio: 1, borderRadius: 999, backgroundColor: 'rgba(101,48,15,0.12)' },

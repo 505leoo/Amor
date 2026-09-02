@@ -21,7 +21,7 @@ const PREMIOS = [
   { id: 'cartas_5', tipo: 'cartasAnimalitos', cantidad: 5, label: 'x5', icono: 'style', color: '#2d6547', nivel: 'normal', peso: 6 },
   { id: 'diamantes_10', tipo: 'diamantes', cantidad: 10, label: 'x10', icono: 'diamond', color: '#c18b26', nivel: 'epico', peso: 8 },
   { id: 'diamantes_25', tipo: 'diamantes', cantidad: 25, label: 'x25', icono: 'diamond', color: '#e0ae43', nivel: 'epico', peso: 4 },
-  { id: 'sorpresa_coleccion', tipo: 'coleccion', cantidad: 1, label: '?', icono: 'help-outline', color: '#9d63c0', nivel: 'epico', peso: 0.2 },
+  { id: 'sorpresa_coleccion', tipo: 'coleccion', cantidad: 1, label: '?', icono: 'help-outline', color: '#9d63c0', nivel: 'epico', peso: 4.1667 },
 ];
 
 const resolverSorpresaColeccion = recompensa => {

@@ -283,7 +283,7 @@ const ejecutarGiroRuletaDiaria = async (uid) => {
     {id: "cartas_5", tipo: "cartasAnimalitos", cantidad: 5, peso: 6},
     {id: "diamantes_10", tipo: "diamantes", cantidad: 10, peso: 8},
     {id: "diamantes_25", tipo: "diamantes", cantidad: 25, peso: 4},
-    {id: "sorpresa_coleccion", tipo: "coleccion", cantidad: 1, peso: 0.2},
+    {id: "sorpresa_coleccion", tipo: "coleccion", cantidad: 1, peso: 4.1667},
   ];
   const total = premios.reduce((sum, item) => sum + item.peso, 0);
   let roll = Math.random() * total;
