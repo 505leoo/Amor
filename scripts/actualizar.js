@@ -29,7 +29,23 @@ function bumpVersion(version) {
   return [major, minor, patch].join('.');
 }
 
-function run() {
+async function notificarActualizacion(version) {
+  const admin = require('../functions/node_modules/firebase-admin');
+  if (!admin.apps.length) admin.initializeApp({ projectId: 'amor-9df0d' });
+  const ref = admin.firestore().collection('notificaciones').doc('notificacion_1_actualizacion');
+  await ref.set({
+    nombre: 'Notificación 1',
+    titulo: 'Una nueva actualización llegó a Amor',
+    descripcion: `La versión ${version} ya está disponible con nuevos detalles, mejoras y pequeñas sorpresas.`,
+    enviar: 'si',
+    vibrar: true,
+    version,
+    solicitadaEn: admin.firestore.FieldValue.serverTimestamp(),
+    actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+}
+
+async function run() {
   try {
     // stage all changes
     execSync('git add .', { stdio: 'inherit' });
@@ -130,6 +146,19 @@ function run() {
       }
     } else {
       console.log('Skipping eas update (--no-publish)');
+    }
+
+    const noNotify = process.argv.includes('--no-notify');
+    if (!noPublish && !noNotify) {
+      try {
+        console.log(`Sending update notification for ${newVersion}...`);
+        await notificarActualizacion(newVersion);
+        console.log('Update notification queued successfully.');
+      } catch (notificationError) {
+        console.error('Update published, but the notification could not be queued:', notificationError.message);
+      }
+    } else if (noNotify) {
+      console.log('Skipping update notification (--no-notify)');
     }
 
   } catch (err) {
