@@ -8,7 +8,7 @@ import { auth, db } from './firebaseConfig';
 import TabButtons from './components/TabButtons';
 import RecompensaOverlay from './components/RecompensaOverlay';
 
-const ICONO_ARDILLA = require('./assets/inicio/iconos/icono-ardilla-bellota.png');
+const ICONO_ARDILLA = require('./assets/inicio/iconos/icono-ardilla-bellota-v2.png');
 const ICONO_AJOLOTE = require('./assets/inicio/iconos/icono-ajolote-caramelo.png');
 const AJOLOTE_BASE = require('./assets/temporadas/libro/Temporada2/Animales/Ajolote/ajolote1.png');
 const AJOLOTE_TRAJE_1 = require('./assets/temporadas/libro/Temporada2/Animales/Ajolote/skins/ajolotet1.png');
@@ -72,6 +72,12 @@ const LOTES = {
     ],
   },
 };
+
+const IMAGENES_LOTES = Array.from(new Set(Object.values(LOTES).flatMap(lote => [
+  lote.personaje,
+  lote.icono,
+  ...lote.premios.map(premio => premio.imagen).filter(Boolean),
+])));
 
 const COSTO_GIRO = 50;
 const GIROS_GRATIS = 1;
@@ -153,8 +159,14 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
   const brilloTitulo = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (LOTES[animalId] && animalId !== loteId) setLoteId(animalId);
-  }, [animalId, loteId]);
+    IMAGENES_LOTES.forEach(source => {
+      Image.prefetch(source, { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+    });
+  }, []);
+
+  useEffect(() => {
+    if (LOTES[animalId]) setLoteId(animalId);
+  }, [animalId]);
 
   useEffect(() => {
     const animacion = Animated.loop(Animated.sequence([
@@ -169,6 +181,7 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
   useEffect(() => {
     if (!uid) return undefined;
     setEstadoCargado(false);
+    setEstado({ girosGratisUsados: 0, girosTotales: 0, premiosUnicos: {} });
     const unsubUsuario = onSnapshot(doc(db, 'usuarios', uid), snap => {
       const data = snap.data() || {};
       setUsuario({
@@ -191,7 +204,6 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
   const obtenidos = estado.premiosUnicos || {};
   const loteCompleto = lote.premios.every(item => Boolean(obtenidos[item.id]));
   const puedeGirar = estadoCargado && !saliendo && !loteCompleto && (gratisRestantes > 0 || usuario.diamantes >= costoGiro);
-  const premioSeleccionadoId = premioActual?.id;
   const premios = useMemo(() => lote.premios, [lote]);
   const premioPrincipal = premios.find(item => item.id === lote.premioPrincipalId) || premios[premios.length - 1];
   const ordenCuadricula = lote.ordenCuadricula || premios.filter(item => item.id !== premioPrincipal.id).map(item => item.id);
@@ -200,7 +212,7 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
   const compensarBrilloTitulo = brilloTitulo.interpolate({ inputRange: [0, 1], outputRange: [65, -250] });
   const cambiarLote = direccion => {
     const ids = Object.keys(LOTES);
-    setLoteId(ids[(ids.indexOf(loteId) + direccion + ids.length) % ids.length]);
+    setLoteId(actual => ids[(ids.indexOf(actual) + direccion + ids.length) % ids.length]);
     setPremioActual(null);
   };
 
@@ -289,9 +301,9 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
       <TabButtons onExit={salir} userMoney={usuario.dinero} chicles={usuario.cartasAnimalitos} chicleIcono={<Text style={s.universalMini}>✦</Text>} customAddButton={<View />} />
 
       <View style={s.loteSwitcher}>
-        <TouchableOpacity onPress={() => cambiarLote(-1)} style={s.loteArrow} accessibilityLabel="Lote anterior"><MaterialIcons name="chevron-left" size={20} color={lote.oscuro} /></TouchableOpacity>
+        <TouchableOpacity onPress={() => cambiarLote(-1)} disabled={girando || saliendo} style={[s.loteArrow, (girando || saliendo) && s.loteArrowDisabled]} accessibilityLabel="Lote anterior"><MaterialIcons name="chevron-left" size={20} color={lote.oscuro} /></TouchableOpacity>
         <Text style={[s.loteSwitcherText, { color: lote.oscuro }]}>{lote.nombre.toUpperCase()}</Text>
-        <TouchableOpacity onPress={() => cambiarLote(1)} style={s.loteArrow} accessibilityLabel="Siguiente lote"><MaterialIcons name="chevron-right" size={20} color={lote.oscuro} /></TouchableOpacity>
+        <TouchableOpacity onPress={() => cambiarLote(1)} disabled={girando || saliendo} style={[s.loteArrow, (girando || saliendo) && s.loteArrowDisabled]} accessibilityLabel="Siguiente lote"><MaterialIcons name="chevron-right" size={20} color={lote.oscuro} /></TouchableOpacity>
       </View>
 
       <View style={s.leftPanel}>
@@ -348,8 +360,9 @@ export default function Lotes({ navigation, animalId = 'ardilla' }) {
 
 const s = StyleSheet.create({
   root: { flex: 1, overflow: 'hidden' },
-  loteSwitcher: { position: 'absolute', top: '3.5%', left: '8%', width: '39%', height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, zIndex: 8 },
+  loteSwitcher: { position: 'absolute', top: '27%', left: '8%', width: '39%', height: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, zIndex: 8, elevation: 8 },
   loteArrow: { width: 25, height: 25, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: 'rgba(255,248,211,0.55)', borderWidth: 1, borderColor: 'rgba(125,75,30,0.32)' },
+  loteArrowDisabled: { opacity: 0.45 },
   loteSwitcherText: { minWidth: 125, textAlign: 'center', fontSize: 8, fontWeight: '900', letterSpacing: 1.4 },
   radialA: { position: 'absolute', left: '21%', top: '-35%', width: '58%', aspectRatio: 1, borderRadius: 999, backgroundColor: 'rgba(255,255,224,0.32)' },
   radialB: { position: 'absolute', left: '27%', top: '-22%', width: '46%', aspectRatio: 1, borderRadius: 999, borderWidth: 2, borderColor: 'rgba(255,250,202,0.34)' },

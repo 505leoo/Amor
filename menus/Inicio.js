@@ -10,6 +10,7 @@ import Pareja from '../components/Pareja';
 import PanelPerfil from '../components/PanelPerfil';
 import RecompensaOverlay from '../components/RecompensaOverlay';
 import RuletaDiariaModal from '../components/RuletaDiariaModal';
+import PreguntonasModal from '../components/PreguntonasModal';
 import { getRecompensaDiariaDelDia, useRecompensaDiaria } from '../hooks/useRecompensaDiaria';
 import { auth, db } from '../firebaseConfig';
 import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
@@ -33,9 +34,6 @@ const NOOP = () => {};
 const INICIO_BACKGROUND = require('../assets/inicio/inicio.png');
 const INICIO_BACKGROUND_T2 = require('../assets/inicio/iniciot2.png');
 const HALCON_IMAGE = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
-const ICONO_ARDILLA_LOTE = require('../assets/inicio/iconos/icono-ardilla-bellota.png');
-const AJOLOTE_LOTE = require('../assets/inicio/iconos/icono-ajolote-caramelo.png');
-const ERIZO_LOTE = require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.png');
 const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
 const JUGAR_IMAGE = require('../assets/inicio/jugar.png');
 const selectEstadoInicio = data => ({
@@ -78,12 +76,18 @@ const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
 });
 
 const IconoRuleta = () => <Svg width="30" height="30" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="17" fill="#9c6ac1" stroke="#633d82" strokeWidth="2" /><Path d="M20 20 L20 4 A16 16 0 0 1 34 12 Z" fill="#ffd879" /><Path d="M20 20 L34 12 A16 16 0 0 1 34 28 Z" fill="#ee8aaa" /><Path d="M20 20 L34 28 A16 16 0 0 1 20 36 Z" fill="#7cbae3" /><Path d="M20 20 L20 36 A16 16 0 0 1 6 28 Z" fill="#8dcf9a" /><Path d="M20 20 L6 28 A16 16 0 0 1 6 12 Z" fill="#f3ad70" /><Path d="M20 20 L6 12 A16 16 0 0 1 20 4 Z" fill="#ee8aaa" /><Circle cx="20" cy="20" r="4" fill="#fff4d6" stroke="#633d82" strokeWidth="1.5" /></Svg>;
-const IconoLoteAjolote = () => <View style={styles.iconoAjoloteWrap}><Svg width="35" height="35" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="18" fill="#f3a0c4" stroke="#8b4e81" strokeWidth="2" /><Circle cx="20" cy="20" r="14.8" fill="#ffe5f0" stroke="#d36f9e" strokeWidth="1.2" /><Path d="M7 10 l2 4 4 2-4 2-2 4-2-4-4-2 4-2z M33 23 l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" fill="#fff0a4" /></Svg><Image source={AJOLOTE_LOTE} style={styles.iconoAjoloteImagen} contentFit="contain" cachePolicy="memory-disk" /></View>;
-const IconoLoteErizo = () => <View style={styles.iconoErizoWrap}><View style={styles.iconoErizoAura} /><Image source={ERIZO_LOTE} style={styles.iconoErizoImagen} contentFit="cover" cachePolicy="memory-disk" /></View>;
+const IconoPreguntonas = () => <Svg width="34" height="34" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="18" fill="#f3cfdf" stroke="#9b5874" strokeWidth="2" /><Path d="M7 12c0-3 2.5-5 5.5-5H21c3 0 5.5 2 5.5 5v6c0 3-2.5 5-5.5 5h-5l-4.5 4v-4c-2.6-.4-4.5-2.3-4.5-5z" fill="#fff6e8" stroke="#9b5874" strokeWidth="1.5" /><Path d="M20 20c0-3 2.5-5 5.5-5H29c2.2 0 4 1.8 4 4v5c0 2.2-1.8 4-4 4h-1v4l-4-4h-1.5c-1.4 0-2.5-1.1-2.5-2.5z" fill="#9c82c5" stroke="#654b87" strokeWidth="1.5" /><Path d="M13.5 12.5c.4-1.4 3.5-1.5 4.1.2.8 2.3-2.1 2.5-2.1 4" fill="none" stroke="#c66487" strokeWidth="2" strokeLinecap="round" /><Circle cx="15.5" cy="19.5" r="1" fill="#c66487" /><Path d="M24 21c1.4-1.9 3.7-1.6 4.5 0 1.1 2.1-1.3 3.7-2.3 4.4-1-.7-3.3-2.3-2.2-4.4z" fill="#ffe7a8" /></Svg>;
 const IconoRegalo = () => <Svg width="31" height="31" viewBox="0 0 40 40"><Rect x="7" y="16" width="26" height="18" rx="3" fill="#ef8ba6" stroke="#a94667" strokeWidth="2" /><Rect x="5" y="12" width="30" height="8" rx="3" fill="#f6a7ba" stroke="#a94667" strokeWidth="2" /><Path d="M18 12 C10 11 10 4 15 5 C19 6 20 12 20 12 M22 12 C30 11 30 4 25 5 C21 6 20 12 20 12" fill="#ffd58b" stroke="#a94667" strokeWidth="1.7" /><Path d="M18 13 H22 V34 H18Z" fill="#ffd58b" /><Circle cx="13" cy="24" r="1.5" fill="#fff0f4" opacity="0.9" /></Svg>;
-const IconoLotes = () => <View style={styles.iconoLotesWrap}><Svg width="35" height="35" viewBox="0 0 40 40"><Circle cx="20" cy="20" r="18" fill="#f7cb68" stroke="#9c5b20" strokeWidth="2" /><Circle cx="20" cy="20" r="14.8" fill="#fff3bd" stroke="#e0a23a" strokeWidth="1.3" /><Path d="M6 10 l2 5 5 2-5 2-2 5-2-5-5-2 5-2z M33 22 l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2-3.2-1.3 3.2-1.3z" fill="#c47a22" /></Svg><Image source={ICONO_ARDILLA_LOTE} style={[styles.iconoLotesAnimal, styles.iconoLotesArdilla]} contentFit="contain" cachePolicy="memory-disk" /><Image source={AJOLOTE_LOTE} style={[styles.iconoLotesAnimal, styles.iconoLotesAjolote]} contentFit="contain" cachePolicy="memory-disk" /><Image source={ERIZO_LOTE} style={[styles.iconoLotesAnimal, styles.iconoLotesErizo]} contentFit="contain" cachePolicy="memory-disk" /></View>;
+const IconoLotes = () => <Svg width="35" height="35" viewBox="0 0 40 40">
+  <Circle cx="20" cy="20" r="18" fill="#f7cb68" stroke="#9c5b20" strokeWidth="2" />
+  <Path d="M9 15 20 10l11 5-11 5z" fill="#ffeaa0" stroke="#9c5b20" strokeWidth="1.6" strokeLinejoin="round" />
+  <Path d="M9 15v12l11 5V20z M31 15v12l-11 5V20z" fill="#e59b39" stroke="#9c5b20" strokeWidth="1.6" strokeLinejoin="round" />
+  <Path d="M20 10v10 M20 20v12" stroke="#fff3bd" strokeWidth="2" />
+  <Path d="M16 12l4 2 4-2" fill="none" stroke="#fff8d2" strokeWidth="1.3" strokeLinecap="round" />
+  <Path d="M6 8l1 2.5L9.5 12 7 13l-1 2.5L5 13l-2.5-1L5 10.5z M33 6l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z" fill="#fff3a1" />
+</Svg>;
 
-const AccesosRegalos = memo(({ onRuleta, onRegaloDiario, onLotes, regaloDisponible, loteDisponible }) => (
+const AccesosRegalos = memo(({ onRuleta, onRegaloDiario, onLotes, onPreguntonas, regaloDisponible, loteDisponible }) => (
   <View style={styles.accesosRegalos}>
     <TouchableOpacity style={styles.accesoRegalo} onPress={onRuleta} activeOpacity={0.78} accessibilityLabel="Abrir ruleta diaria">
       <IconoRuleta />
@@ -95,6 +99,9 @@ const AccesosRegalos = memo(({ onRuleta, onRegaloDiario, onLotes, regaloDisponib
     <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloLotes]} onPress={onLotes} activeOpacity={0.78} accessibilityLabel="Abrir lotes">
       <IconoLotes />
       {loteDisponible && <View style={[styles.accesoRegaloDot, styles.accesoLoteDot]} />}
+    </TouchableOpacity>
+    <TouchableOpacity style={[styles.accesoRegalo, styles.accesoRegaloPreguntonas]} onPress={onPreguntonas} activeOpacity={0.78} accessibilityLabel="Abrir Preguntonas">
+      <IconoPreguntonas />
     </TouchableOpacity>
   </View>
 ));
@@ -652,6 +659,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
   const [regalosAbiertos, setRegalosAbiertos] = useState(false);
   const [ruletaAbierta, setRuletaAbierta] = useState(false);
+  const [preguntonasAbiertas, setPreguntonasAbiertas] = useState(false);
   const [reporteSemanalAbierto, setReporteSemanalAbierto] = useState(Boolean(openReporteSemanal));
   const puedeAbrirColeccion = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
   const { pendientesReclamar } = useMisiones();
@@ -808,7 +816,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
         <MoneyMenu />
         <QuickMenu />
         <SiguientePaso icono={siguientePaso.icono} titulo={siguientePaso.titulo} detalle={siguientePaso.detalle} insignia={siguientePaso.insignia} onPress={siguientePaso.accion} />
-        <AccesosRegalos onRuleta={() => { setRuletaAbierta(true); setOverlayActive(true); }} regaloDisponible={regaloDisponible} loteDisponible={estadoInicio?.diamantes >= 50} onRegaloDiario={() => { setRegalosAbiertos(true); setOverlayActive(true); }} onLotes={() => navigation?.navigate('lotes', { animalId: 'ardilla' })} />
+        <AccesosRegalos onRuleta={() => { setRuletaAbierta(true); setOverlayActive(true); }} regaloDisponible={regaloDisponible} loteDisponible={estadoInicio?.diamantes >= 50} onRegaloDiario={() => { setRegalosAbiertos(true); setOverlayActive(true); }} onLotes={() => navigation?.navigate('lotes', { animalId: 'ardilla' })} onPreguntonas={() => { setPreguntonasAbiertas(true); setOverlayActive(true); }} />
         <Player containerStyle={styles.player} disabled={overlayActive} />
         <TouchableOpacity style={styles.changeButton} onPress={() => navigation?.navigate('animalitos')} activeOpacity={0.78}>
           <MaterialIcons name="swap-horiz" size={20} color="#c58b2d" />
@@ -874,6 +882,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
           </View>
         </Modal>
         <RuletaDiariaModal visible={ruletaAbierta} onClose={() => { setRuletaAbierta(false); setOverlayActive(false); }} />
+        <PreguntonasModal visible={preguntonasAbiertas} parejaUid={estadoInicio?.pareja} nombrePareja={parejaInicio?.nombre || 'Tu pareja'} onClose={() => { setPreguntonasAbiertas(false); setOverlayActive(false); }} />
         <TouchableOpacity style={styles.jugarBtn} activeOpacity={0.82} onPress={() => {
           const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
           navigation?.navigate(isAdmin ? 'juegos' : 'conexiones');
@@ -923,8 +932,8 @@ const styles = StyleSheet.create({
   accesoRegaloErizo: { backgroundColor: '#eee5f8', borderColor: '#76559a' },
   accesoRegaloDiario: { borderColor: '#df90a7', backgroundColor: '#fff0f3' },
   accesoRegaloLotes: { borderColor: '#d19a35', backgroundColor: '#fff1bf' },
+  accesoRegaloPreguntonas: { borderColor: '#bd7f9b', backgroundColor: '#f8e5ee' },
   iconoLotesWrap: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
-  iconoLotesAnimal: { position: 'absolute', width: 17, height: 17, borderRadius: 6, borderWidth: 1, borderColor: '#fff0b8' }, iconoLotesArdilla: { left: 2, top: 3 }, iconoLotesAjolote: { right: 2, top: 3 }, iconoLotesErizo: { left: 9, bottom: 2 },
   iconoAjoloteWrap: { width: 35, height: 35, alignItems: 'center', justifyContent: 'center' },
   iconoAjoloteImagen: { position: 'absolute', width: 25, height: 25, borderRadius: 8 },
   iconoErizoWrap: { width: 35, height: 35, alignItems: 'center', justifyContent: 'center' },

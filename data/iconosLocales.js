@@ -1,5 +1,5 @@
 export const ICONOS_LOCALES = {
-  ardilla_bellota: require('../assets/inicio/iconos/icono-ardilla-bellota.png'),
+  ardilla_bellota: require('../assets/inicio/iconos/icono-ardilla-bellota-v2.png'),
   ajolote_caramelo: require('../assets/inicio/iconos/icono-ajolote-caramelo.png'),
   erizo_dulce_medianoche: require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.png'),
 };

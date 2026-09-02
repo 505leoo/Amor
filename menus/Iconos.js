@@ -27,7 +27,7 @@ const ICONO_ARDILLA = {
   nombre: 'ardilla_bellota',
   url: null,
   local: true,
-  source: require('../assets/inicio/iconos/icono-ardilla-bellota.png'),
+  source: require('../assets/inicio/iconos/icono-ardilla-bellota-v2.png'),
   seccion: 'animales',
   temporada: 't1',
 };

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Image as RNImage, ScrollView, Modal } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Image as RNImage, ScrollView, Modal, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -16,28 +16,31 @@ import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos'
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
 const COSTO_MEJORA = nivel => 120 * nivel;
 const EXP_POR_MEJORA = nivel => 15 + (5 * nivel);
-const proyectarMejoras = ({ nivel, cartasPropias, cartasUniversales }) => {
+const proyectarMejoras = ({ nivel, cartasPropias, cartasUniversales }, dineroDisponible) => {
   let nivelSimulado = Math.max(1, Number(nivel) || 1);
   let propias = Math.max(0, Number(cartasPropias) || 0);
   let universales = Math.max(0, Number(cartasUniversales) || 0);
+  let monedas = Math.max(0, Number(dineroDisponible) || 0);
   let cartasGastadas = 0;
   let monedasGastadas = 0;
   let nivelesPosibles = 0;
   while (nivelesPosibles < 100) {
     const cartasNecesarias = COPIAS_POR_NIVEL(nivelSimulado);
     const monedasNecesarias = COSTO_MEJORA(nivelSimulado);
-    if (propias + universales < cartasNecesarias) break;
+    if (propias + universales < cartasNecesarias || monedas < monedasNecesarias) break;
     const propiasUsadas = Math.min(propias, cartasNecesarias);
     propias -= propiasUsadas;
     universales -= cartasNecesarias - propiasUsadas;
     cartasGastadas += cartasNecesarias;
     monedasGastadas += monedasNecesarias;
+    monedas -= monedasNecesarias;
     nivelSimulado += 1;
     nivelesPosibles += 1;
   }
   return { nivelesPosibles, nivelFinal: nivelSimulado, cartasGastadas, monedasGastadas };
 };
 const CartaUniversalIcon = () => <View style={s.cartaBarra}><Text style={s.cartaBarraMarca}>✦</Text></View>;
+const AnimatedTouchableOpacity = Animated.createAnimatedComponent(TouchableOpacity);
 const RECOMPENSAS_NIVEL = {
   halcon: [
     { nivel: 5, tipo: 'dinero', cantidad: 1000, icono: '🪙', titulo: '1.000 monedas' },
@@ -90,11 +93,28 @@ const Animalitos = ({ navigation, mode }) => {
   const [soloDesbloqueados, setSoloDesbloqueados] = useState(false);
   const [ordenCatalogo, setOrdenCatalogo] = useState('rareza');
   const [recordatorioCerrado, setRecordatorioCerrado] = useState(false);
+  const [llamadaMejoraActiva, setLlamadaMejoraActiva] = useState(false);
 
   const loadingRef = useRef(null);
   const limpiezaArdillaRef = useRef(false);
   const mejoraEnCursoRef = useRef(false);
+  const llamadaMejora = useRef(new Animated.Value(0)).current;
   const transicion = (fn) => loadingRef.current?.fadeIn(() => { fn(); setTimeout(() => loadingRef.current?.fadeOut(), 80); });
+
+  const irAMejorarAhora = animal => {
+    setSeleccionado(animalitosFiltrados.find(item => item.id === animal.id) || animal);
+    setRecordatorioCerrado(true);
+    setLlamadaMejoraActiva(true);
+    llamadaMejora.stopAnimation();
+    llamadaMejora.setValue(0);
+    Animated.sequence([
+      Animated.delay(180),
+      Animated.loop(Animated.sequence([
+        Animated.timing(llamadaMejora, { toValue: 1, duration: 230, useNativeDriver: false }),
+        Animated.timing(llamadaMejora, { toValue: 0, duration: 330, useNativeDriver: false }),
+      ]), { iterations: 3 }),
+    ]).start(() => setLlamadaMejoraActiva(false));
+  };
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
@@ -223,8 +243,8 @@ const Animalitos = ({ navigation, mode }) => {
     .filter(animal => desbloqueados.includes(animal.id) && contenidoDisponible(animal.temporada || 't1', temporadaActual))
     .map(animal => {
       const estado = estadoAnimal(animal.id);
-      const proyeccion = proyectarMejoras(estado);
-      return { animal, estado, ...proyeccion, monedasFaltantes: Math.max(0, proyeccion.monedasGastadas - dinero) };
+      const proyeccion = proyectarMejoras(estado, dinero);
+      return { animal, estado, ...proyeccion };
     })
     .filter(resultado => resultado.nivelesPosibles >= 2)
     .sort((a, b) => b.nivelesPosibles - a.nivelesPosibles || Number(b.animal.id === equipado) - Number(a.animal.id === equipado))[0] || null;
@@ -445,7 +465,7 @@ const Animalitos = ({ navigation, mode }) => {
           <View style={s.botonesFinales}>
             <TouchableOpacity style={s.cartasBtn} onPress={() => navigation?.navigate?.('comerciante')} activeOpacity={0.82}><Text style={s.botonFinalTexto}>▣ CONSEGUIR CARTAS</Text></TouchableOpacity>
             <TouchableOpacity style={[s.usarBtn, (mode === 'skins' ? equipadaSkin : equipado) === animalMostrado.id && s.usarBtnActivo]} onPress={() => handleEquipar(animalMostrado.id)} activeOpacity={0.82}><Text style={s.botonFinalTexto}>{(mode === 'skins' ? equipadaSkin : equipado) === animalMostrado.id ? '✓ USANDO' : 'USAR'}</Text></TouchableOpacity>
-            <TouchableOpacity style={[s.subirBtn, (!puedeMejorar || mejoraEnCurso) && s.subirBtnBloqueado, mejoraPendiente === animalMostrado.id && s.subirBtnConfirmar]} onPress={() => manejarMejora(animalMostrado.id)} disabled={!puedeMejorar || Boolean(mejoraEnCurso)} activeOpacity={puedeMejorar ? 0.82 : 1}><Text style={s.botonFinalTexto}>{mejoraEnCurso === animalMostrado.id ? 'MEJORANDO…' : mejoraPendiente === animalMostrado.id ? `CONFIRMAR -${costoMejora}` : `⬆ SUBIR NIVEL · ${costoMejora}`}</Text></TouchableOpacity>
+            <AnimatedTouchableOpacity style={[s.subirBtn, (!puedeMejorar || mejoraEnCurso) && s.subirBtnBloqueado, mejoraPendiente === animalMostrado.id && s.subirBtnConfirmar, llamadaMejoraActiva && { backgroundColor: llamadaMejora.interpolate({ inputRange: [0, 1], outputRange: ['#4384bd', '#f3a8c3'] }), borderColor: llamadaMejora.interpolate({ inputRange: [0, 1], outputRange: ['#286190', '#d86f9d'] }), transform: [{ scale: llamadaMejora.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] }) }] }]} onPress={() => manejarMejora(animalMostrado.id)} disabled={!puedeMejorar || Boolean(mejoraEnCurso)} activeOpacity={puedeMejorar ? 0.82 : 1}><Text style={s.botonFinalTexto}>{mejoraEnCurso === animalMostrado.id ? 'MEJORANDO…' : mejoraPendiente === animalMostrado.id ? `CONFIRMAR -${costoMejora}` : `⬆ SUBIR NIVEL · ${costoMejora}`}</Text></AnimatedTouchableOpacity>
           </View>
         </View>
         </>}
@@ -469,14 +489,14 @@ const Animalitos = ({ navigation, mode }) => {
             <View style={s.recordatorioContenido}>
               <Text style={s.recordatorioEtiqueta}>TUS CARTAS ESTÁN ESPERANDO</Text>
               <Text style={s.recordatorioTitulo}>¡{recordatorioMejora.animal.nombre} puede crecer!</Text>
-              <Text style={s.recordatorioTexto}>Ya tienes cartas para subirlo <Text style={s.recordatorioDestacado}>{recordatorioMejora.nivelesPosibles} niveles seguidos</Text>. El aviso aparece aunque todavía te falten monedas, para que no sigas acumulando cartas sin usarlas.</Text>
+              <Text style={s.recordatorioTexto}>Tienes las cartas y monedas necesarias para subirlo <Text style={s.recordatorioDestacado}>{recordatorioMejora.nivelesPosibles} niveles seguidos</Text>.</Text>
               <View style={s.recordatorioRecursos}>
                 <View style={s.recordatorioRecurso}><View style={s.recordatorioCartaIcono}><Text style={s.recordatorioCartaMarca}>✦</Text></View><View><Text style={s.recordatorioRecursoValor}>{recordatorioMejora.cartasGastadas}</Text><Text style={s.recordatorioRecursoLabel}>CARTAS PARA 2+ NIVELES</Text></View></View>
                 <View style={s.recordatorioSeparador} />
-                <View style={s.recordatorioRecurso}><Text style={s.recordatorioMoneda}>●</Text><View><Text style={[s.recordatorioRecursoValor, recordatorioMejora.monedasFaltantes > 0 && s.recordatorioRecursoValorFaltante]}>{recordatorioMejora.monedasFaltantes > 0 ? `Faltan ${recordatorioMejora.monedasFaltantes.toLocaleString('es-AR')}` : recordatorioMejora.monedasGastadas.toLocaleString('es-AR')}</Text><Text style={s.recordatorioRecursoLabel}>{recordatorioMejora.monedasFaltantes > 0 ? `MONEDAS · TOTAL ${recordatorioMejora.monedasGastadas.toLocaleString('es-AR')}` : 'MONEDAS NECESARIAS'}</Text></View></View>
+                <View style={s.recordatorioRecurso}><Text style={s.recordatorioMoneda}>●</Text><View><Text style={s.recordatorioRecursoValor}>{recordatorioMejora.monedasGastadas.toLocaleString('es-AR')}</Text><Text style={s.recordatorioRecursoLabel}>MONEDAS NECESARIAS</Text></View></View>
               </View>
-              <Text style={s.recordatorioNota}>{recordatorioMejora.monedasFaltantes > 0 ? `Tus cartas ya están listas. Reúne las ${recordatorioMejora.monedasFaltantes.toLocaleString('es-AR')} monedas que faltan y empieza a mejorar.` : `Usaremos primero las cartas propias de ${recordatorioMejora.animal.nombre}; las universales solo completan lo que falte.`}</Text>
-              <View style={s.recordatorioAcciones}><TouchableOpacity style={s.recordatorioDespues} onPress={() => setRecordatorioCerrado(true)} activeOpacity={0.8}><Text style={s.recordatorioDespuesTexto}>Después</Text></TouchableOpacity><TouchableOpacity style={s.recordatorioIr} onPress={() => { setSeleccionado(animalitosFiltrados.find(animal => animal.id === recordatorioMejora.animal.id) || recordatorioMejora.animal); setRecordatorioCerrado(true); }} activeOpacity={0.84}><MaterialIcons name="pets" size={13} color="#fff8df" /><Text style={s.recordatorioIrTexto}>MEJORAR AHORA</Text></TouchableOpacity></View>
+              <Text style={s.recordatorioNota}>Usaremos primero las cartas propias de {recordatorioMejora.animal.nombre}; las universales solo completan lo que falte.</Text>
+              <View style={s.recordatorioAcciones}><TouchableOpacity style={s.recordatorioDespues} onPress={() => setRecordatorioCerrado(true)} activeOpacity={0.8}><Text style={s.recordatorioDespuesTexto}>Después</Text></TouchableOpacity><TouchableOpacity style={s.recordatorioIr} onPress={() => irAMejorarAhora(recordatorioMejora.animal)} activeOpacity={0.84}><MaterialIcons name="pets" size={13} color="#fff8df" /><Text style={s.recordatorioIrTexto}>MEJORAR AHORA</Text></TouchableOpacity></View>
             </View>
           </View>}
         </View>
