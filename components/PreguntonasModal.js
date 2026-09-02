@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { deleteDoc, doc, onSnapshot, runTransaction } from 'firebase/firestore';
+import { deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 
 const CATEGORIAS = {
@@ -44,7 +44,12 @@ const buscarPregunta = (categoriaId, preguntaId) => {
   return categoria.preguntas.find(item => item.id === preguntaId) || categoria.preguntas[0];
 };
 
-const horaCorta = valor => valor ? new Date(valor).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+const INACTIVIDAD_MAXIMA_MS = 2 * 60 * 60 * 1000;
+const aMillis = valor => valor?.toMillis?.() ?? Math.max(0, Number(valor) || 0);
+const horaCorta = valor => {
+  const millis = aMillis(valor);
+  return millis ? new Date(millis).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '';
+};
 
 export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePareja = 'Tu pareja' }) {
   const uid = auth.currentUser?.uid;
@@ -57,7 +62,7 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
   const [cuenta, setCuenta] = useState(null);
   const [revelado, setRevelado] = useState(false);
   const [ahora, setAhora] = useState(Date.now());
-  const revelacionVista = useRef(null);
+  const [errorSesion, setErrorSesion] = useState('');
   const entrada = useRef(new Animated.Value(0)).current;
 
   const primerUid = participantes[0];
@@ -72,9 +77,20 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
     if (!visible || !sesionRef || !uid || !parejaUid) return undefined;
     let activo = true;
     setCargando(true);
+    setErrorSesion('');
     runTransaction(db, async transaction => {
       const snap = await transaction.get(sesionRef);
-      if (snap.exists()) return;
+      const existente = snap.data() || {};
+      const ultimaActividad = aMillis(existente.actualizadaEn) || aMillis(existente.actualizadaEnMs);
+      const participantesValidos = Array.isArray(existente.participantes)
+        && existente.participantes.length === 2
+        && participantes.every(participante => existente.participantes.includes(participante));
+      const sesionTerminada = snap.exists() && (
+        existente.estado === 'finalizada'
+        || !participantesValidos
+        || (ultimaActividad > 0 && Date.now() - ultimaActividad >= INACTIVIDAD_MAXIMA_MS)
+      );
+      if (snap.exists() && !sesionTerminada) return;
       const categoria = 'amor';
       transaction.set(sesionRef, {
         participantes,
@@ -83,15 +99,22 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
         respuestas: {},
         solicitudCambio: null,
         version: 1,
-        creadaEnMs: Date.now(),
-        actualizadaEnMs: Date.now(),
+        estado: 'activa',
+        creadaEn: serverTimestamp(),
+        actualizadaEn: serverTimestamp(),
       });
-    }).catch(() => {}).finally(() => { if (activo) setCargando(false); });
+    }).catch(error => {
+      if (activo) setErrorSesion(error?.code === 'permission-denied' ? 'Firestore todavía no permite acceder a Preguntonas.' : 'No pudimos preparar la sesión compartida.');
+    }).finally(() => { if (activo) setCargando(false); });
     const unsubscribe = onSnapshot(sesionRef, snap => {
       if (!activo) return;
       setSesion(snap.exists() ? snap.data() : null);
       setCargando(false);
-    }, () => setCargando(false));
+    }, error => {
+      if (!activo) return;
+      setErrorSesion(error?.code === 'permission-denied' ? 'Firestore todavía no permite acceder a Preguntonas.' : 'Se perdió la conexión con la sesión.');
+      setCargando(false);
+    });
     return () => { activo = false; unsubscribe(); };
   }, [parejaUid, participantes, sesionRef, uid, visible]);
 
@@ -108,28 +131,29 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
   }, [entrada, visible]);
 
   useEffect(() => {
-    if (!ambosRespondieron) {
+    const reveladoEnMs = aMillis(sesion?.reveladoEn);
+    if (!ambosRespondieron || !reveladoEnMs) {
       setCuenta(null);
       setRevelado(false);
-      revelacionVista.current = null;
       return undefined;
     }
-    const clave = `${sesion?.version}-${miRespuesta?.respondidoEnMs}-${respuestaPareja?.respondidoEnMs}`;
-    if (revelacionVista.current === clave) return undefined;
-    revelacionVista.current = clave;
-    setCuenta(3);
-    setRevelado(false);
-    let valor = 3;
-    const interval = setInterval(() => {
-      valor -= 1;
-      if (valor <= 0) {
-        clearInterval(interval);
+    const actualizarRevelacion = () => {
+      const transcurrido = Math.max(0, Date.now() - reveladoEnMs);
+      if (transcurrido >= 3000) {
         setCuenta(null);
         setRevelado(true);
-      } else setCuenta(valor);
-    }, 760);
+        return true;
+      }
+      setCuenta(3 - Math.floor(transcurrido / 1000));
+      setRevelado(false);
+      return false;
+    };
+    if (actualizarRevelacion()) return undefined;
+    const interval = setInterval(() => {
+      if (actualizarRevelacion()) clearInterval(interval);
+    }, 150);
     return () => clearInterval(interval);
-  }, [ambosRespondieron, miRespuesta?.respondidoEnMs, respuestaPareja?.respondidoEnMs, sesion?.version]);
+  }, [ambosRespondieron, sesion?.reveladoEn]);
 
   useEffect(() => {
     if (!revelado) return undefined;
@@ -148,13 +172,17 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
         const data = snap.data() || {};
         const actuales = data.respuestas || {};
         if (actuales[uid]) return;
-        const nuevas = { ...actuales, [uid]: { opcion, respondidoEnMs: Date.now() } };
+        const nuevas = { ...actuales, [uid]: { opcion, respondidoEn: serverTimestamp() } };
         transaction.set(sesionRef, {
           respuestas: nuevas,
-          reveladoEnMs: nuevas[parejaUid] ? Date.now() : null,
-          actualizadaEnMs: Date.now(),
+          reveladoEn: nuevas[parejaUid] ? serverTimestamp() : null,
+          actualizadaEn: serverTimestamp(),
         }, { merge: true });
       });
+    } catch (error) {
+      const mensaje = error?.code === 'permission-denied' ? 'Firestore rechazó la respuesta.' : 'No pudimos guardar tu elección.';
+      setErrorSesion(mensaje);
+      global.showToast?.({ type: 'error', text1: mensaje });
     } finally {
       setGuardando(false);
     }
@@ -182,10 +210,11 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
             categoria: solicitud.categoria,
             preguntaId: solicitud.preguntaId,
             respuestas: {},
-            reveladoEnMs: null,
+            reveladoEn: null,
             solicitudCambio: null,
             version: (Number(data.version) || 0) + 1,
-            actualizadaEnMs: Date.now(),
+            estado: 'activa',
+            actualizadaEn: serverTimestamp(),
           }, { merge: true });
           return;
         }
@@ -196,11 +225,15 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
             preguntaId: nueva.id,
             solicitadaPor: uid,
             confirmaciones: { [uid]: true },
-            creadaEnMs: Date.now(),
+            creadaEn: serverTimestamp(),
           },
-          actualizadaEnMs: Date.now(),
+          actualizadaEn: serverTimestamp(),
         }, { merge: true });
       });
+    } catch (error) {
+      const mensaje = error?.code === 'permission-denied' ? 'Firestore rechazó el cambio.' : 'No pudimos proponer otra pregunta.';
+      setErrorSesion(mensaje);
+      global.showToast?.({ type: 'error', text1: mensaje });
     } finally {
       setGuardando(false);
     }
@@ -213,9 +246,10 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
   };
 
   const primeraRespuesta = ambosRespondieron
-    ? (miRespuesta.respondidoEnMs <= respuestaPareja.respondidoEnMs ? uid : parejaUid)
+    ? (aMillis(miRespuesta.respondidoEn) <= aMillis(respuestaPareja.respondidoEn) ? uid : parejaUid)
     : null;
-  const transcurridoTurno = sesion?.reveladoEnMs ? Math.max(0, Math.floor((ahora - sesion.reveladoEnMs) / 1000) - 3) : 0;
+  const reveladoEnMs = aMillis(sesion?.reveladoEn);
+  const transcurridoTurno = reveladoEnMs ? Math.max(0, Math.floor((ahora - reveladoEnMs) / 1000) - 3) : 0;
   const turnoUid = transcurridoTurno < 30 ? primeraRespuesta : transcurridoTurno < 60 ? (primeraRespuesta === uid ? parejaUid : uid) : null;
   const turnoRestante = turnoUid ? 30 - (transcurridoTurno % 30) : 0;
   const solicitud = sesion?.solicitudCambio;
@@ -225,10 +259,7 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
     if (!revelado) return [];
     const mia = miRespuesta?.opcion === opcion;
     const suya = respuestaPareja?.opcion === opcion;
-    if (mia && suya) return [
-      { uid, color: miColor.principal, style: { left: 0, width: '50%' } },
-      { uid: parejaUid, color: colorPareja.principal, style: { right: 0, width: '50%' } },
-    ];
+    if (mia && suya) return participantes.map((participante, index) => ({ uid: participante, color: colores[participante].principal, style: { [index === 0 ? 'left' : 'right']: 0, width: '50%' } }));
     if (mia) return [{ uid, color: miColor.principal, style: { left: 0, width: '100%' } }];
     if (suya) return [{ uid: parejaUid, color: colorPareja.principal, style: { left: 0, width: '100%' } }];
     return [];
@@ -245,7 +276,7 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
           <TouchableOpacity style={s.cerrar} onPress={cerrar}><MaterialIcons name="close" size={17} color="#73516a" /></TouchableOpacity>
         </View>
 
-        {!parejaUid ? <View style={s.vacio}><MaterialIcons name="favorite-border" size={38} color="#d69aae" /><Text style={s.vacioTitulo}>Preguntonas es para dos</Text><Text style={s.vacioTexto}>Conectá una pareja para empezar una sesión compartida.</Text></View> : cargando ? <View style={s.vacio}><Text style={s.cargandoCorazon}>♥</Text><Text style={s.vacioTexto}>Preparando una pregunta para ustedes…</Text></View> : !sesion ? <View style={s.vacio}><MaterialIcons name="door-front" size={34} color="#ae8bb5" /><Text style={s.vacioTitulo}>La sesión terminó</Text><Text style={s.vacioTexto}>Pueden cerrar y volver a entrar cuando quieran jugar otra vez.</Text></View> : <>
+        {!parejaUid ? <View style={s.vacio}><MaterialIcons name="favorite-border" size={38} color="#d69aae" /><Text style={s.vacioTitulo}>Preguntonas es para dos</Text><Text style={s.vacioTexto}>Conectá una pareja para empezar una sesión compartida.</Text></View> : cargando ? <View style={s.vacio}><Text style={s.cargandoCorazon}>♥</Text><Text style={s.vacioTexto}>Preparando una pregunta para ustedes…</Text></View> : errorSesion ? <View style={s.vacio}><MaterialIcons name="cloud-off" size={34} color="#bd7891" /><Text style={s.vacioTitulo}>No pudimos conectar</Text><Text style={s.vacioTexto}>{errorSesion}</Text></View> : !sesion ? <View style={s.vacio}><MaterialIcons name="door-front" size={34} color="#ae8bb5" /><Text style={s.vacioTitulo}>La sesión terminó</Text><Text style={s.vacioTexto}>Pueden cerrar y volver a entrar cuando quieran jugar otra vez.</Text></View> : <>
           <View style={s.categorias}>{Object.entries(CATEGORIAS).map(([id, categoria]) => {
             const activa = sesion.categoria === id;
             return <TouchableOpacity key={id} onPress={() => !activa && solicitarCambio(id)} disabled={guardando || Boolean(solicitud)} style={[s.categoria, activa && { backgroundColor: categoria.color, borderColor: categoria.color }]} activeOpacity={0.8}><MaterialIcons name={categoria.icono} size={10} color={activa ? '#fff' : categoria.color} /><Text style={[s.categoriaTexto, activa && s.categoriaTextoActiva]}>{categoria.nombre}</Text></TouchableOpacity>;
@@ -268,8 +299,8 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
 
           <View style={s.estadoFila}>
             <View style={s.estadosPareja}>
-              <View style={s.estadoPersona}><View style={[s.estadoPunto, { backgroundColor: miColor.principal }]} /><Text style={s.estadoTexto}>{miRespuesta ? `Elegiste · ${horaCorta(miRespuesta.respondidoEnMs)}` : 'Todavía no elegiste'}</Text></View>
-              <View style={s.estadoPersona}><View style={[s.estadoPunto, { backgroundColor: colorPareja.principal }]} /><Text style={s.estadoTexto}>{respuestaPareja ? `${nombrePareja} respondió · ${horaCorta(respuestaPareja.respondidoEnMs)}` : `Esperando a ${nombrePareja}`}</Text></View>
+              <View style={s.estadoPersona}><View style={[s.estadoPunto, { backgroundColor: miColor.principal }]} /><Text style={s.estadoTexto}>{miRespuesta ? `Elegiste · ${horaCorta(miRespuesta.respondidoEn)}` : 'Todavía no elegiste'}</Text></View>
+              <View style={s.estadoPersona}><View style={[s.estadoPunto, { backgroundColor: colorPareja.principal }]} /><Text style={s.estadoTexto}>{respuestaPareja ? `${nombrePareja} respondió · ${horaCorta(respuestaPareja.respondidoEn)}` : `Esperando a ${nombrePareja}`}</Text></View>
             </View>
             <TouchableOpacity style={[s.cambiar, solicitud && s.cambiarPendiente]} onPress={() => solicitarCambio(solicitud?.categoria || sesion.categoria)} disabled={guardando || yoConfirmeCambio} activeOpacity={0.82}><MaterialIcons name={solicitud && !yoConfirmeCambio ? 'how-to-reg' : 'shuffle'} size={12} color="#fff9ed" /><Text style={s.cambiarTexto}>{solicitud ? (yoConfirmeCambio ? 'ESPERANDO AL OTRO' : 'CONFIRMAR CAMBIO') : 'CAMBIAR PREGUNTA'}</Text></TouchableOpacity>
           </View>
