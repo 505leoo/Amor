@@ -227,7 +227,7 @@ const legacyBadgeTargets = legacyMap => {
   return [...targets];
 };
 
-const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained, requirement, tierName, targetLevel = 0, earnedReason, expanded, onExpandedChange }) => {
+const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained, requirement, tierName, targetLevel = 0, earnedReason, expanded, onExpandedChange, onArrange }) => {
   const rotation = useRef(new Animated.Value(0)).current;
   const animating = useRef(false);
   const desiredBack = useRef(Boolean(expanded));
@@ -277,7 +277,7 @@ const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained
         </LinearGradient>
         </TouchableOpacity>
         {unlocked && <TouchableOpacity style={[styles.badgeQuestion, showRequirement && styles.badgeQuestionActive]} onPress={() => setShowRequirement(value => !value)} activeOpacity={0.75}><Text style={styles.badgeQuestionText}>?</Text></TouchableOpacity>}
-      </View> : <TouchableOpacity style={styles.badgeFront} onPress={toggle} activeOpacity={0.9}>
+      </View> : <TouchableOpacity style={styles.badgeFront} onPress={toggle} onLongPress={onArrange} activeOpacity={0.9}>
         <View style={[styles.badgeWing, styles.badgeWingLeft, legendary && styles.badgeWingLegend, !unlocked && styles.badgeLocked]} />
         <View style={[styles.badgeWing, styles.badgeWingRight, legendary && styles.badgeWingLegend, !unlocked && styles.badgeLocked]} />
         <LinearGradient colors={unlocked ? colors : ['#b9ad9d', '#80766c', '#5e5751']} style={[styles.badgeMedal, legendary && unlocked && styles.badgeMedalLegend]}>
@@ -601,6 +601,9 @@ const Perfil = ({ navigation, route }) => {
   const [animalStates, setAnimalStates] = useState({});
   const [badgeRecords, setBadgeRecords] = useState({});
   const [openBadgeId, setOpenBadgeId] = useState(null);
+  const [chapasExpandidas, setChapasExpandidas] = useState(false);
+  const [chapaSeleccionada, setChapaSeleccionada] = useState(null);
+  const [chapasOrden, setChapasOrden] = useState([]);
   const [busyFrameId, setBusyFrameId] = useState(null);
   const [rinconSaving, setRinconSaving] = useState(false);
   const [rinconUnlocking, setRinconUnlocking] = useState(null);
@@ -619,6 +622,9 @@ const Perfil = ({ navigation, route }) => {
     setUserData(null);
     setBadgeRecords({});
     setOpenBadgeId(null);
+    setChapasExpandidas(false);
+    setChapaSeleccionada(null);
+    setChapasOrden([]);
     setBusyFrameId(null);
     setRinconSaving(false);
     setRinconUnlocking(null);
@@ -630,6 +636,7 @@ const Perfil = ({ navigation, route }) => {
     legacyCleanupRef.current = false;
     if (!targetUid) return undefined;
     let conexiones = {};
+    let memoriaSabores = {};
     const unsubscribeUser = onSnapshot(doc(db, 'usuarios', targetUid), snap => {
       const raw = snap.exists() ? (snap.data() || {}) : {};
       setUserData({
@@ -667,6 +674,10 @@ const Perfil = ({ navigation, route }) => {
       conexiones = snap.data() || {};
       setUserData(previous => previous ? { ...previous, juegos: { ...(previous.juegos || {}), conexiones: { ...(previous.juegos?.conexiones || {}), ...conexiones } } } : previous);
     }, () => {});
+    const unsubscribeMemoria = onSnapshot(doc(db, 'usuarios', targetUid, 'juegos', 'memoriaSabores'), snap => {
+      memoriaSabores = snap.exists() ? (snap.data() || {}) : {};
+      setUserData(previous => previous ? { ...previous, juegos: { ...(previous.juegos || {}), memoriaSabores } } : previous);
+    }, () => {});
     const unsubscribeAnimals = onSnapshot(collection(db, 'usuarios', targetUid, 'animalitos'), snap => {
       const next = {};
       snap.docs.forEach(animalDoc => { next[animalDoc.id] = animalDoc.data() || {}; });
@@ -677,7 +688,7 @@ const Perfil = ({ navigation, route }) => {
       snap.docs.forEach(badgeDoc => { next[badgeDoc.id] = { id: badgeDoc.id, ...(badgeDoc.data() || {}) }; });
       setBadgeRecords(next);
     }, () => setBadgeRecords({}));
-    return () => { unsubscribeUser(); unsubscribeGame(); unsubscribeAnimals(); unsubscribeBadges(); };
+    return () => { unsubscribeUser(); unsubscribeGame(); unsubscribeMemoria(); unsubscribeAnimals(); unsubscribeBadges(); };
   }, [externalUid, soloLectura]);
 
   useEffect(() => {
@@ -743,6 +754,12 @@ const Perfil = ({ navigation, route }) => {
         { value: 100, requisito: 'Alcanza el nivel 100 en Hilito.', motivo: 'Se convirtió en leyenda al alcanzar el nivel 100 en Hilito.' },
         { value: 200, requisito: 'Alcanza el nivel 200 en Hilito.', motivo: 'Superó la leyenda y alcanzó el nivel 200 en Hilito.' },
       ] }),
+      evolvingBadge({ id: 'maestria_dulces', icon: 'psychology', title: 'Maestría en Dulces', value: Math.max(0, Number(userData?.juegos?.memoriaSabores?.nivel || 1) - 1), unit: 'niveles', thresholds: [
+        { value: 10, requisito: 'Alcanza el nivel 10 en Memoria de Sabores.', motivo: 'Descubrió los sabores hasta el nivel 10.' },
+        { value: 50, requisito: 'Alcanza el nivel 50 en Memoria de Sabores.', motivo: 'Demostró una memoria dulce excepcional.' },
+        { value: 100, requisito: 'Alcanza el nivel 100 en Memoria de Sabores.', motivo: 'Se convirtió en una maestra o maestro de los sabores.' },
+        { value: 200, requisito: 'Alcanza el nivel 200 en Memoria de Sabores.', motivo: 'Dominó todos los sabores de la temporada.' },
+      ] }),
       evolvingBadge({ id: 'guardian_animalitos', icon: 'pets', title: 'Guardián del bosque', value: ownedAnimals.length, unit: 'Animalitos', thresholds: [
         { value: 1, requisito: 'Desbloquea tu primer Animalito.', motivo: 'Desbloqueó su primer Animalito.' },
         { value: 2, requisito: 'Desbloquea 2 Animalitos diferentes.', motivo: 'Reunió 2 Animalitos diferentes.' },
@@ -756,7 +773,7 @@ const Perfil = ({ navigation, route }) => {
         { value: 12, requisito: 'Consigue 12 iconos o trajes especiales.', motivo: 'Reunió 12 iconos y trajes especiales.' },
       ] }),
     ];
-  }, [accountAge, mastery.nivel, ownedAnimals.length, unlockedStyleCount]);
+  }, [accountAge, mastery.nivel, ownedAnimals.length, unlockedStyleCount, userData?.juegos?.memoriaSabores?.nivel]);
 
   useEffect(() => {
     if (soloLectura || !userData?.uid) return;
@@ -810,6 +827,52 @@ const Perfil = ({ navigation, route }) => {
       legacyCleanupRef.current = false;
     });
   }, [badgeRecords, soloLectura, userData?.chapasPerfil, userData?.uid]);
+
+  useEffect(() => {
+    if (!badgeCatalog.length) return;
+    const storedOrder = Array.isArray(userData?.chapasOrden) ? userData.chapasOrden : [];
+    const defaultOrder = ['antiguedad_amor', 'maestria_hilito', 'guardian_animalitos', 'coleccion_estilo', 'maestria_dulces'];
+    const nextOrder = [...storedOrder.filter(id => badgeCatalog.some(badge => badge.id === id)), ...defaultOrder.filter(id => badgeCatalog.some(badge => badge.id === id) && !storedOrder.includes(id)), ...badgeCatalog.map(badge => badge.id).filter(id => !storedOrder.includes(id) && !defaultOrder.includes(id))];
+    setChapasOrden(previous => previous.length === nextOrder.length && previous.every((id, index) => id === nextOrder[index]) ? previous : nextOrder);
+  }, [badgeCatalog, userData?.chapasOrden]);
+
+  const orderedBadges = useMemo(() => {
+    const byId = new Map(badgeCatalog.map(badge => [badge.id, badge]));
+    return [...chapasOrden.map(id => byId.get(id)).filter(Boolean), ...badgeCatalog.filter(badge => !chapasOrden.includes(badge.id))];
+  }, [badgeCatalog, chapasOrden]);
+
+  const seleccionarChapa = useCallback(id => {
+    if (soloLectura) return;
+    if (!chapaSeleccionada) {
+      setChapaSeleccionada(id);
+      return;
+    }
+    if (chapaSeleccionada === id) {
+      setChapaSeleccionada(null);
+      return;
+    }
+    const from = orderedBadges.findIndex(badge => badge.id === chapaSeleccionada);
+    const to = orderedBadges.findIndex(badge => badge.id === id);
+    if (from < 0 || to < 0 || from >= 4 || to >= 4) {
+      setChapaSeleccionada(id);
+      return;
+    }
+    const nextOrder = [...orderedBadges.map(badge => badge.id)];
+    [nextOrder[from], nextOrder[to]] = [nextOrder[to], nextOrder[from]];
+    setChapasOrden(nextOrder);
+    setChapaSeleccionada(null);
+    if (userData?.uid) updateDoc(doc(db, 'usuarios', userData.uid), { chapasOrden: nextOrder }).catch(() => {});
+  }, [chapaSeleccionada, orderedBadges, soloLectura, userData?.uid]);
+
+  const renderBadge = badge => {
+    const persisted = badgeRecords[badge.id] || legacyBadgeRecord(d.chapasPerfil, badge.id);
+    const persistedLevel = Math.max(0, Number(persisted?.nivel) || 0);
+    const effectiveLevel = Math.max(badge.targetLevel, persistedLevel);
+    const effectiveTier = effectiveLevel > 0 ? BADGE_TIERS[Math.min(effectiveLevel, BADGE_TIERS.length) - 1] : null;
+    const milestone = effectiveLevel > 0 ? badge.thresholds[Math.min(effectiveLevel, badge.thresholds.length) - 1] : null;
+    const obtained = persistedLevel >= effectiveLevel ? persisted : effectiveLevel > 0 ? { nivel: effectiveLevel, rango: effectiveTier?.id, obtenidaEn: milestone?.obtenidaEn || null, motivo: milestone?.motivo } : null;
+    return <View key={badge.id} style={[styles.badgeSlot, chapaSeleccionada === badge.id && styles.badgeSlotSelected]}><ProfileBadge {...badge} onArrange={() => seleccionarChapa(badge.id)} obtained={obtained} earnedReason={milestone?.motivo} expanded={openBadgeId === badge.id} onExpandedChange={open => setOpenBadgeId(open ? badge.id : null)} targetLevel={effectiveLevel} tierName={effectiveTier?.nombre || 'Sin rango'} colors={effectiveTier?.colors || badge.colors} legendary={effectiveLevel >= BADGE_TIERS.length} detail={effectiveTier ? `${effectiveTier.nombre} · ${badge.displayValue || `${badge.value} ${badge.unit}`}` : badge.detail} /></View>;
+  };
 
   if (!userData) return <View style={styles.root}><StatusBar hidden /><RoomBackground /></View>;
 
@@ -974,19 +1037,18 @@ const Perfil = ({ navigation, route }) => {
         </View>
 
         <View style={styles.rightPage}>
-          <View style={styles.sectionHeaderPink}><Text style={styles.sectionHeaderText}>MIS CHAPAS</Text><View style={styles.headerPaw}><MaterialIcons name="pets" size={11} color="#fff1d7" /></View></View>
-          <View style={styles.badgesGrid}>
-            {badgeCatalog.map(badge => {
-              const persisted = badgeRecords[badge.id] || legacyBadgeRecord(d.chapasPerfil, badge.id);
-              const persistedLevel = Math.max(0, Number(persisted?.nivel) || 0);
-              const effectiveLevel = Math.max(badge.targetLevel, persistedLevel);
-              const effectiveTier = effectiveLevel > 0 ? BADGE_TIERS[Math.min(effectiveLevel, BADGE_TIERS.length) - 1] : null;
-              const milestone = effectiveLevel > 0 ? badge.thresholds[Math.min(effectiveLevel, badge.thresholds.length) - 1] : null;
-              const obtained = persistedLevel >= effectiveLevel ? persisted : effectiveLevel > 0 ? { nivel: effectiveLevel, rango: effectiveTier?.id, obtenidaEn: milestone?.obtenidaEn || null, motivo: milestone?.motivo } : null;
-              return <ProfileBadge key={badge.id} {...badge} obtained={obtained} earnedReason={milestone?.motivo} expanded={openBadgeId === badge.id} onExpandedChange={open => setOpenBadgeId(open ? badge.id : null)} targetLevel={effectiveLevel} tierName={effectiveTier?.nombre || 'Sin rango'} colors={effectiveTier?.colors || badge.colors} legendary={effectiveLevel >= BADGE_TIERS.length} detail={effectiveTier ? `${effectiveTier.nombre} · ${badge.displayValue || `${badge.value} ${badge.unit}`}` : badge.detail} />;
-            })}
-          </View>
+          <TouchableOpacity style={styles.sectionHeaderPink} onPress={() => { setChapasExpandidas(value => !value); setChapaSeleccionada(null); }} activeOpacity={0.82}>
+            <Text style={styles.sectionHeaderText}>CHAPAS</Text><View style={styles.headerPaw}><MaterialIcons name="pets" size={11} color="#fff1d7" /></View><View style={styles.chapasArrowTab}><MaterialIcons name={chapasExpandidas ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={20} color="#fff1d7" /></View>
+          </TouchableOpacity>
+          {!chapasExpandidas ? <>
+            <View style={styles.badgesGrid}>{orderedBadges.slice(0, 4).map(renderBadge)}</View>
+            {!soloLectura && <Text style={styles.badgeReorderHint}>{chapaSeleccionada ? 'Tocá otra chapa principal para intercambiarla' : 'Tocá dos chapas principales para cambiar su lugar'}</Text>}
+          </> : <ScrollView style={styles.badgesScroll} contentContainerStyle={styles.badgesScrollContent} showsVerticalScrollIndicator={false}>
+            <Text style={styles.badgesScrollHint}>CHAPAS PRINCIPALES · TOCÁ DOS PARA CAMBIARLAS DE LUGAR</Text>
+            <View style={styles.badgesGridExpanded}>{orderedBadges.map(renderBadge)}</View>
+          </ScrollView>}
 
+          {!chapasExpandidas && <>
           <View style={styles.styleHeader}><MaterialIcons name="brush" size={14} color="#fff4db" /><Text style={styles.styleHeaderText}>MI ESTILO</Text><Text style={styles.styleHint}>Toca una tarjeta para cambiarla</Text></View>
           <View style={styles.styleRow}>
             <TouchableOpacity style={styles.styleCard} onPress={() => !soloLectura && navigation?.navigate?.('iconos')} disabled={soloLectura} activeOpacity={0.82}>
@@ -1010,6 +1072,7 @@ const Perfil = ({ navigation, route }) => {
               <MaterialIcons name="chevron-right" size={17} color="#9b6630" />
             </TouchableOpacity>
           </View>
+          </>}
         </View>
         </>}
       </Animated.View>
@@ -1215,7 +1278,8 @@ const styles = StyleSheet.create({
   statEmoji: { fontSize: 14, lineHeight: 17 },
   bigStatValue: { maxWidth: '94%', color: '#fff8df', fontSize: 9.5, lineHeight: 11, fontWeight: '900', textShadowColor: 'rgba(48,28,72,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   bigStatLabel: { color: '#f3e4ff', fontSize: 5, fontWeight: '900', letterSpacing: 0.25 },
-  sectionHeaderPink: { alignSelf: 'center', minWidth: 140, height: 24, marginBottom: 5, paddingHorizontal: 16, borderRadius: 7, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d7647c', borderWidth: 1, borderColor: '#a9435b', shadowColor: '#8f4353', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 2, elevation: 3 },
+  sectionHeaderPink: { alignSelf: 'center', minWidth: 166, height: 28, marginBottom: 5, paddingLeft: 16, paddingRight: 2, borderRadius: 8, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d7647c', borderWidth: 1, borderColor: '#a9435b', shadowColor: '#8f4353', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 2, elevation: 3 },
+  chapasArrowTab: { width: 27, height: 26, marginLeft: 3, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(126,42,65,0.42)', borderLeftWidth: 1, borderLeftColor: 'rgba(255,241,215,0.38)' },
   headerPaw: { width: 17, height: 17, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(126,42,65,0.35)' },
   sectionHeaderText: { color: '#fff4dc', fontSize: 8, fontWeight: '900', letterSpacing: 0.35 },
   rinconPreview: { flex: 1, minHeight: 82, position: 'relative', overflow: 'hidden', marginTop: 5, marginHorizontal: 1, borderRadius: 11, borderWidth: 1.4, borderColor: '#785435', shadowColor: '#55331f', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.34, shadowRadius: 4, elevation: 5 },
@@ -1245,7 +1309,14 @@ const styles = StyleSheet.create({
   rinconEditChip: { height: 18, marginTop: 1, paddingHorizontal: 7, borderRadius: 9, flexDirection: 'row', gap: 3, alignItems: 'center', backgroundColor: 'rgba(255,240,199,0.92)', borderWidth: 0.8, borderColor: 'rgba(112,72,39,0.55)' },
   rinconEditChipText: { color: '#6b4327', fontSize: 4.8, fontWeight: '900', letterSpacing: 0.35 },
   badgesGrid: { height: 84, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around', borderBottomWidth: 1, borderBottomColor: 'rgba(150,102,60,0.17)' },
-  badgeItem: { width: '24%', height: 82, position: 'relative' },
+  badgesGridExpanded: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-around', paddingBottom: 8 },
+  badgesScroll: { height: 255, borderBottomWidth: 1, borderBottomColor: 'rgba(150,102,60,0.17)' },
+  badgesScrollContent: { paddingTop: 3, paddingBottom: 8 },
+  badgesScrollHint: { color: '#986646', fontSize: 5.5, fontWeight: '900', letterSpacing: 0.45, marginBottom: 3, textAlign: 'center' },
+  badgeReorderHint: { color: '#986646', fontSize: 5.5, fontWeight: '800', marginTop: 2, textAlign: 'center' },
+  badgeSlot: { width: '24%', height: 82, alignItems: 'center' },
+  badgeSlotSelected: { borderRadius: 8, backgroundColor: 'rgba(244,202,107,0.25)', borderWidth: 1, borderColor: '#d99832' },
+  badgeItem: { width: '100%', height: 82, position: 'relative' },
   badgeFace: { ...StyleSheet.absoluteFillObject, alignItems: 'center', backfaceVisibility: 'hidden' },
   badgeFront: { width: '100%', height: '100%', alignItems: 'center' },
   badgeBack: { width: 55, height: 55, position: 'relative', justifyContent: 'flex-start', alignItems: 'center' },

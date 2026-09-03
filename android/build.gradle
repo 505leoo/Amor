@@ -3,6 +3,8 @@
 buildscript {
   repositories {
     google()
+    // Fallback independiente cuando repo.maven.apache.org devuelve 429.
+    maven { url 'https://repo1.maven.org/maven2' }
     mavenCentral()
   }
   dependencies {
@@ -16,6 +18,8 @@ buildscript {
 allprojects {
   repositories {
     google()
+    // Fallback independiente cuando repo.maven.apache.org devuelve 429.
+    maven { url 'https://repo1.maven.org/maven2' }
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
   }
