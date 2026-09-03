@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
-import TabButtons from '../components/TabButtons';
+import RoomBackground from '../components/RoomBackground';
 import { Buffer } from 'buffer';
 
 const BUCKET = 'amor-9df0d.firebasestorage.app';
@@ -467,41 +467,21 @@ const Iconos = ({ navigation }) => {
   return (
     <View style={s.root}>
       <StatusBar hidden />
-      <ExpoImage source={require('../assets/temporadas/neutral.png')} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
-
-      <TabButtons
-        onExit={() => {
-          // Iconos se abre desde Perfil, por lo que debe retirar esta pantalla
-          // del historial. Navegar otra vez a Perfil dejaba Iconos debajo y
-          // provocaba el bucle Perfil -> Iconos -> Perfil -> Iconos.
-          if (!navigation?.goBack?.()) navigation?.navigate?.('perfil');
-        }}
-        customAddButton={
-          <View style={s.topBtns}>
-            {isAdmin && (
-              <TouchableOpacity onPress={toggleGestion} activeOpacity={0.7} style={s.touchable}>
-                <View style={[s.manageBtn, gestion && s.btnActivo]}>
-                  <MaterialIcons name="list" size={20} color="#fff" />
-                </View>
-              </TouchableOpacity>
-            )}
-            {isAdmin && (
-              <TouchableOpacity onPress={handleSubir} activeOpacity={0.7} style={s.touchable} disabled={uploading}>
-                <View style={[s.addBtn, uploading && s.btnDisabled]}>
-                  {uploading
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <MaterialIcons name="add" size={20} color="#fff" />
-                  }
-                </View>
-              </TouchableOpacity>
-            )}
-          </View>
-        }
-      />
+      <RoomBackground />
+      {isAdmin && <View style={s.topBtns}>
+        <TouchableOpacity onPress={toggleGestion} activeOpacity={0.7} style={s.touchable}>
+          <View style={[s.manageBtn, gestion && s.btnActivo]}><MaterialIcons name="list" size={20} color="#fff" /></View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={handleSubir} activeOpacity={0.7} style={s.touchable} disabled={uploading}>
+          <View style={[s.addBtn, uploading && s.btnDisabled]}>{uploading ? <ActivityIndicator size="small" color="#fff" /> : <MaterialIcons name="add" size={20} color="#fff" />}</View>
+        </TouchableOpacity>
+      </View>}
 
       <View style={s.center}>
         <View style={s.catalogPanel}>
-          <View pointerEvents="none" style={s.panelTopShine} />
+          <TouchableOpacity style={s.backButton} onPress={() => { if (navigation?.canGoBack?.()) navigation.goBack(); else navigation?.navigate?.('perfil'); }} activeOpacity={0.78} hitSlop={8}>
+            <MaterialIcons name="arrow-back" size={18} color="#75502f" />
+          </TouchableOpacity>
           <View style={s.catalogHeader}>
             <LinearGradient colors={['#e58a9d', '#b94f69']} style={s.headerIcon}><MaterialIcons name="collections" size={20} color="#fff5dc" /></LinearGradient>
             <View style={s.headerCopy}><Text style={s.headerEyebrow}>PERSONALIZA TU PERFIL</Text><Text style={s.headerTitle}>Mi colección de iconos</Text><Text style={s.headerSubtitle}>Elige uno de tus recuerdos para representarte en Amor.</Text></View>
@@ -542,12 +522,13 @@ const Iconos = ({ navigation }) => {
 
 // ── Estilos pantalla ──────────────────────────────────────────────────────────
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#30251f' },
+  root: { flex: 1, backgroundColor: '#eadbde' },
   backgroundGlow: { position: 'absolute', top: -170, left: '17%', width: 530, height: 310, borderRadius: 270, backgroundColor: 'rgba(255,207,136,0.13)' },
   backgroundPetalOne: { position: 'absolute', left: -42, bottom: -48, width: 150, height: 105, borderRadius: 80, backgroundColor: 'rgba(76,113,74,0.25)', transform: [{ rotate: '25deg' }] },
   backgroundPetalTwo: { position: 'absolute', right: -34, top: 67, width: 120, height: 88, borderRadius: 65, backgroundColor: 'rgba(159,80,92,0.2)', transform: [{ rotate: '-25deg' }] },
-  center: { position: 'absolute', top: 39, left: 52, right: 18, bottom: 8 },
-  catalogPanel: { flex: 1, borderRadius: 16, padding: 10, backgroundColor: '#f8e8c7', borderWidth: 4, borderColor: '#80502f', shadowColor: '#100a07', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.72, shadowRadius: 14, elevation: 20, overflow: 'hidden' },
+  backButton: { position: 'absolute', top: 11, right: 14, zIndex: 1000, elevation: 12, width: 29, height: 29, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0d7a8', borderWidth: 1, borderColor: '#bd8a53' },
+  center: { position: 'absolute', top: 43, left: 13, right: 13, bottom: 9 },
+  catalogPanel: { flex: 1, borderRadius: 16, padding: 10, backgroundColor: 'rgba(255,248,244,0.72)', borderWidth: 1.2, borderColor: 'rgba(173,119,137,0.28)', shadowColor: '#805968', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 8, elevation: 3, overflow: 'hidden' },
   panelTopShine: { position: 'absolute', top: 2, left: 8, right: 8, height: 8, borderTopLeftRadius: 11, borderTopRightRadius: 11, backgroundColor: 'rgba(255,255,255,0.42)' },
   catalogHeader: { height: 49, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 9, gap: 9 },
   headerIcon: { width: 39, height: 39, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1.2, borderColor: '#983f57', shadowColor: '#8a344b', shadowOpacity: 0.3, shadowRadius: 3, elevation: 4 },
@@ -555,7 +536,7 @@ const s = StyleSheet.create({
   headerEyebrow: { color: '#b56d45', fontSize: 5.8, fontWeight: '900', letterSpacing: 0.9 },
   headerTitle: { color: '#513320', fontSize: 14.5, lineHeight: 17, fontWeight: '900' },
   headerSubtitle: { color: '#866247', fontSize: 6.4, fontWeight: '700' },
-  counterPill: { width: 74, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eed8aa', borderWidth: 1, borderColor: '#c79b5e' },
+  counterPill: { width: 68, height: 34, marginRight: 39, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eed8aa', borderWidth: 1, borderColor: '#c79b5e' },
   counterValue: { color: '#684728', fontSize: 11, lineHeight: 12, fontWeight: '900' },
   counterLabel: { color: '#9b6c3d', fontSize: 4.9, fontWeight: '900', letterSpacing: 0.5 },
   headerDivider: { height: 1, marginHorizontal: 8, backgroundColor: 'rgba(143,91,47,0.23)' },
@@ -586,7 +567,7 @@ const s = StyleSheet.create({
   catalogFooter: { height: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
   footerText: { color: '#89674e', fontSize: 5.6, fontWeight: '800' },
   footerDot: { width: 3, height: 3, borderRadius: 2, backgroundColor: '#c18658', marginHorizontal: 4 },
-  topBtns: { flexDirection: 'row', gap: 4, marginRight: 6, marginTop: 4 },
+  topBtns: { position: 'absolute', top: 8, right: 50, zIndex: 1000, flexDirection: 'row', gap: 4 },
   touchable: { pointerEvents: 'auto' },
   addBtn: { width: 34, height: 28, borderRadius: 9, backgroundColor: '#c8667b', borderWidth: 1, borderColor: '#93475a', justifyContent: 'center', alignItems: 'center', elevation: 7 },
   manageBtn: { width: 34, height: 28, borderRadius: 9, backgroundColor: '#8a6370', borderWidth: 1, borderColor: '#674652', justifyContent: 'center', alignItems: 'center', elevation: 7 },

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, Dimensions, TouchableOpacity, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Dimensions, TouchableOpacity, Modal, Animated, ScrollView } from 'react-native';
+import Svg, { Circle, Defs, LinearGradient, Path, Rect, Stop, Text as SvgText } from 'react-native-svg';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { collection, doc, getDocs, onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
@@ -13,9 +14,12 @@ import { contenidoDisponible, numeroTemporada, useTemporadaActual } from './hook
 import { useMisiones } from './MisionesContext';
 import { actualizarPasoTutorial } from './components/Tutorial';
 import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
+import { ALIMENTOS } from './data/alimentos';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const COMERCIO_W = Math.min(SCREEN_W * 0.58, SCREEN_H * 0.45);
+const TIENDA_H = Math.min(SCREEN_H * 0.78, 460);
+const TIENDA_W = TIENDA_H / 1.43;
 const COMERCIO_IMAGE = require('./assets/inicio/comercio.png');
 const CARTAS_POR_ANIMAL = ANIMALITOS.map(animal => ({
   ...animal,
@@ -23,6 +27,55 @@ const CARTAS_POR_ANIMAL = ANIMALITOS.map(animal => ({
   fondo: animal.comercio?.fondo || '#f3e5c8',
   borde: animal.comercio?.borde || animal.colorRareza,
 }));
+
+const TiendaInterior = () => (
+  <Svg style={StyleSheet.absoluteFillObject} width={SCREEN_W} height={SCREEN_H} viewBox="0 0 1600 900" preserveAspectRatio="none">
+    <Defs>
+      <LinearGradient id="tiendaPared" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#d5a66f" /><Stop offset="0.58" stopColor="#f3d79d" /><Stop offset="1" stopColor="#e8c181" /></LinearGradient>
+      <LinearGradient id="cielo" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#6bc6ec" /><Stop offset="1" stopColor="#d8f2f2" /></LinearGradient>
+      <LinearGradient id="madera" x1="0" y1="0" x2="1" y2="1"><Stop offset="0" stopColor="#b96e31" /><Stop offset="0.5" stopColor="#87451f" /><Stop offset="1" stopColor="#5d2e18" /></LinearGradient>
+      <LinearGradient id="maderaClara" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#e4a452" /><Stop offset="1" stopColor="#9a5428" /></LinearGradient>
+      <LinearGradient id="piso" x1="0" y1="0" x2="0" y2="1"><Stop offset="0" stopColor="#b67a47" /><Stop offset="1" stopColor="#80502f" /></LinearGradient>
+    </Defs>
+    <Rect width="1600" height="900" fill="url(#tiendaPared)" />
+    <Path d="M0 110Q380 55 800 92T1600 96V0H0Z" fill="#bb8a5b" opacity=".28" />
+    {[80,260,470,690,920,1140,1360].map((x, i) => <Path key={`ladrillo-${i}`} d={`M${x} ${120 + (i % 3) * 78}h120v46H${x - 24}`} fill="none" stroke="#b78152" strokeWidth="5" opacity=".18" />)}
+
+    <Path d="M116 215Q116 105 226 105Q336 105 336 215V505H116Z" fill="url(#cielo)" stroke="#80502e" strokeWidth="16" />
+    <Path d="M226 112v386M121 265h210M121 382h210" stroke="#9b6536" strokeWidth="12" />
+    <Path d="M126 426q48-75 104-32 51-92 98-13v117H126Z" fill="#91b85d" />
+    <Path d="M132 204q42-48 81 0 43-67 94-5" fill="none" stroke="#fff" strokeWidth="20" strokeLinecap="round" opacity=".85" />
+    <Path d="M1264 202Q1264 112 1354 112Q1444 112 1444 202V316H1264Z" fill="url(#cielo)" stroke="#80502e" strokeWidth="14" />
+    <Path d="M1354 118v192M1269 222h170" stroke="#9b6536" strokeWidth="10" />
+
+    <Path d="M170 82Q800 14 1432 82" fill="none" stroke="#3d3320" strokeWidth="6" />
+    {[214,300,390,485,585,690,800,915,1020,1128,1230,1332,1410].map((x, i) => <Circle key={`guirnalda-${i}`} cx={x} cy={58 + Math.abs(800 - x) * 0.055} r="15" fill={i % 4 === 2 ? '#df816f' : '#ffd66d'} stroke="#a76430" strokeWidth="4" />)}
+
+    <Path d="M350 196Q515 190 638 145Q800 98 958 145Q1080 190 1250 196V232H350Z" fill="#9d5728" stroke="#5e3019" strokeWidth="7" />
+    <Rect x="355" y="222" width="890" height="477" rx="5" fill="url(#madera)" stroke="#582b17" strokeWidth="9" />
+    <Rect x="382" y="250" width="836" height="175" fill="#713719" stroke="#512713" strokeWidth="5" />
+    <Rect x="382" y="458" width="836" height="174" fill="#713719" stroke="#512713" strokeWidth="5" />
+    <Path d="M342 421h916v45H342zM342 625h916v50H342z" fill="url(#maderaClara)" stroke="#653519" strokeWidth="7" />
+    <Path d="M372 430h854M372 634h854" stroke="#f1ba66" strokeWidth="5" opacity=".65" />
+    <Circle cx="800" cy="174" r="49" fill="#e8aa4e" stroke="#663719" strokeWidth="7" />
+    <Circle cx="783" cy="162" r="6" fill="#63371f" /><Circle cx="817" cy="162" r="6" fill="#63371f" /><Path d="M778 187q22 21 44 0" fill="none" stroke="#63371f" strokeWidth="7" strokeLinecap="round" />
+    <Path d="M700 184q-35-45-57-9 21 15 57 9M900 184q35-45 57-9-21 15-57 9" fill="#718b25" stroke="#40591c" strokeWidth="5" />
+
+    <Path d="M300 674h1000v111H300z" fill="url(#maderaClara)" stroke="#653519" strokeWidth="9" />
+    {[390,535,680,825,970,1115].map(x => <Path key={`panel-${x}`} d={`M${x} 690v80`} stroke="#7d421f" strokeWidth="5" opacity=".6" />)}
+    <Rect y="784" width="1600" height="116" fill="url(#piso)" />
+    {[0,170,350,540,740,955,1175,1400].map(x => <Path key={`piso-${x}`} d={`M${x} 784l75 116`} stroke="#633e27" strokeWidth="4" opacity=".45" />)}
+    <Path d="M490 900q-30-112 310-113t310 113" fill="#dc776f" stroke="#a84d50" strokeWidth="8" /><Path d="M555 900q-15-80 245-80t245 80" fill="none" stroke="#f2b26e" strokeWidth="11" />
+
+    <Rect x="1285" y="360" width="210" height="250" rx="10" fill="#6e421f" stroke="#4f2d18" strokeWidth="8" /><Rect x="1302" y="380" width="176" height="205" fill="#263026" stroke="#bc8242" strokeWidth="5" />
+    <TextSvg x="1390" y="438" textAnchor="middle" fill="#f8dda1" fontSize="34" fontWeight="bold">Tienda</TextSvg><TextSvg x="1390" y="500" textAnchor="middle" fill="#efc87d" fontSize="19">Nuevos productos</TextSvg>
+    <Path d="M75 710q-20-162 58-232 14 83 44 117 11-121 86-158 5 106-29 173 73-75 126-31-65 118-207 139Z" fill="#587321" stroke="#354714" strokeWidth="8" /><Rect x="92" y="690" width="170" height="105" rx="32" fill="#bd6955" stroke="#773d32" strokeWidth="7" />
+    <Path d="M1342 735q-20-88 42-126 4 58 25 79 14-72 67-82 0 64-28 96 63-37 91 6-67 62-197 27Z" fill="#688621" stroke="#405615" strokeWidth="7" /><Rect x="1330" y="724" width="180" height="97" fill="#84502c" stroke="#56311c" strokeWidth="8" />
+    <Path d="M1490 430h68v240h-68z" fill="#9b5c32" stroke="#60351f" strokeWidth="6" /><Circle cx="1524" cy="512" r="28" fill="#ffd66d" opacity=".75" />
+  </Svg>
+);
+
+const TextSvg = ({ children, ...props }) => <SvgText {...props}>{children}</SvgText>;
 
 const tiempoRestanteCredito = (vencimientoMs, ahora) => {
   const restante = Number(vencimientoMs) - ahora;
@@ -68,6 +121,7 @@ export default function Comerciante({ navigation, temporada }) {
   const [prestamoSeleccionado, setPrestamoSeleccionado] = useState(null);
   const [confirmarSaldar, setConfirmarSaldar] = useState(false);
   const [recompensa, setRecompensa] = useState(null);
+  const [mostrarCatalogo, setMostrarCatalogo] = useState(false);
   const [animalitosDesbloqueados, setAnimalitosDesbloqueados] = useState([]);
   const [animalitosEstado, setAnimalitosEstado] = useState({});
   const [productosFadeAnim] = useState(new Animated.Value(0));
@@ -132,6 +186,8 @@ export default function Comerciante({ navigation, temporada }) {
         useNativeDriver: true,
       }).start();
     }).catch(() => {});
+    const fallback = setTimeout(() => productosFadeAnim.setValue(1), 450);
+    return () => clearTimeout(fallback);
   }, [productosFadeAnim]);
 
   useEffect(() => onAuthStateChanged(auth, user => {
@@ -196,7 +252,7 @@ export default function Comerciante({ navigation, temporada }) {
   const tutorialCompraActiva = tutorialActivo && tutorialPaso === 3;
   const rotacion = cicloComercio(ahora);
   const comprasRotacion = usuario?.comercio?.compras?.[rotacion.key] || {};
-  const productoComprado = producto => Boolean(comprasRotacion[producto.id]);
+  const productoComprado = producto => producto.tipo !== 'alimento' && Boolean(comprasRotacion[producto.id]);
   const animalEstaDesbloqueado = animal => Boolean(animal) && (animalitosDesbloqueados.includes(animal.id)
     || animalitoEstaDesbloqueado(animal, usuario, animalitosEstado?.[animal.id] || usuario?.animalitos?.[animal.id] || {}));
   const cartasAnimalesDisponibles = CARTAS_POR_ANIMAL
@@ -236,6 +292,7 @@ export default function Comerciante({ navigation, temporada }) {
       imagen: skin.imagen,
     }));
   const productosDisponibles = [
+    ...ALIMENTOS.map(alimento => ({ ...alimento, tipo: 'alimento', cantidadLabel: `x${alimento.cantidad}` })),
     { id: 'cartas_3', temporada: 't1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Cartas universales', cantidad: 3, cantidadLabel: 'x3', precio: 360 },
     ...cartasAnimalesDisponibles,
     { id: 'diamantes_25', temporada: 't1', tipo: 'diamantes', icon: 'diamond', nombre: 'Diamantes', cantidad: 25, cantidadLabel: 'x25', precio: 900 },
@@ -255,7 +312,8 @@ export default function Comerciante({ navigation, temporada }) {
   // Después de comprarlo, el paso avanza y la tienda queda sin compras.
   const productos = tutorialActivo
     ? (tutorialCompraActiva ? [{ ...productosDisponibles.find(producto => producto.id === 'cartas_3'), precio: 120 }] : [])
-    : [...productosDisponibles, ...productosRelleno].slice(0, 6);
+    : productosDisponibles.filter(producto => producto.tipo === 'alimento' || producto.tipo === 'diamantes').slice(0, 14);
+  const productosVisibles = productos.filter(producto => producto.tipo === 'alimento' || producto.tipo === 'diamantes');
 
   const salirComerciante = () => {
     if (saliendoRef.current) return;
@@ -283,9 +341,10 @@ export default function Comerciante({ navigation, temporada }) {
         const precio = vencido ? Math.ceil(producto.precio * 1.2) : producto.precio;
         const compras = comercio.compras || {};
         const comprasActuales = compras[rotacion.key] || {};
-        if (comprasActuales[producto.id]) throw new Error('comprado');
+        if (producto.tipo !== 'alimento' && comprasActuales[producto.id]) throw new Error('comprado');
         if ((data.dinero || 0) < precio) throw new Error('monedas');
         const update = { dinero: data.dinero - precio };
+        if (producto.tipo === 'alimento') update.alimentos = { ...(data.alimentos || {}), [producto.id]: Math.max(0, Number(data.alimentos?.[producto.id]) || 0) + producto.cantidad };
         if (producto.tipo === 'cartasAnimalitos') update.cartasAnimalitos = (data.cartasAnimalitos || 0) + producto.cantidad;
         if (producto.tipo === 'cartasAnimal') {
           const animalData = animalSnap?.exists() ? (animalSnap.data() || {}) : (data.animalitos?.[producto.animalId] || {});
@@ -317,7 +376,9 @@ export default function Comerciante({ navigation, temporada }) {
           if (data.iconosDesbloqueados?.[producto.icono.id] || data.iconoUrl === producto.icono.url) throw new Error('poseido');
           update.iconosDesbloqueados = { ...(data.iconosDesbloqueados || {}), [producto.icono.id]: true };
         }
-        const comprasActualizadas = { ...compras, [rotacion.key]: { ...comprasActuales, [producto.id]: true } };
+        const comprasActualizadas = producto.tipo === 'alimento'
+          ? compras
+          : { ...compras, [rotacion.key]: { ...comprasActuales, [producto.id]: true } };
         transaction.set(ref, update, { merge: true });
         transaction.set(comercioRef, { ...comercio, compras: comprasActualizadas }, { merge: true });
       });
@@ -325,7 +386,6 @@ export default function Comerciante({ navigation, temporada }) {
       actualizarPasoTutorial(uid, 4).catch(() => {});
       global.showToast?.({ text1: `${producto.nombre} añadido`, type: 'success' });
       setProductoSeleccionado(null);
-      setRecompensa(producto);
     } catch (error) {
       global.showToast?.({ text1: error.message === 'monedas' ? 'No tienes suficientes monedas' : 'Ese producto ya no está disponible', type: 'error' });
     } finally {
@@ -336,18 +396,51 @@ export default function Comerciante({ navigation, temporada }) {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <RoomBackground />
-      <TabButtons onExit={salirComerciante} customAddButton={<View />} />
-      <View style={styles.comercioLayout}>
+      <View style={styles.topControls}><TabButtons onExit={salirComerciante} customAddButton={<View />} showResources={false} /></View>
+      <View style={styles.tiendaEscena}>
+        <View style={styles.svgTiendaLayer} pointerEvents="none"><TiendaInterior /></View>
+        <View style={styles.tiendaTitulo}><Text style={styles.tiendaKicker}>DESPENSA DEL BOSQUE</Text><Text style={styles.tiendaNombre}>Mentita & compañía</Text></View>
+        <View style={styles.tiendaMonedas}><Text style={styles.tiendaMonedasIcono}>🪙</Text><Text style={styles.tiendaMonedasTexto}>{monedas}</Text></View>
+        <TouchableOpacity style={styles.catalogoInfo} onPress={() => setMostrarCatalogo(true)} activeOpacity={0.78}><Text style={styles.catalogoInfoTexto}>!</Text></TouchableOpacity>
+        <Text style={styles.tiendaRenueva}>Nuevos productos en {rotacion.texto}</Text>
+        <Animated.View style={[styles.estantesProductos, { opacity: productosFadeAnim }]}>
+          {productosVisibles.map(producto => {
+            const precio = vencido ? Math.ceil(producto.precio * 1.2) : producto.precio;
+            const comprado = productoComprado(producto);
+            const agotado = monedas < precio || comprando || comprado;
+            return <TouchableOpacity key={producto.id} style={[styles.estanteProducto, agotado && styles.estanteProductoAgotado]} onPress={() => comprarProducto(producto)} disabled={agotado} activeOpacity={0.72}>
+              <View style={styles.estanteProductoVista}>
+                {producto.emoji ? <Text style={styles.estanteProductoEmoji}>{producto.emoji}</Text>
+                  : producto.imagen ? <Image source={producto.imagen} style={styles.estanteProductoImagen} contentFit="contain" cachePolicy="memory-disk" />
+                    : <MaterialIcons name={producto.icon || 'redeem'} size={23} color={producto.tipo === 'diamantes' ? '#49b8d2' : '#8b4e2d'} />}
+              </View>
+              <Text style={styles.estanteProductoNombre} numberOfLines={1}>{producto.tipo === 'skin' ? 'Traje' : producto.tipo === 'icono' ? 'Icono' : producto.nombre}</Text>
+              <Text style={styles.estanteProductoCantidad} numberOfLines={1}>{producto.tipo === 'alimento' ? `Compra x${producto.cantidad} · Tenés x${Number(usuario?.alimentos?.[producto.id]) || 0}` : producto.cantidadLabel}</Text>
+              <View style={styles.estanteProductoPrecio}><Text style={styles.estanteProductoPrecioTexto}>{comprado ? '✓' : `🪙 ${precio}`}</Text></View>
+            </TouchableOpacity>;
+          })}
+        </Animated.View>
+      </View>
+      <Modal visible={mostrarCatalogo} transparent animationType="fade" onRequestClose={() => setMostrarCatalogo(false)}>
+        <View style={styles.catalogoFondo}>
+          <TouchableOpacity style={styles.catalogoCerrarFondo} activeOpacity={1} onPress={() => setMostrarCatalogo(false)} />
+          <View style={styles.catalogoTarjeta}>
+            <View style={styles.catalogoCabecera}><View><Text style={styles.catalogoKicker}>SURTIDO COMPLETO</Text><Text style={styles.catalogoTitulo}>Alimentos y diamantes</Text></View><TouchableOpacity style={styles.catalogoCerrar} onPress={() => setMostrarCatalogo(false)}><MaterialIcons name="close" size={17} color="#704126" /></TouchableOpacity></View>
+            <ScrollView contentContainerStyle={styles.catalogoLista} showsVerticalScrollIndicator={false}>
+              {productosDisponibles.filter(producto => producto.tipo === 'alimento' || producto.tipo === 'diamantes').map(producto => {
+                const precio = vencido ? Math.ceil(producto.precio * 1.2) : producto.precio;
+                const comprado = productoComprado(producto);
+                return <View key={`catalogo-${producto.id}`} style={[styles.catalogoProducto, (monedas < precio || comprando || comprado) && styles.catalogoProductoAgotado]}>
+                  <Text style={styles.catalogoProductoIcono}>{producto.emoji || '💎'}</Text><View style={styles.catalogoProductoInfo}><Text style={styles.catalogoProductoNombre}>{producto.nombre}</Text><Text style={styles.catalogoProductoDetalle}>{producto.tipo === 'alimento' ? `+${producto.saciedad} saciedad · ${producto.cantidadLabel}` : producto.cantidadLabel}</Text></View><Text style={styles.catalogoProductoPrecio}>{comprado ? '✓' : `🪙 ${precio}`}</Text>
+                </View>;
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+      {false && <View style={styles.comercioLayout}>
         <View style={styles.comercioLayer} pointerEvents="none">
-          <Image
-            source={COMERCIO_IMAGE}
-            style={styles.comercioImagen}
-            contentFit="contain"
-            cachePolicy="memory-disk"
-            priority="high"
-            transition={0}
-          />
+          <TiendaInterior />
         </View>
         <View style={styles.comercioMenu}>
           {!mostrarPrestamos && <>
@@ -366,9 +459,11 @@ export default function Comerciante({ navigation, temporada }) {
                 const esVisual = producto.tipo === 'skin' || producto.tipo === 'icono';
                 const esCartaAnimal = producto.tipo === 'cartasAnimal';
                 return (
-                  <TouchableOpacity key={producto.id} style={[styles.producto, esCartaAnimal && styles.productoAnimal, esCartaAnimal && { backgroundColor: producto.fondoAnimal, borderColor: producto.bordeAnimal }, (monedas < precio || comprando) && !comprado && styles.productoBloqueado, comprado && styles.productoComprado]} onPress={() => setProductoSeleccionado(producto)} disabled={comprando || comprado} activeOpacity={comprado ? 1 : 0.75}>
-                    <View style={[styles.productoIcono, producto.imagen && styles.productoIconoVisual]}>
-                      {esCartaAnimal
+                  <TouchableOpacity key={producto.id} style={[styles.producto, esCartaAnimal && styles.productoAnimal, esCartaAnimal && { backgroundColor: producto.fondoAnimal, borderColor: producto.bordeAnimal }, (monedas < precio || comprando) && !comprado && styles.productoBloqueado, comprado && styles.productoComprado]} onPress={() => comprarProducto(producto)} disabled={comprando || comprado || monedas < precio} activeOpacity={comprado ? 1 : 0.75}>
+                    <View style={[styles.productoIcono, (producto.imagen || producto.emoji) && styles.productoIconoVisual]}>
+                      {producto.emoji
+                        ? <Text style={styles.productoEmoji}>{producto.emoji}</Text>
+                        : esCartaAnimal
                         ? <View style={[styles.productoSimboloAnimal, { backgroundColor: producto.colorAnimal, borderColor: producto.bordeAnimal }]}><MaterialIcons name="style" size={12} color="#fffbe9" /></View>
                         : producto.imagen
                         ? <View style={[styles.productoMarco, esCartaAnimal && styles.productoMarcoAnimal]}><Image source={producto.imagen} style={styles.productoImagen} contentFit={producto.tipo === 'icono' ? 'cover' : 'contain'} cachePolicy="memory-disk" />{esCartaAnimal && <View style={styles.productoCartaMarca}><Text style={styles.productoCartaMarcaTexto}>▣</Text></View>}</View>
@@ -428,20 +523,23 @@ export default function Comerciante({ navigation, temporada }) {
             </>}
           </View>}
         </View>
-      </View>
+      </View>}
       <Modal visible={Boolean(productoSeleccionado)} transparent animationType="fade" onRequestClose={() => setProductoSeleccionado(null)}>
         <View style={styles.compraFondo}>
           <TouchableOpacity style={styles.compraCerrarFondo} activeOpacity={1} onPress={() => setProductoSeleccionado(null)} />
           {productoSeleccionado && (() => {
             const precio = vencido ? Math.ceil(productoSeleccionado.precio * 1.2) : productoSeleccionado.precio;
-            const descripcion = productoSeleccionado.tipo === 'cartasAnimalitos' ? 'Un paquete de cartas universales que completa las cartas que le falten a cualquier animalito.'
+            const descripcion = productoSeleccionado.tipo === 'alimento' ? productoSeleccionado.descripcion
+              : productoSeleccionado.tipo === 'cartasAnimalitos' ? 'Un paquete de cartas universales que completa las cartas que le falten a cualquier animalito.'
               : productoSeleccionado.tipo === 'cartasAnimal' ? `Cartas propias de ${productoSeleccionado.nombre.replace('Cartas de ', '')}. Se usan primero al mejorar este animalito.`
               : productoSeleccionado.tipo === 'diamantes' ? 'Un paquete de diamantes para conseguir recompensas y objetos especiales.'
               : productoSeleccionado.tipo === 'skin' ? `Un traje exclusivo que podrás equipar a ${productoSeleccionado.animalNombre || 'tu animalito'} desde el vestidor.`
               : 'Un icono nuevo para personalizar tu perfil y hacerlo único.';
             return <View style={styles.compraTarjeta}>
               <View style={styles.compraVista}>
-                {productoSeleccionado.imagen
+                {productoSeleccionado.emoji
+                  ? <Text style={styles.compraEmoji}>{productoSeleccionado.emoji}</Text>
+                  : productoSeleccionado.imagen
                   ? <Image source={productoSeleccionado.imagen} style={styles.compraImagen} contentFit={productoSeleccionado.tipo === 'icono' ? 'cover' : 'contain'} cachePolicy="memory-disk" />
                   : <MaterialIcons name={productoSeleccionado.icon} size={45} color={productoSeleccionado.tipo === 'diamantes' ? '#32b9d5' : '#a56b16'} />}
               </View>
@@ -489,7 +587,9 @@ export default function Comerciante({ navigation, temporada }) {
         </View>
       </Modal>
       <RecompensaOverlay visible={Boolean(recompensa)} onClose={() => setRecompensa(null)}>
-        {recompensa?.imagen
+        {recompensa?.emoji
+          ? <Text style={styles.recompensaEmoji}>{recompensa.emoji}</Text>
+          : recompensa?.imagen
           ? <Image source={recompensa.imagen} style={styles.recompensaImagen} contentFit="contain" />
           : <View style={styles.recompensaIcono}><MaterialIcons name={recompensa?.icon || 'auto-awesome'} size={45} color="#a56b16" /></View>}
         <Text style={styles.recompensaTitulo}>{recompensa?.tipo === 'icono' ? 'Icono especial' : recompensa?.nombre}</Text>
@@ -500,11 +600,49 @@ export default function Comerciante({ navigation, temporada }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  comercioLayout: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 24, transform: [{ translateY: 25 }], zIndex: 100, elevation: 100 },
-  comercioLayer: { alignItems: 'center', justifyContent: 'center', transform: [{ translateY: -10 }] },
+  container: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#eadbde' },
+  backgroundLayer: { ...StyleSheet.absoluteFillObject, zIndex: 0, elevation: 0 },
+  tiendaEscena: { ...StyleSheet.absoluteFillObject, backgroundColor: '#ead5b1', zIndex: 200, elevation: 200 },
+  svgTiendaLayer: { ...StyleSheet.absoluteFillObject, zIndex: 1, elevation: 1 },
+  topControls: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 1000, elevation: 1000 },
+  tiendaTitulo: { position: 'absolute', top: 18, left: 0, right: 0, alignItems: 'center', zIndex: 10, elevation: 10 },
+  tiendaKicker: { color: '#f6e2a8', fontFamily: 'Delius', fontWeight: '900', fontSize: 6, letterSpacing: 1.2, textShadowColor: '#60361f', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
+  tiendaNombre: { color: '#fff7d8', fontFamily: 'Delius', fontWeight: '900', fontSize: 13, textShadowColor: '#60361f', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2 },
+  tiendaMonedas: { position: 'absolute', top: 18, right: 28, minWidth: 54, height: 25, paddingHorizontal: 7, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: 'rgba(95,52,29,0.88)', borderWidth: 1, borderColor: '#f3cd73', borderRadius: 7, zIndex: 10, elevation: 10 },
+  tiendaMonedasIcono: { fontSize: 12 },
+  tiendaMonedasTexto: { color: '#fff5ce', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  tiendaRenueva: { position: 'absolute', top: 42, right: 28, color: '#6f4228', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '900', zIndex: 10 },
+  catalogoInfo: { position: 'absolute', top: 70, left: 28, width: 25, height: 25, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#f4d178', borderWidth: 2, borderColor: '#754127', zIndex: 20, elevation: 20 },
+  catalogoInfoTexto: { color: '#704126', fontFamily: 'Delius', fontSize: 16, fontWeight: '900', lineHeight: 18 },
+  catalogoFondo: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(49,28,17,0.62)' },
+  catalogoCerrarFondo: { ...StyleSheet.absoluteFillObject },
+  catalogoTarjeta: { width: Math.min(SCREEN_W * 0.88, 360), maxHeight: SCREEN_H * 0.78, padding: 14, borderRadius: 18, backgroundColor: '#f5dfaa', borderWidth: 3, borderColor: '#8b5129', shadowColor: '#2b180d', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 22 },
+  catalogoCabecera: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 9, borderBottomWidth: 1, borderBottomColor: '#c08a4c' },
+  catalogoKicker: { color: '#a36a33', fontFamily: 'Delius', fontSize: 6, fontWeight: '900', letterSpacing: 1 },
+  catalogoTitulo: { marginTop: 2, color: '#633719', fontFamily: 'Delius', fontSize: 15, fontWeight: '900' },
+  catalogoCerrar: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: '#fff0c8', borderWidth: 1, borderColor: '#bd8950' },
+  catalogoLista: { paddingTop: 9, paddingBottom: 2, gap: 6 },
+  catalogoProducto: { minHeight: 43, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10, backgroundColor: '#fff0c8', borderWidth: 1, borderColor: '#c49354' },
+  catalogoProductoAgotado: { opacity: 0.45 },
+  catalogoProductoIcono: { width: 30, fontSize: 22, textAlign: 'center' },
+  catalogoProductoInfo: { flex: 1, marginLeft: 7 },
+  catalogoProductoNombre: { color: '#6e3d20', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  catalogoProductoDetalle: { marginTop: 2, color: '#a06b35', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '700' },
+  catalogoProductoPrecio: { color: '#754323', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
+  estantesProductos: { position: 'absolute', top: SCREEN_H * 0.285, left: SCREEN_W * 0.235, right: SCREEN_W * 0.225, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', rowGap: Math.max(6, SCREEN_H * 0.035), zIndex: 500, elevation: 500 },
+  estanteProducto: { width: '14.285%', height: 73, alignItems: 'center', justifyContent: 'flex-start' },
+  estanteProductoAgotado: { opacity: 0.4 },
+  estanteProductoVista: { width: 38, height: 36, alignItems: 'center', justifyContent: 'center' },
+  estanteProductoEmoji: { fontSize: 27, lineHeight: 32 },
+  estanteProductoImagen: { width: 34, height: 34 },
+  estanteProductoNombre: { width: '100%', marginTop: 1, color: '#fff3ca', fontFamily: 'Delius', fontSize: 5.1, fontWeight: '900', textAlign: 'center', textShadowColor: '#5c311d', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
+  estanteProductoCantidad: { width: '100%', marginTop: 1, color: '#ffe5a6', fontFamily: 'Delius', fontSize: 4.2, fontWeight: '700', textAlign: 'center', textShadowColor: '#5c311d', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
+  estanteProductoPrecio: { marginTop: 2, minWidth: 35, paddingHorizontal: 4, paddingVertical: 1, alignItems: 'center', backgroundColor: '#f4d178', borderWidth: 1, borderColor: '#754127', borderRadius: 3 },
+  estanteProductoPrecioTexto: { color: '#6d3c24', fontFamily: 'Delius', fontSize: 5.3, fontWeight: '900' },
+  comercioLayout: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 34, transform: [{ translateY: -22 }], zIndex: 100, elevation: 100 },
+  comercioLayer: { width: Math.min(SCREEN_W * 0.88, 390), height: Math.min(SCREEN_W * 0.88, 390) * 1.43, alignItems: 'center', justifyContent: 'center' },
   comercioImagen: { width: COMERCIO_W, height: COMERCIO_W * 1.5 },
-  comercioMenu: { width: 260, alignItems: 'center' },
+  comercioMenu: { position: 'absolute', top: 142, width: 260, alignItems: 'center' },
   comercioIntro: { width: '100%', height: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, borderRadius: 13, backgroundColor: '#f1e1bd', borderWidth: 1.5, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 7, elevation: 10 },
   comercioIntroIcon: { width: 31, height: 31, borderRadius: 9, alignItems: 'center', justifyContent: 'center', marginRight: 7, backgroundColor: '#ead2a0', borderWidth: 1, borderColor: '#d0ad70' },
   comercioIntroTitle: { color: '#76552f', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900', letterSpacing: 0.4 },
@@ -513,6 +651,7 @@ const styles = StyleSheet.create({
   producto: { width: 68, height: 70, alignItems: 'center', justifyContent: 'center', padding: 2, borderRadius: 10, backgroundColor: '#f3e7c8', borderWidth: 1, borderColor: '#d7b46a', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 5 },
   productoAnimal: { shadowColor: '#6e4b25', shadowOpacity: 0.26 },
   productoIcono: { width: 20, height: 20, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ead2a0' },
+  productoEmoji: { fontSize: 18, lineHeight: 21 },
   productoIconoVisual: { overflow: 'visible', backgroundColor: 'transparent' },
   productoMarco: { width: 27, height: 27, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff8e2', borderWidth: 1.5, borderColor: '#bf9142', shadowColor: '#6e4d21', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.24, shadowRadius: 3, elevation: 4, transform: [{ translateY: -1 }] },
   productoMarcoAnimal: { backgroundColor: '#f6ffe7', borderColor: '#79a34e' },
@@ -535,6 +674,7 @@ const styles = StyleSheet.create({
   compraCerrarFondo: { ...StyleSheet.absoluteFillObject },
   compraTarjeta: { width: 236, minHeight: 270, alignItems: 'center', padding: 18, borderRadius: 17, backgroundColor: '#fff0c8', borderWidth: 3, borderColor: '#b7873b', shadowColor: '#1f150d', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 20 },
   compraVista: { width: 76, height: 76, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#f5e2ab', borderWidth: 2, borderColor: '#c3933e' },
+  compraEmoji: { fontSize: 48, lineHeight: 58 },
   compraImagen: { width: 68, height: 68, borderRadius: 13 },
   prestamoVista: { width: 76, height: 76, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#f5e2ab', borderWidth: 2, borderColor: '#c3933e' },
   prestamoMonto: { marginTop: 4, color: '#a16e25', fontFamily: 'Delius', fontSize: 14, fontWeight: '900' },
@@ -552,6 +692,7 @@ const styles = StyleSheet.create({
   compraConfirmarBloqueado: { opacity: 0.48 },
   compraConfirmarTexto: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
   recompensaImagen: { width: 112, height: 82 },
+  recompensaEmoji: { fontSize: 64, lineHeight: 76 },
   recompensaIcono: { width: 76, height: 76, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: '#f5e2ab', borderWidth: 2, borderColor: '#c3933e' },
   recompensaTitulo: { marginTop: 6, color: '#683714', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', textAlign: 'center' },
   recompensaCantidad: { marginTop: 1, color: '#b16d25', fontFamily: 'Delius', fontSize: 11, fontWeight: '900' },

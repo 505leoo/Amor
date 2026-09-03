@@ -34,7 +34,7 @@ const PlayerContent = memo(({ animalito, skin, loading, imageStyle, placeholder,
   );
 });
 
-const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, disabled }) => {
+const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, disabled, dropZoneRef, dropZoneActive = false }) => {
   const { data: userData, loaded: userLoaded, uid } = useUserDocument(
     data => ({ animalito: data?.animalito, skin: data?.skin }),
     uidProp,
@@ -45,6 +45,7 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
   const animalito = userData?.animalito ?? null;
   const skin = userData?.skin ?? 'default';
   const loading = !disabled && Boolean(uid) && !userLoaded;
+  const sourceReady = Boolean(animalito && (IMAGENES_POR_SKIN[animalito]?.[skin] || IMAGENES_POR_SKIN[animalito]?.default || ANIMALITOS_POR_ID[animalito]?.imagen));
 
   const hidePlayer = useCallback(() => {
     playerReveal.stopAnimation();
@@ -55,8 +56,7 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
   }, [playerReveal]);
   const handleLoadStart = useCallback(() => {
     imageLoaded.current = false;
-    hidePlayer();
-  }, [hidePlayer]);
+  }, []);
   const handleLoad = useCallback(() => {
     imageLoaded.current = true;
     revealPlayer();
@@ -72,8 +72,14 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
       return;
     }
     if (!uid || !userLoaded) hidePlayer();
-    else if (!animalito || imageLoaded.current) revealPlayer();
-  }, [animalito, disabled, hidePlayer, revealPlayer, uid, userLoaded]);
+    else if (!animalito || sourceReady || imageLoaded.current) revealPlayer();
+  }, [animalito, disabled, hidePlayer, revealPlayer, sourceReady, uid, userLoaded]);
+
+  useEffect(() => {
+    if (disabled || !uid || !userLoaded || !sourceReady || imageLoaded.current) return undefined;
+    const fallback = setTimeout(revealPlayer, 260);
+    return () => clearTimeout(fallback);
+  }, [disabled, revealPlayer, sourceReady, uid, userLoaded]);
 
   useEffect(() => {
     if (!loading && !animalito) revealPlayer();
@@ -81,7 +87,7 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
 
   return (
     <View style={[styles.container, containerStyle]} pointerEvents="box-none">
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: playerReveal }]}>
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: playerReveal }]}> 
         <PlayerContent
           animalito={animalito}
           skin={skin}
@@ -93,13 +99,15 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
           onError={handleError}
         />
       </Animated.View>
+      {dropZoneRef && <View ref={dropZoneRef} collapsable={false} pointerEvents="none" style={[styles.dropZone, { backgroundColor: dropZoneActive ? 'rgba(40,190,75,0.42)' : 'rgba(220,45,45,0.34)' }]} />}
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   container: { position: 'absolute', zIndex: 1 },
-  image: { width: '100%', height: '100%', top: '10%', left: '43%' },
+  dropZone: { position: 'absolute', width: '78%', height: '78%', left: '11%', top: '11%', zIndex: 20, borderWidth: 1.5, borderColor: 'rgba(150,20,20,0.7)', borderRadius: 999 },
+  image: { width: '100%', height: '100%', top: 0, left: 0 },
   sinAnimalWrap: {
     flex: 1,
     justifyContent: 'center',

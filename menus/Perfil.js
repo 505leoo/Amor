@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated, ScrollView, StatusBar, StyleSheet, Text,
+  Animated, Modal, ScrollView, StatusBar, StyleSheet, Text,
   TouchableOpacity, View,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
@@ -9,7 +9,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { collection, deleteField, doc, onSnapshot, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
-import TabButtons from '../components/TabButtons';
+import RoomBackground from '../components/RoomBackground';
 import Player, { SinAnimal } from '../Player';
 import { ANIMALITOS, ANIMALITOS_POR_ID, SKINS_POR_ANIMAL, animalitoEstaDesbloqueado } from '../data/animalitos';
 import { resolverAvatarUsuario } from '../data/iconosLocales';
@@ -605,6 +605,7 @@ const Perfil = ({ navigation, route }) => {
   const [rinconSaving, setRinconSaving] = useState(false);
   const [rinconUnlocking, setRinconUnlocking] = useState(null);
   const [seccionPerfil, setSeccionPerfil] = useState('principal');
+  const [infoAbierta, setInfoAbierta] = useState(false);
   const contentReveal = useRef(new Animated.Value(0)).current;
   const badgeAwardingRef = useRef(new Set());
   const legacyCleanupRef = useRef(false);
@@ -622,6 +623,7 @@ const Perfil = ({ navigation, route }) => {
     setRinconSaving(false);
     setRinconUnlocking(null);
     setSeccionPerfil('principal');
+    setInfoAbierta(false);
     frameActionRef.current = false;
     rinconSaveRef.current = false;
     rinconUnlockRef.current = false;
@@ -809,7 +811,7 @@ const Perfil = ({ navigation, route }) => {
     });
   }, [badgeRecords, soloLectura, userData?.chapasPerfil, userData?.uid]);
 
-  if (!userData) return <View style={styles.root}><StatusBar hidden /><ExpoImage source={require('../assets/temporadas/neutral.png')} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" /></View>;
+  if (!userData) return <View style={styles.root}><StatusBar hidden /><RoomBackground /></View>;
 
   const d = userData;
   const nivelPerfil = 1 + Math.floor(d.exp / 100);
@@ -939,27 +941,22 @@ const Perfil = ({ navigation, route }) => {
   return (
     <View style={styles.root}>
       <StatusBar hidden />
-      <ExpoImage source={require('../assets/temporadas/neutral.png')} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="memory-disk" />
-      <TabButtons onExit={volver} userMoney={soloLectura ? undefined : d.dinero} onAddSticker={soloLectura ? undefined : () => navigation?.navigate?.('coleccion')} showResources={!soloLectura} />
+      <RoomBackground />
 
       <Animated.View style={[styles.book, { opacity: contentReveal }]}>
-        <View pointerEvents="none" style={styles.bookTopLight} />
-        {seccionPerfil === 'principal' && <View pointerEvents="none" style={styles.bookSpine} />}
+        {seccionPerfil === 'principal' && <TouchableOpacity style={styles.closeButton} onPress={volver} activeOpacity={0.78} hitSlop={8}>
+          <MaterialIcons name="close" size={18} color="#75502f" />
+        </TouchableOpacity>}
         {seccionPerfil === 'marcos' ? <FrameBookPage onBack={() => setSeccionPerfil('principal')} avatar={avatar} selectedFrame={activeFrame} unlockedFrames={d.marcosDesbloqueados} readOnly={soloLectura} onSelect={seleccionarMarco} busyFrameId={busyFrameId} /> : seccionPerfil === 'coleccion' ? <CollectionBookPage onBack={() => setSeccionPerfil('principal')} animals={ANIMALITOS} ownedAnimals={ownedAnimals} animalStates={animalStates} user={d} /> : seccionPerfil === 'rinconcito' && !soloLectura ? <RinconcitoBookPage onBack={() => setSeccionPerfil('principal')} config={rinconConfig} ownedAnimals={ownedAnimals} animalStates={animalStates} user={d} onSave={guardarRinconcito} saving={rinconSaving} onUnlock={desbloquearRincon} unlocking={rinconUnlocking} /> : <>
         <View style={styles.leftPage}>
           <View style={styles.identityRow}>
+            <TouchableOpacity style={styles.profileInfoButton} onPress={() => setInfoAbierta(true)} activeOpacity={0.76} hitSlop={7}>
+              <Text style={styles.profileInfoMark}>!</Text>
+            </TouchableOpacity>
             <View style={styles.portraitColumn}>
               <ProfileFrame avatar={avatar} frameId={activeFrame} />
               <NamePlate name={d.nombre} frameId={activeFrame} />
               <Text style={styles.profileQuote}>{legendary ? 'Una leyenda que dejó su marca en Hilito.' : 'Colecciono momentos, no cosas.'}</Text>
-            </View>
-            <View style={styles.dataCard}>
-              <View style={styles.dataRow}><Text style={styles.dataLabel}>Nombre</Text><Text style={styles.dataValue}>{d.nombre}</Text></View>
-              <View style={styles.dataRow}><Text style={styles.dataLabel}>Correo</Text><Text style={styles.dataValue} numberOfLines={1}>{d.correo}</Text></View>
-              <View style={styles.dataRow}><Text style={styles.dataLabel}>Versión de Amor</Text><Text style={styles.dataValue}>{d.appVersion ? `v${d.appVersion}` : 'Sin registrar'}</Text></View>
-              <View style={styles.dataRow}><Text style={styles.dataLabel}>ID de Amor</Text><Text style={styles.dataValue}>{idAmor}</Text></View>
-              <View style={styles.dataRow}><Text style={styles.dataLabel}>Sexo</Text><Text style={styles.dataValue}>{generoCorto(d.genero)}</Text></View>
-              <View style={[styles.dataRow, styles.dataRowLast]}><Text style={styles.dataLabel}>Estado</Text><View style={styles.activeChip}><Text style={styles.activeChipText}>{d.estado === 'activo' ? 'VIGENTE' : String(d.estado).toUpperCase()}</Text></View></View>
             </View>
           </View>
 
@@ -1017,22 +1014,56 @@ const Perfil = ({ navigation, route }) => {
         </>}
       </Animated.View>
 
+      <Modal visible={infoAbierta} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setInfoAbierta(false)}>
+        <View style={styles.infoBackdrop}>
+          <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={() => setInfoAbierta(false)} />
+          <View style={styles.infoCard}>
+            <View style={styles.infoHeader}>
+              <View style={styles.infoSymbol}><Text style={styles.infoSymbolText}>!</Text></View>
+              <View style={styles.infoHeaderCopy}><Text style={styles.infoEyebrow}>INFORMACIÓN DE LA CUENTA</Text><Text style={styles.infoTitle}>Detalles del perfil</Text></View>
+              <TouchableOpacity style={styles.infoClose} onPress={() => setInfoAbierta(false)}><MaterialIcons name="close" size={16} color="#75502f" /></TouchableOpacity>
+            </View>
+            <View style={styles.infoRows}>
+              <View style={styles.dataRow}><Text style={styles.dataLabel}>Nombre</Text><Text style={styles.dataValue}>{d.nombre}</Text></View>
+              <View style={styles.dataRow}><Text style={styles.dataLabel}>Correo</Text><Text style={styles.dataValue} numberOfLines={1}>{d.correo}</Text></View>
+              <View style={styles.dataRow}><Text style={styles.dataLabel}>Versión de Amor</Text><Text style={styles.dataValue}>{d.appVersion ? `v${d.appVersion}` : 'Sin registrar'}</Text></View>
+              <View style={styles.dataRow}><Text style={styles.dataLabel}>ID de Amor</Text><Text style={styles.dataValue}>{idAmor}</Text></View>
+              <View style={styles.dataRow}><Text style={styles.dataLabel}>Sexo</Text><Text style={styles.dataValue}>{generoCorto(d.genero)}</Text></View>
+              <View style={[styles.dataRow, styles.dataRowLast]}><Text style={styles.dataLabel}>Estado</Text><View style={styles.activeChip}><Text style={styles.activeChipText}>{d.estado === 'activo' ? 'VIGENTE' : String(d.estado).toUpperCase()}</Text></View></View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: '#30251f' },
+  root: { flex: 1, backgroundColor: '#eadbde' },
+  closeButton: { position: 'absolute', top: 11, right: 14, zIndex: 1000, elevation: 12, width: 29, height: 29, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0d7a8', borderWidth: 1, borderColor: '#bd8a53' },
   backgroundGlow: { position: 'absolute', top: -160, left: '17%', width: 520, height: 300, borderRadius: 260, backgroundColor: 'rgba(255,205,129,0.12)' },
   backgroundLeafOne: { position: 'absolute', left: -55, bottom: -65, width: 180, height: 125, borderRadius: 90, backgroundColor: 'rgba(70,107,72,0.27)', transform: [{ rotate: '24deg' }] },
   backgroundLeafTwo: { position: 'absolute', right: -40, top: 60, width: 130, height: 90, borderRadius: 70, backgroundColor: 'rgba(149,81,82,0.18)', transform: [{ rotate: '-28deg' }] },
-  book: { position: 'absolute', top: 38, bottom: 7, left: 56, right: 13, flexDirection: 'row', borderRadius: 15, overflow: 'hidden', backgroundColor: '#f6e6c3', borderWidth: 4, borderColor: '#80502f', shadowColor: '#100a07', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.72, shadowRadius: 14, elevation: 20 },
+  book: { position: 'absolute', top: 43, bottom: 9, left: 13, right: 13, flexDirection: 'row', gap: 10, overflow: 'visible' },
   bookTopLight: { position: 'absolute', top: 2, left: 8, right: 8, height: 8, zIndex: 4, borderTopLeftRadius: 10, borderTopRightRadius: 10, backgroundColor: 'rgba(255,255,255,0.42)' },
   bookSpine: { position: 'absolute', zIndex: 8, left: '49.65%', top: 0, bottom: 0, width: 8, backgroundColor: 'rgba(130,79,43,0.16)', borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(112,67,36,0.18)', shadowColor: '#6a3e26', shadowOpacity: 0.3, shadowRadius: 5 },
-  leftPage: { width: '50%', paddingHorizontal: 9, paddingTop: 10, paddingBottom: 8, backgroundColor: '#f9ebcc', borderRightWidth: 1, borderRightColor: 'rgba(132,86,49,0.24)' },
-  rightPage: { width: '50%', paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, backgroundColor: '#f7e7c7' },
-  identityRow: { height: 118, flexDirection: 'row', gap: 8 },
-  portraitColumn: { width: '36%', alignItems: 'center' },
+  leftPage: { flex: 1, minWidth: 0, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, borderRadius: 16, backgroundColor: 'rgba(255,248,244,0.70)', borderWidth: 1.2, borderColor: 'rgba(173,119,137,0.28)', shadowColor: '#805968', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 8, elevation: 3 },
+  rightPage: { flex: 1, minWidth: 0, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, borderRadius: 16, backgroundColor: 'rgba(255,248,244,0.65)', borderWidth: 1.2, borderColor: 'rgba(173,119,137,0.25)', shadowColor: '#805968', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.13, shadowRadius: 8, elevation: 3 },
+  identityRow: { height: 118, position: 'relative', alignItems: 'center', justifyContent: 'center' },
+  portraitColumn: { width: '58%', maxWidth: 185, alignItems: 'center' },
+  profileInfoButton: { position: 'absolute', top: 1, right: 1, width: 21, height: 21, borderRadius: 11, zIndex: 5, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(240,215,168,0.54)', borderWidth: 0.8, borderColor: 'rgba(189,138,83,0.52)' },
+  profileInfoMark: { color: '#936b51', fontSize: 11, lineHeight: 13, fontWeight: '900' },
+  infoBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(48,31,38,0.55)' },
+  infoCard: { width: 320, maxWidth: '82%', padding: 12, borderRadius: 17, backgroundColor: '#fff7f1', borderWidth: 1.5, borderColor: '#d6a9b5', shadowColor: '#3e2630', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.32, shadowRadius: 12, elevation: 18 },
+  infoHeader: { height: 42, flexDirection: 'row', alignItems: 'center', paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(173,119,137,0.18)' },
+  infoSymbol: { width: 29, height: 29, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: '#ead0d7', borderWidth: 1, borderColor: '#c88da0' },
+  infoSymbolText: { color: '#92586d', fontSize: 16, lineHeight: 19, fontWeight: '900' },
+  infoHeaderCopy: { flex: 1, marginLeft: 8 },
+  infoEyebrow: { color: '#b27b8d', fontSize: 5.2, fontWeight: '900', letterSpacing: 0.7 },
+  infoTitle: { color: '#65414f', fontSize: 11, lineHeight: 14, fontWeight: '900' },
+  infoClose: { width: 27, height: 27, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f0d7a8', borderWidth: 1, borderColor: '#bd8a53' },
+  infoRows: { height: 122, marginTop: 7, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 11, backgroundColor: 'rgba(239,220,223,0.38)', borderWidth: 1, borderColor: 'rgba(190,139,155,0.2)' },
   frameWrap: { width: 82, height: 80, padding: 1 },
   frameWrapCompact: { width: 34, height: 34, padding: 0 },
   frameWrapCatalog: { width: 56, height: 53, padding: 1 },
@@ -1280,7 +1311,7 @@ const styles = StyleSheet.create({
 });
 
 const subpage = StyleSheet.create({
-  page: { flex: 1, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 10, backgroundColor: '#f8e8c7' },
+  page: { flex: 1, paddingHorizontal: 14, paddingTop: 11, paddingBottom: 10, borderRadius: 16, backgroundColor: 'rgba(255,248,244,0.76)', borderWidth: 1.2, borderColor: 'rgba(173,119,137,0.28)', shadowColor: '#805968', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 3 },
 });
 
 const modal = StyleSheet.create({

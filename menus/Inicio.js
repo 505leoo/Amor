@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, memo, useState, createContext, useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Dimensions, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Easing, Modal, PanResponder, ScrollView } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import Svg, { Path, Circle, Rect, Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { Image } from 'expo-image';
 import LottieView from 'lottie-react-native';
 import { LibroJuegos } from '../components/botones';
@@ -13,7 +13,7 @@ import RuletaDiariaModal from '../components/RuletaDiariaModal';
 import PreguntonasModal from '../components/PreguntonasModal';
 import { getRecompensaDiariaDelDia, useRecompensaDiaria } from '../hooks/useRecompensaDiaria';
 import { auth, db } from '../firebaseConfig';
-import { collection, doc, limit, onSnapshot, orderBy, query, setDoc, where } from 'firebase/firestore';
+import { collection, doc, limit, onSnapshot, orderBy, query, runTransaction, serverTimestamp, setDoc, where } from 'firebase/firestore';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useUserDocument } from '../hooks/useUserDocument';
 import { BuzonModal } from './Buzon';
@@ -25,14 +25,13 @@ import { actualizarPasoTutorial } from '../components/Tutorial';
 import MisionesDiarias from '../components/MisionesDiarias';
 import { InventarioModal } from './Inventario';
 import { useMisiones } from '../MisionesContext';
-import { useTemporadaActual } from '../hooks/useTemporadaActual';
+import RoomBackground from '../components/RoomBackground';
+import { ALIMENTOS, calcularSaciedad, estadoSaciedad } from '../data/alimentos';
 import * as Haptics from 'expo-haptics';
 
 const OverlayContext = createContext(false);
 export const useOverlayActive = () => useContext(OverlayContext);
 const NOOP = () => {};
-const INICIO_BACKGROUND = require('../assets/inicio/inicio.png');
-const INICIO_BACKGROUND_T2 = require('../assets/inicio/iniciot2.png');
 const HALCON_IMAGE = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
 const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
 const JUGAR_IMAGE = require('../assets/inicio/jugar.png');
@@ -323,7 +322,7 @@ const TutorialInicio = ({ navigation }) => {
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
   const paso = Number(data?.tutorialPaso || 0);
   return <View style={styles.container}>
-    <Image source={INICIO_BACKGROUND} style={styles.backgroundImage} contentFit="fill" cachePolicy="memory-disk" transition={0} />
+    <RoomBackground />
     <RegaloDaily overlayActive={false} />
     <CajasRecompensa onOverlayChange={NOOP} overlayActive={false} />
     {paso >= 1 && <TouchableOpacity style={[styles.changeButton, styles.tutorialChangeButton, paso >= 2 && paso !== 5 && styles.tutorialDisabledButton]} onPress={() => (paso === 1 || paso === 5) && navigation?.navigate('animalitos')} disabled={paso >= 2 && paso !== 5} activeOpacity={0.78}>
@@ -456,11 +455,6 @@ const rd = StyleSheet.create({
     letterSpacing: 0.4, marginTop: 1, fontStyle: 'italic',
   },
 });
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const IMG_RATIO = 1616 / 973;
-const IMG_H = SCREEN_W / IMG_RATIO;
-const IMG_TOP = (SCREEN_H - IMG_H) / 2;
 
 const MoneyMenu = memo(() => {
   const { data: userData, loaded, uid } = useUserDocument(
@@ -637,11 +631,345 @@ const QuickMenu = memo(() => {
   </>;
 });
 
+const AlimentoArrastrable = memo(({ alimento, cantidad, disabled, onDrop, onDragMove, draggingRef, onDragState, renderContent, style, onPress, dragPreview = false }) => {
+  const posicion = useRef(new Animated.ValueXY()).current;
+  const [arrastrando, setArrastrando] = useState(false);
+  const [soltando, setSoltando] = useState(false);
+  const escalaArrastre = useRef(new Animated.Value(1)).current;
+  const activo = useRef(!disabled && cantidad > 0);
+  const alimentoRef = useRef(alimento);
+  const cantidadRef = useRef(cantidad);
+  const onDropRef = useRef(onDrop);
+  activo.current = !disabled && cantidad > 0;
+  alimentoRef.current = alimento;
+  cantidadRef.current = cantidad;
+  onDropRef.current = onDrop;
+  const panResponder = useRef(PanResponder.create({
+    // El toque simple queda disponible para cambiar de alimento; el gesto se
+    // captura recién cuando el usuario empieza a mover el botón.
+    onStartShouldSetPanResponder: () => false,
+    onMoveShouldSetPanResponderCapture: (_, gesture) => activo.current && (Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2),
+    onMoveShouldSetPanResponder: (_, gesture) => activo.current && (Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2),
+    onPanResponderGrant: () => {
+      console.log('[Alimentar] drag-start', alimentoRef.current.id, 'cantidad:', cantidadRef.current);
+      if (draggingRef) draggingRef.current = true;
+      onDragState?.(true);
+      posicion.stopAnimation();
+      // El botón mantiene su sitio; solo la previsualización se desplaza.
+      // Limpiamos también el offset para que cada gesto empiece en cero.
+      posicion.setOffset({ x: 0, y: 0 });
+      posicion.setValue({ x: 0, y: 0 });
+      escalaArrastre.stopAnimation();
+      escalaArrastre.setValue(1);
+      setSoltando(false);
+      Haptics.selectionAsync().catch(() => {});
+      setArrastrando(true);
+    },
+    onPanResponderMove: (_, gesture) => {
+      posicion.setValue({ x: gesture.dx, y: gesture.dy });
+      onDragMove?.(gesture.moveX, gesture.moveY);
+    },
+    onPanResponderRelease: (_, gesture) => {
+      const alimentoActual = alimentoRef.current;
+      console.log('[Alimentar] drag-release', alimentoActual.id, { x: gesture.moveX, y: gesture.moveY });
+      posicion.flattenOffset();
+      onDropRef.current?.(alimentoActual, gesture.moveX, gesture.moveY);
+      setArrastrando(false);
+      if (draggingRef) draggingRef.current = false;
+      onDragState?.(false);
+      setSoltando(true);
+      Animated.parallel([
+        Animated.timing(posicion, { toValue: { x: 0, y: 0 }, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(escalaArrastre, { toValue: 0.52, duration: 260, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      ]).start(() => {
+        setSoltando(false);
+        // Reiniciar cuando la copia ya no está renderizada evita el destello
+        // en el que el alimento vuelve a crecer en una posición desplazada.
+        requestAnimationFrame(() => {
+          posicion.setValue({ x: 0, y: 0 });
+          escalaArrastre.setValue(1);
+        });
+      });
+    },
+    onPanResponderTerminate: () => {
+      posicion.flattenOffset();
+      setArrastrando(false);
+      if (draggingRef) draggingRef.current = false;
+      onDragState?.(false);
+      setSoltando(true);
+      Animated.parallel([
+        Animated.timing(posicion, { toValue: { x: 0, y: 0 }, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(escalaArrastre, { toValue: 0.52, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: false }),
+      ]).start(() => {
+        setSoltando(false);
+        requestAnimationFrame(() => {
+          posicion.setValue({ x: 0, y: 0 });
+          escalaArrastre.setValue(1);
+        });
+      });
+    },
+  })).current;
+
+  return <Animated.View {...panResponder.panHandlers} style={[renderContent ? style : styles.foodItem, !renderContent && cantidad <= 0 && styles.foodItemEmpty, !dragPreview && { transform: posicion.getTranslateTransform() }]}>
+    {renderContent ? <TouchableOpacity style={[StyleSheet.absoluteFill, styles.foodSelectTouch]} onPress={onPress} activeOpacity={0.78}>{renderContent({ ocultarIcono: arrastrando || soltando })}</TouchableOpacity> : <><Text style={styles.foodEmoji}>{alimento.emoji}</Text><View style={styles.foodCount}><Text style={styles.foodCountText}>{cantidad}</Text></View></>}
+    {dragPreview && (arrastrando || soltando) && <Animated.View pointerEvents="none" style={[styles.foodDragPreview, { transform: [{ translateX: posicion.x }, { translateY: posicion.y }, { scale: escalaArrastre }] }]}><Text style={styles.foodDragPreviewEmoji}>{alimento.emoji}</Text></Animated.View>}
+  </Animated.View>;
+});
+
+const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, hoverRef, onZoneChange, draggingRef }) => {
+  const uid = auth.currentUser?.uid;
+  const participantes = useMemo(() => uid ? [uid, parejaUid].filter(Boolean).sort() : [], [parejaUid, uid]);
+  const cuidadoId = participantes.join('_');
+  const cuidadoRef = useMemo(() => cuidadoId ? doc(db, 'cuidado_parejas', cuidadoId) : null, [cuidadoId]);
+  const { data: inventario } = useUserDocument(data => data?.alimentos || {});
+  const [cuidado, setCuidado] = useState(null);
+  const [ahora, setAhora] = useState(Date.now());
+  const [alimentando, setAlimentando] = useState(false);
+  const [avisoAlimentacion, setAvisoAlimentacionLocal] = useState(null);
+  const avisoTimerRef = useRef(null);
+  const alimentandoRef = useRef(false);
+  const zonaActivaRef = useRef(false);
+  const hoverTimerRef = useRef(null);
+  const zonaRectRef = useRef(null);
+  const burbuja = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!cuidadoRef) return undefined;
+    return onSnapshot(cuidadoRef, snap => {
+      if (snap.exists()) setCuidado(snap.data() || {});
+      else setDoc(cuidadoRef, { participantes, saciedad: 100, actualizadaEnMs: Date.now(), creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() }, { merge: true }).catch(() => {});
+    }, () => {});
+  }, [cuidadoRef, participantes]);
+
+  useEffect(() => {
+    const interval = setInterval(() => setAhora(Date.now()), 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const animation = Animated.loop(Animated.sequence([
+      Animated.delay(4200),
+      Animated.timing(burbuja, { toValue: 1.07, duration: 280, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.spring(burbuja, { toValue: 1, friction: 5, useNativeDriver: true }),
+    ]));
+    animation.start();
+    return () => animation.stop();
+  }, [burbuja]);
+
+  const saciedad = calcularSaciedad(cuidado, ahora);
+  const estado = estadoSaciedad(saciedad);
+  const saciedadAnimada = useRef(new Animated.Value(saciedad)).current;
+
+  useEffect(() => {
+    Animated.timing(saciedadAnimada, { toValue: saciedad, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
+  }, [saciedad, saciedadAnimada]);
+
+  const alimentar = useCallback(async alimento => {
+    if (!uid || !cuidadoRef || alimentandoRef.current || disabled) return;
+    const alimentoSeguro = ALIMENTOS.find(item => item.id === alimento?.id) || alimento;
+    if (!alimentoSeguro?.id) {
+      console.warn('[Alimentar] alimento inválido recibido', alimento);
+      return;
+    }
+    alimentandoRef.current = true;
+    setAlimentando(true);
+    try {
+      const resultado = await runTransaction(db, async transaction => {
+        const usuarioRef = doc(db, 'usuarios', uid);
+        const usuarioSnap = await transaction.get(usuarioRef);
+        const cuidadoSnap = await transaction.get(cuidadoRef);
+        const usuario = usuarioSnap.data() || {};
+        const alimentos = { ...(usuario.alimentos || {}) };
+        const valorInventario = alimentos[alimentoSeguro.id];
+        const disponibles = Math.max(0, Number(valorInventario) || 0);
+        console.log('[Alimentar] inventario verificado', { id: alimentoSeguro.id, valor: valorInventario, disponibles });
+        if (disponibles < 1) throw new Error('sin_alimento');
+        const datosCuidado = cuidadoSnap.exists() ? (cuidadoSnap.data() || {}) : {};
+        const actual = calcularSaciedad(datosCuidado);
+        if (actual >= 99.5) throw new Error('lleno');
+        const nueva = Math.min(100, actual + alimentoSeguro.saciedad);
+        alimentos[alimentoSeguro.id] = disponibles - 1;
+        transaction.set(usuarioRef, { alimentos }, { merge: true });
+        transaction.set(cuidadoRef, {
+          participantes,
+          saciedad: nueva,
+          actualizadaEnMs: Date.now(),
+          actualizadaEn: serverTimestamp(),
+          ultimaAlimentacionPor: uid,
+          ultimoAlimento: alimentoSeguro.id,
+          ultimaAlimentacionEn: serverTimestamp(),
+        }, { merge: true });
+        return Math.round(nueva - actual);
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      onFed?.(alimentoSeguro, resultado);
+    } catch (error) {
+      if (error.message === 'lleno') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}), 150);
+        setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}), 300);
+        setAvisoAlimentacionLocal('🍽️  Animalito lleno');
+        clearTimeout(avisoTimerRef.current);
+        avisoTimerRef.current = setTimeout(() => setAvisoAlimentacionLocal(null), 2200);
+      } else if (error.message === 'sin_alimento') {
+        setAvisoAlimentacionLocal('🛒  Comprá comida en el Comerciante');
+        clearTimeout(avisoTimerRef.current);
+        avisoTimerRef.current = setTimeout(() => setAvisoAlimentacionLocal(null), 2600);
+      }
+      global.showToast?.({ type: 'info', text1: error.message === 'lleno' ? 'Tu Animalito ya está lleno' : 'Ya no te queda ese alimento' });
+    } finally {
+      alimentandoRef.current = false;
+      setAlimentando(false);
+    }
+  }, [cuidadoRef, disabled, onFed, participantes, uid]);
+
+  const soltar = useCallback((alimento, pageX, pageY) => {
+    // El botón representa la acción de alimentar y es el único origen de
+    // arrastre; no dependemos de medir un nodo animado para confirmar el drop.
+    if (!zonaActivaRef.current) {
+      console.log('[Alimentar] drop-rejected: fuera de la zona', alimento.id, { x: pageX, y: pageY });
+      global.showToast?.({ type: 'info', text1: 'Soltá la comida sobre tu Animalito' });
+      return;
+    }
+    const alimentoSeguro = ALIMENTOS.find(item => item.id === alimento?.id) || alimento;
+    console.log('[Alimentar] drop-accepted', alimentoSeguro?.id, { x: pageX, y: pageY });
+    alimentar(alimentoSeguro);
+    zonaActivaRef.current = false;
+    zonaRectRef.current = null;
+    clearTimeout(hoverTimerRef.current);
+    onZoneChange?.(false);
+  }, [alimentar, targetRef]);
+
+  const comprobarHover = useCallback((pageX, pageY) => {
+    if (!draggingRef?.current) return;
+    const evaluar = (x, y, width, height) => {
+      // Histeresis mínima: evita que el estado parpadee por redondeos de
+      // coordenadas mientras el dedo permanece cerca del borde.
+      const margen = zonaActivaRef.current ? 5 : 0;
+      const apto = pageX >= x - margen && pageX <= x + width + margen && pageY >= y - margen && pageY <= y + height + margen;
+      if (apto !== zonaActivaRef.current) {
+        zonaActivaRef.current = apto;
+        onZoneChange?.(apto);
+        console.log('[Alimentar] zona', apto ? 'APTA' : 'fuera', { pageX, pageY, x, y, width, height });
+        if (apto) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }
+    };
+    if (zonaRectRef.current) {
+      evaluar(...zonaRectRef.current);
+      return;
+    }
+    targetRef.current?.measureInWindow?.((x, y, width, height) => {
+      zonaRectRef.current = [x, y, width, height];
+      evaluar(x, y, width, height);
+    });
+  }, [draggingRef, onZoneChange, targetRef]);
+
+  useEffect(() => {
+    if (dropRef) dropRef.current = soltar;
+    return () => { if (dropRef) dropRef.current = null; };
+  }, [dropRef, soltar]);
+  useEffect(() => {
+    if (hoverRef) hoverRef.current = comprobarHover;
+    return () => { if (hoverRef) hoverRef.current = null; };
+  }, [hoverRef, comprobarHover]);
+
+  const IconoHambre = () => (
+    <View style={styles.satietyIconWrap}>
+      <MaterialIcons name="restaurant" size={11} color="#fff1c8" />
+    </View>
+  );
+
+  const petMoodBubbleSvg = (
+    <Svg width="46" height="46" viewBox="0 0 42 42" style={styles.petMoodSvg}>
+      <Path d="M11 5h16c5.5 0 10 4.5 10 10v9c0 5.5-4.5 10-10 10h-7l-8 5 2.1-5H11C5.5 34 1 29.5 1 24v-9C1 9.5 5.5 5 11 5Z" fill="#fff5dd" stroke="#c89552" strokeWidth="1.4" strokeLinejoin="round" />
+      <Path d="M5 14c2-4.5 5.5-6.7 10.2-7" fill="none" stroke="#fff9e7" strokeWidth="1.5" strokeLinecap="round" opacity="0.9" />
+      <Circle cx="19" cy="20" r="10" fill={estado.color} opacity="0.16" />
+      {estado.id === 'feliz' && <>
+        <Path d="M14 19c1.3 1.1 2.7 1.1 4 0M24 19c1.3 1.1 2.7 1.1 4 0M17 25c1.8 1.9 5.2 1.9 7 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
+        <Circle cx="14.5" cy="23" r="1.3" fill="#e89aaa" opacity="0.55" /><Circle cx="27.5" cy="23" r="1.3" fill="#e89aaa" opacity="0.55" />
+      </>}
+      {estado.id === 'bien' && <>
+        <Circle cx="16" cy="19" r="1.3" fill="#79513f" /><Circle cx="26" cy="19" r="1.3" fill="#79513f" />
+        <Path d="M17 25c1.6 1.2 4.4 1.2 6 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
+      </>}
+      {estado.id === 'hambre' && <>
+        <Circle cx="16" cy="19" r="1.3" fill="#79513f" /><Circle cx="26" cy="19" r="1.3" fill="#79513f" />
+        <Path d="M17 26c1.6-1.1 4.4-1.1 6 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
+      </>}
+      {estado.id === 'enojado' && <>
+        <Path d="m13.5 17.5 4 1M28.5 17.5l-4 1" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
+        <Circle cx="16" cy="21" r="1.1" fill="#79513f" /><Circle cx="26" cy="21" r="1.1" fill="#79513f" />
+        <Path d="M17 27c1.6-1.2 4.4-1.2 6 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
+      </>}
+      {estado.id === 'dormido' && <>
+        <Path d="M13 20h5M24 20h5M18 26c1.4.8 3.6.8 5 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
+        <Path d="M29 11h5l-3 3h3" fill="none" stroke="#887aa4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+      </>}
+    </Svg>
+  );
+
+  return <>
+    <Animated.View style={[styles.petMoodBubble, { transform: [{ scale: burbuja }] }]}>
+      {petMoodBubbleSvg}
+    </Animated.View>
+    <View style={styles.satietyPanel}>
+      <View style={styles.satietyTrack}>
+        <Animated.View style={[styles.satietyFill, { height: saciedadAnimada.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }), backgroundColor: saciedadAnimada.interpolate({ inputRange: [0, 15, 40, 70, 100], outputRange: ['#887aa4', '#c65f62', '#d8844f', '#d0a342', '#72a85f'] }) }]} />
+      </View>
+      <View style={styles.satietyIconWrap}><IconoHambre /></View>
+    </View>
+    {avisoAlimentacion && <View style={styles.feedNotice} pointerEvents="none"><Text style={styles.feedNoticeText}>{avisoAlimentacion}</Text></View>}
+  </>;
+});
+
 const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, tutorialActivo = false }) => {
-  const temporadaActual = useTemporadaActual();
-  const inicioBackground = temporadaActual === 't2' ? INICIO_BACKGROUND_T2 : INICIO_BACKGROUND;
   const [nivelJuego, setNivelJuego] = useState(1);
   const [partidasCompletadas, setPartidasCompletadas] = useState(0);
+  const petTargetRef = useRef(null);
+  const petIdleScale = useRef(new Animated.Value(1)).current;
+  const petIdleY = useRef(new Animated.Value(0)).current;
+  const petIdleX = useRef(new Animated.Value(0)).current;
+  const petIdleSquash = useRef(new Animated.Value(0)).current;
+  const petIdleRotate = useRef(new Animated.Value(0)).current;
+  const petBreathScale = useRef(new Animated.Value(1)).current;
+  const petFeedScale = useRef(new Animated.Value(1)).current;
+  const petFeedY = useRef(new Animated.Value(0)).current;
+  const foodFeedbackTimer = useRef(null);
+  const [foodFeedback, setFoodFeedback] = useState(null);
+  const [selectedFoodIndex, setSelectedFoodIndex] = useState(-1);
+  const feedDropRef = useRef(null);
+  const feedHoverRef = useRef(null);
+  const draggingRef = useRef(false);
+  const petDropZoneRef = useRef(null);
+  const [zonaAlimentar, setZonaAlimentar] = useState(false);
+  const [arrastreActivo, setArrastreActivo] = useState(false);
+  const [avisoSeleccion, setAvisoSeleccion] = useState(null);
+  const avisoSeleccionTimer = useRef(null);
+  const { data: userAlimentos } = useUserDocument(data => data?.alimentos || {});
+
+  useEffect(() => {
+    if (arrastreActivo) {
+      petBreathScale.stopAnimation();
+      petBreathScale.setValue(1);
+      return undefined;
+    }
+    let cancelada = false;
+    const respirar = () => {
+      if (cancelada) return;
+      Animated.sequence([
+        Animated.timing(petBreathScale, { toValue: 1.018, duration: 900, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(petBreathScale, { toValue: 0.992, duration: 1050, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.delay(260),
+      ]).start(({ finished }) => { if (finished && !cancelada) respirar(); });
+    };
+    respirar();
+    return () => {
+      cancelada = true;
+      petBreathScale.stopAnimation();
+      petBreathScale.setValue(1);
+    };
+  }, [arrastreActivo, petBreathScale]);
+
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
@@ -650,6 +978,95 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
       setNivelJuego(Number.isFinite(datosJuego.nivel) ? datosJuego.nivel : 1);
       setPartidasCompletadas(Math.max(0, Number(datosJuego.partidasCompletadas) || 0));
     }, error => console.warn('[Inicio] No se pudo actualizar el progreso de Conexiones', error?.message || error));
+  }, []);
+
+  useEffect(() => {
+    if (arrastreActivo) {
+      petIdleScale.stopAnimation();
+      petIdleY.stopAnimation();
+      petIdleX.stopAnimation();
+      petIdleSquash.stopAnimation();
+      petIdleRotate.stopAnimation();
+      petIdleScale.setValue(1);
+      petIdleY.setValue(0);
+      petIdleX.setValue(0);
+      petIdleSquash.setValue(0);
+      petIdleRotate.setValue(0);
+      return undefined;
+    }
+    let ciclo = 0;
+    let cancelada = false;
+    const reproducirMovimiento = () => {
+      if (cancelada) return;
+      const lado = [1, -1, -1, 1][ciclo % 4];
+      const salto = ciclo % 3 === 2;
+      const deslizamientoIzquierda = lado === -1 && ciclo % 4 === 2;
+      ciclo += 1;
+      const animation = Animated.sequence([
+      Animated.delay(salto ? 1500 : deslizamientoIzquierda ? 1750 : 2200),
+      Animated.parallel([
+        Animated.timing(petIdleScale, { toValue: salto ? 1.09 : deslizamientoIzquierda ? 1.025 : 1.045, duration: salto ? 520 : deslizamientoIzquierda ? 260 : 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(petIdleY, { toValue: salto ? -18 : deslizamientoIzquierda ? -1 : -3, duration: salto ? 520 : deslizamientoIzquierda ? 260 : 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(petIdleX, { toValue: salto ? 4 : deslizamientoIzquierda ? -11 : lado * 2.5, duration: salto ? 520 : deslizamientoIzquierda ? 260 : 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(petIdleSquash, { toValue: salto ? -1 : deslizamientoIzquierda ? 1 : lado, duration: salto ? 520 : deslizamientoIzquierda ? 260 : 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(petIdleRotate, { toValue: salto ? 1.5 : deslizamientoIzquierda ? -3.2 : lado, duration: salto ? 520 : deslizamientoIzquierda ? 260 : 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(petIdleScale, { toValue: salto ? 0.96 : deslizamientoIzquierda ? 1.055 : 0.99, duration: salto ? 300 : deslizamientoIzquierda ? 180 : 520, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(petIdleY, { toValue: salto ? 3 : deslizamientoIzquierda ? 2 : 1, duration: salto ? 300 : deslizamientoIzquierda ? 180 : 520, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(petIdleX, { toValue: deslizamientoIzquierda ? -4 : lado * -2, duration: salto ? 300 : deslizamientoIzquierda ? 180 : 520, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(petIdleSquash, { toValue: salto ? 1 : deslizamientoIzquierda ? -1 : lado * -0.7, duration: salto ? 300 : deslizamientoIzquierda ? 180 : 520, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(petIdleRotate, { toValue: salto ? lado * -1 : deslizamientoIzquierda ? 1.3 : lado * -0.8, duration: salto ? 300 : deslizamientoIzquierda ? 180 : 520, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.spring(petIdleScale, { toValue: 1, friction: 6, tension: 50, useNativeDriver: true }),
+        Animated.spring(petIdleY, { toValue: 0, friction: 7, tension: 45, useNativeDriver: true }),
+        Animated.spring(petIdleX, { toValue: 0, friction: 7, tension: 45, useNativeDriver: true }),
+        Animated.spring(petIdleSquash, { toValue: 0, friction: 7, tension: 45, useNativeDriver: true }),
+        Animated.spring(petIdleRotate, { toValue: 0, friction: 7, tension: 45, useNativeDriver: true }),
+      ]),
+    ]);
+      animation.start(({ finished }) => { if (finished && !cancelada) reproducirMovimiento(); });
+    };
+    reproducirMovimiento();
+    return () => { cancelada = true; };
+  }, [arrastreActivo, petIdleRotate, petIdleScale, petIdleSquash, petIdleX, petIdleY]);
+
+  const reaccionarAlComer = useCallback((alimento, recuperado) => {
+    petFeedScale.stopAnimation();
+    petFeedY.stopAnimation();
+    petFeedScale.setValue(1);
+    petFeedY.setValue(0);
+    setFoodFeedback({ emoji: alimento.emoji, recuperado, key: Date.now() });
+    Animated.sequence([
+      Animated.parallel([
+        Animated.timing(petFeedY, { toValue: 2, duration: 140, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+        Animated.timing(petFeedScale, { toValue: 0.96, duration: 140, easing: Easing.in(Easing.quad), useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(petFeedY, { toValue: -20, duration: 560, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(petFeedScale, { toValue: 1.1, duration: 560, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(petFeedY, { toValue: 1, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(petFeedScale, { toValue: 0.985, duration: 420, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.spring(petFeedScale, { toValue: 1, friction: 5, tension: 95, useNativeDriver: true }),
+        Animated.spring(petFeedY, { toValue: 0, friction: 7, tension: 75, useNativeDriver: true }),
+      ]),
+    ]).start(({ finished }) => {
+      if (finished) {
+        petFeedY.setValue(0);
+        petFeedScale.setValue(1);
+      }
+    });
+    if (foodFeedbackTimer.current) clearTimeout(foodFeedbackTimer.current);
+    foodFeedbackTimer.current = setTimeout(() => setFoodFeedback(null), 1300);
+  }, [petFeedScale, petFeedY]);
+
+  useEffect(() => () => {
+    if (foodFeedbackTimer.current) clearTimeout(foodFeedbackTimer.current);
   }, []);
   const [overlayActive, setOverlayActive] = useState(false);
   const { puedeReclamar: regaloDisponible } = useRecompensaDiaria({ paused: overlayActive });
@@ -668,6 +1085,34 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     undefined,
     equalEstadoInicio,
   );
+
+  useEffect(() => {
+    if (overlayActive || !estadoInicio?.animalito) setSelectedFoodIndex(-1);
+  }, [estadoInicio?.animalito, overlayActive]);
+
+  useEffect(() => {
+    if (selectedFoodIndex < 0) return undefined;
+    const timer = setTimeout(() => setSelectedFoodIndex(-1), 6000);
+    return () => clearTimeout(timer);
+  }, [selectedFoodIndex]);
+
+  const seleccionarAlimento = useCallback(() => {
+    const disponibles = ALIMENTOS.filter(alimento => Number(userAlimentos?.[alimento.id]) > 0);
+    if (!disponibles.length) {
+      setAvisoSeleccion('🛒  Comprá comida en el Comerciante');
+      clearTimeout(avisoSeleccionTimer.current);
+      avisoSeleccionTimer.current = setTimeout(() => setAvisoSeleccion(null), 2600);
+      return;
+    }
+    setSelectedFoodIndex(actual => {
+      const indiceActual = ALIMENTOS.findIndex(alimento => alimento.id === ALIMENTOS[actual]?.id);
+      for (let paso = 1; paso <= ALIMENTOS.length; paso += 1) {
+        const candidato = ALIMENTOS[(indiceActual + paso) % ALIMENTOS.length];
+        if (Number(userAlimentos?.[candidato.id]) > 0) return ALIMENTOS.indexOf(candidato);
+      }
+      return ALIMENTOS.indexOf(disponibles[0]);
+    });
+  }, [userAlimentos]);
   const { data: parejaInicio } = useUserDocument(
     data => data ? { nombre: data.nombre || data.datosCompletos?.nombre || 'Tu pareja', exp: Number(data.exp) || 0, ultimaActividad: data.ultimaActividad } : null,
     estadoInicio?.pareja || '',
@@ -806,22 +1251,57 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   return (
     <OverlayContext.Provider value={overlayActive}>
       <View style={[styles.container, style]}>
-        <Image
-          source={inicioBackground}
-          style={styles.backgroundImage}
-          contentFit="fill"
-          cachePolicy="memory-disk"
-        />
+        <RoomBackground />
         <StatusBar hidden={true} />
         <MoneyMenu />
         <QuickMenu />
         <SiguientePaso icono={siguientePaso.icono} titulo={siguientePaso.titulo} detalle={siguientePaso.detalle} insignia={siguientePaso.insignia} onPress={siguientePaso.accion} />
         <AccesosRegalos onRuleta={() => { setRuletaAbierta(true); setOverlayActive(true); }} regaloDisponible={regaloDisponible} loteDisponible={estadoInicio?.diamantes >= 50} onRegaloDiario={() => { setRegalosAbiertos(true); setOverlayActive(true); }} onLotes={() => navigation?.navigate('lotes', { animalId: 'ardilla' })} onPreguntonas={() => { setPreguntonasAbiertas(true); setOverlayActive(true); }} />
-        <Player containerStyle={styles.player} disabled={overlayActive} />
+        <View style={styles.playerShadow}>
+          <Svg width="100%" height="100%" viewBox="0 0 100 30">
+            <Defs>
+              <RadialGradient id="playerShadowGradient" cx="50%" cy="42%" rx="50%" ry="50%">
+                <Stop offset="0" stopColor="#4f303c" stopOpacity="0.45" />
+                <Stop offset="0.48" stopColor="#704655" stopOpacity="0.28" />
+                <Stop offset="1" stopColor="#8e6370" stopOpacity="0" />
+              </RadialGradient>
+              <RadialGradient id="playerContactGradient" cx="50%" cy="50%" rx="50%" ry="50%">
+                <Stop offset="0" stopColor="#3d252e" stopOpacity="0.52" />
+                <Stop offset="1" stopColor="#60404b" stopOpacity="0" />
+              </RadialGradient>
+            </Defs>
+            <Ellipse cx="50" cy="16" rx="50" ry="13" fill="url(#playerShadowGradient)" />
+            <Ellipse cx="50" cy="14" rx="30" ry="7" fill="url(#playerContactGradient)" />
+            <Path d="M17 17C31 23 69 23 83 17C72 26 28 26 17 17Z" fill="#65404d" opacity="0.12" />
+            <Path d="M27 10C39 6 62 6 74 10" fill="none" stroke="#fff0f1" strokeWidth="1.5" strokeLinecap="round" opacity="0.2" />
+          </Svg>
+        </View>
+        <Animated.View ref={petTargetRef} collapsable={false} style={[styles.player, { transform: [{ translateX: petIdleX }, { translateY: petIdleY }, { translateY: petFeedY }, { rotate: petIdleRotate.interpolate({ inputRange: [-1, 1], outputRange: ['-1deg', '1deg'] }) }, { scaleX: petIdleSquash.interpolate({ inputRange: [-1, 0, 1], outputRange: [1.015, 1, 0.985] }) }, { scaleY: petIdleSquash.interpolate({ inputRange: [-1, 0, 1], outputRange: [0.985, 1, 1.015] }) }, { scale: petIdleScale }, { scale: petBreathScale }, { scale: petFeedScale }] }]}>
+          <View style={styles.petTouch} pointerEvents="none">
+            <Player containerStyle={styles.playerFill} imageStyle={styles.playerImage} disabled={overlayActive} />
+            <View ref={petDropZoneRef} collapsable={false} pointerEvents="none" style={[styles.petDropZone, { backgroundColor: zonaAlimentar ? 'rgba(40,190,75,0.42)' : 'rgba(220,45,45,0.34)' }]} />
+          </View>
+        </Animated.View>
+        {estadoInicio?.animalito && <CuidadoAnimal parejaUid={estadoInicio?.pareja} targetRef={petDropZoneRef} disabled={overlayActive} onFed={reaccionarAlComer} dropRef={feedDropRef} hoverRef={feedHoverRef} onZoneChange={setZonaAlimentar} draggingRef={draggingRef} />}
+        {foodFeedback && <Animated.View key={foodFeedback.key} style={styles.foodFeedback}><Text style={styles.foodFeedbackEmoji}>{foodFeedback.emoji}</Text><Text style={styles.foodFeedbackText}>+{foodFeedback.recuperado}</Text></Animated.View>}
         <TouchableOpacity style={styles.changeButton} onPress={() => navigation?.navigate('animalitos')} activeOpacity={0.78}>
           <MaterialIcons name="swap-horiz" size={20} color="#c58b2d" />
           <Text style={styles.changeButtonText}>Cambiar</Text>
         </TouchableOpacity>
+        <AlimentoArrastrable
+          alimento={selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex] : ALIMENTOS[0]}
+          cantidad={selectedFoodIndex >= 0 ? Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0) : 0}
+          disabled={overlayActive || !estadoInicio?.animalito || selectedFoodIndex < 0}
+          onDrop={(alimento, x, y) => feedDropRef.current?.(alimento, x, y)}
+          onDragMove={(x, y) => feedHoverRef.current?.(x, y)}
+          draggingRef={draggingRef}
+          onDragState={setArrastreActivo}
+          renderContent={({ ocultarIcono } = {}) => selectedFoodIndex < 0 ? <><Text style={[styles.foodSelectEmoji, ocultarIcono && styles.foodOriginalIconHidden]}>🍖</Text><Text style={styles.foodSelectLabel}>Alimentar</Text></> : <><Text style={[styles.foodSelectEmoji, ocultarIcono && styles.foodOriginalIconHidden]}>{ALIMENTOS[selectedFoodIndex]?.emoji}</Text><Text style={styles.foodSelectCount}>{Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0)}</Text></>}
+          style={styles.foodSelectButton}
+          dragPreview
+          onPress={seleccionarAlimento}
+        />
+        {avisoSeleccion && <View style={[styles.feedNotice, styles.feedNoticeSelection]} pointerEvents="none"><Text style={styles.feedNoticeText}>{avisoSeleccion}</Text></View>}
         <TouchableOpacity style={styles.skinButton} onPress={() => navigation?.navigate('animalitos', { mode: 'skins' })} activeOpacity={0.78}>
           <MaterialIcons name="checkroom" size={21} color="#c58b2d" />
           <Text style={styles.skinButtonText}>Skin</Text>
@@ -903,7 +1383,6 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
-  backgroundImage: { position: 'absolute', width: SCREEN_W, height: IMG_H, top: IMG_TOP },
   moneyMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   resourcesRow: { position: 'absolute', top: -1, left: '50%', width: 150, height: 24, transform: [{ translateX: -75 }], flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: '#f1e1bd', borderWidth: 1, borderTopWidth: 0, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, zIndex: 220, elevation: 12 },
   diamondMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
@@ -951,7 +1430,7 @@ const styles = StyleSheet.create({
   regaloDiarioModalTitle: { color: '#704b2d', fontFamily: 'Delius', fontSize: 11, fontWeight: '900', letterSpacing: 0.7 },
   regaloDiarioModalSub: { color: '#9c7644', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '800', letterSpacing: 0.55, marginTop: 1 },
   regaloDiarioModalClose: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: 'rgba(255,249,231,0.72)', borderWidth: 1, borderColor: '#d7b977' },
-  accesosInicioWrap: { position: 'absolute', left: '50%', bottom: 6, transform: [{ translateX: -72 }], flexDirection: 'row', alignItems: 'center', zIndex: 220, elevation: 12 },
+  accesosInicioWrap: { position: 'absolute', right: 198, bottom: 6, flexDirection: 'row', alignItems: 'center', zIndex: 220, elevation: 12 },
   accesoInicioBtn: { width: 50, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 0, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 12 },
   accesoInicioFirst: { borderTopLeftRadius: 8, borderBottomLeftRadius: 8 },
   accesoInicioLast: { borderTopRightRadius: 8, borderBottomRightRadius: 8 },
@@ -1000,19 +1479,58 @@ const styles = StyleSheet.create({
   quickModalButtonText: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 8, fontWeight: '900', letterSpacing: 0.7 },
   player: {
     position: 'absolute',
-    bottom: 76,
-    left: '39.55%',
+    bottom: 115,
+    left: '50%',
+    marginLeft: -93,
     width: 90,
     height: 90,
+    zIndex: 420,
+    elevation: 420,
   },
+  petTouch: { position: 'absolute', width: 112, height: 112, top: -10, left: -11, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  playerFill: { ...StyleSheet.absoluteFillObject },
+  playerImage: { width: 112, height: 112, top: -10, left: -11 },
+  petDropZone: { position: 'absolute', width: 76, height: 80, top: 69, left: 63, borderRadius: 999, opacity: 0, zIndex: 999, elevation: 999 },
+  playerShadow: { position: 'absolute', left: '50%', bottom: 70, marginLeft: -54, width: 108, height: 32, zIndex: 0, shadowColor: '#5b3845', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.22, shadowRadius: 9, elevation: 2 },
+  petMoodBubble: { position: 'absolute', left: '50%', bottom: 124, marginLeft: 51, zIndex: 430, width: 46, height: 46, shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.24, shadowRadius: 5, elevation: 8 },
+  petMoodSvg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
+  satietyPanel: { position: 'absolute', left: '50%', bottom: 79, marginLeft: -69, zIndex: 415, width: 16, height: 70, flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 1 },
+  satietyIconWrap: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(112,73,55,0.72)', borderWidth: 1, borderColor: 'rgba(255,224,157,0.7)', borderRadius: 3 },
+  satietyTrack: { flex: 1, width: 10, overflow: 'hidden', borderRadius: 3, backgroundColor: 'rgba(86,57,54,0.48)', borderWidth: 1, borderColor: 'rgba(255,241,210,0.82)', justifyContent: 'flex-end', shadowColor: '#6c4935', shadowOffset: { width: 1, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
+  satietyFill: { width: '100%', borderRadius: 2, borderTopWidth: 1, borderTopColor: 'rgba(255,246,190,0.65)', shadowColor: '#fff2c4', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 2, elevation: 2 },
+  foodTray: { position: 'absolute', left: '50%', bottom: 96, marginLeft: -120, zIndex: 710, elevation: 710, width: 190, height: 36, paddingHorizontal: 8, borderRadius: 18, flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: 'rgba(255,250,240,0.98)', borderWidth: 1, borderColor: '#dfc49a', shadowColor: '#674a35', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 6 },
+  foodTrayBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4e3d1', borderWidth: 1, borderColor: '#e0b97a', marginRight: 4 },
+  foodTrayBadgeEmoji: { fontSize: 18 },
+  foodTrayItems: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  foodTrayTitle: { color: '#8a5d3e', fontFamily: 'Delius', fontSize: 4.9, fontWeight: '900', letterSpacing: 0.25 },
+  foodTrayHint: { color: '#ad8468', fontFamily: 'Delius', fontSize: 3.9, lineHeight: 5, fontWeight: '700' },
+  foodItem: { width: 28, height: 28, position: 'relative', borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f6ead0', borderWidth: 1, borderColor: '#d1ab69', shadowColor: '#7a5634', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.18, shadowRadius: 2, elevation: 10, zIndex: 720 },
+  foodItemEmpty: { opacity: 0.38, backgroundColor: '#e2d8cb', borderColor: '#b9a998' },
+  foodEmoji: { fontSize: 16.5, lineHeight: 20 },
+  foodCount: { position: 'absolute', right: -3, bottom: -3, minWidth: 13, height: 13, paddingHorizontal: 3, borderRadius: 7, alignItems: 'center', justifyContent: 'center', backgroundColor: '#bd6f83', borderWidth: 1, borderColor: '#fff1e2' },
+  foodCountText: { color: '#fff', fontFamily: 'Delius', fontSize: 5.4, fontWeight: '900' },
+  foodFeedback: { position: 'absolute', left: '50%', bottom: 184, marginLeft: -22, zIndex: 900, flexDirection: 'row', gap: 3, alignItems: 'center', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, backgroundColor: 'rgba(255,249,234,0.96)', borderWidth: 1, borderColor: '#d4a75d', elevation: 12 },
+  foodFeedbackEmoji: { fontSize: 13 },
+  foodFeedbackText: { color: '#739b53', fontFamily: 'Delius', fontSize: 9, fontWeight: '900' },
+  feedNotice: { position: 'absolute', left: '50%', bottom: 205, transform: [{ translateX: -55 }], width: 110, paddingHorizontal: 7, paddingVertical: 4, alignItems: 'center', borderRadius: 999, backgroundColor: 'rgba(255,238,214,0.97)', borderWidth: 1.2, borderColor: '#c47758', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 20, zIndex: 950 },
+  feedNoticeText: { color: '#8b4e3c', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', textAlign: 'center' },
+  feedNoticeSelection: { width: 160, transform: [{ translateX: -80 }] },
   jugarBtn: { position: 'absolute', right: 18, bottom: -5, width: 158, height: 94, alignItems: 'center', justifyContent: 'center', zIndex: 30, elevation: 12 },
   jugarImagen: { position: 'absolute', width: '104%', height: '104%' },
   jugarContenido: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5, transform: [{ translateY: -8 }] },
   jugarTexto: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(54,35,22,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   jugarDescripcion: { color: 'rgba(255,248,220,0.82)', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '700', marginTop: -1 },
-  skinButton: { position: 'absolute', left: '61%', bottom: 78, width: 36, height: 41, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 500, zIndex: 500 },
+  skinButton: { position: 'absolute', left: 315, bottom: 6, width: 36, height: 41, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 500, zIndex: 500 },
   skinButtonText: { color: '#76552f', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', marginTop: 1 },
-  changeButton: { position: 'absolute', left: '35%', bottom: 78, width: 36, height: 41, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 500, zIndex: 500 },
+  foodSelectButton: { position: 'absolute', left: 357, bottom: 6, width: 36, height: 41, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 500, zIndex: 500, flexDirection: 'column' },
+  foodSelectTouch: { alignItems: 'center', justifyContent: 'center' },
+  foodOriginalIconHidden: { opacity: 0 },
+  foodSelectEmoji: { fontSize: 15, lineHeight: 17, textAlign: 'center' },
+  foodSelectLabel: { fontSize: 5.5, color: '#76552f', fontFamily: 'Delius', fontWeight: '900', marginTop: 1, textAlign: 'center' },
+  foodSelectCount: { fontSize: 9, color: '#7a5840', fontWeight: '900', marginTop: 2 },
+  foodDragPreview: { position: 'absolute', left: -3, top: -7.3, width: 42, height: 42, alignItems: 'center', justifyContent: 'center', zIndex: 900, elevation: 900 },
+  foodDragPreviewEmoji: { fontSize: 29, lineHeight: 34, textShadowColor: 'rgba(70,45,25,0.28)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 3 },
+  changeButton: { position: 'absolute', left: 273, bottom: 6, width: 36, height: 41, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 500, zIndex: 500 },
   changeButtonText: { color: '#76552f', fontFamily: 'Delius', fontSize: 6, fontWeight: '900', marginTop: 1 },
   canjearWrap: {
     position: 'absolute',
