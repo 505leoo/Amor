@@ -931,6 +931,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
 
 const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, tutorialActivo = false }) => {
   const [nivelJuego, setNivelJuego] = useState(1);
+  const [nivelMemoriaSabores, setNivelMemoriaSabores] = useState(1);
   const [partidasCompletadas, setPartidasCompletadas] = useState(0);
   const petTargetRef = useRef(null);
   const petIdleScale = useRef(new Animated.Value(1)).current;
@@ -985,6 +986,15 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
       setNivelJuego(Number.isFinite(datosJuego.nivel) ? datosJuego.nivel : 1);
       setPartidasCompletadas(Math.max(0, Number(datosJuego.partidasCompletadas) || 0));
     }, error => console.warn('[Inicio] No se pudo actualizar el progreso de Conexiones', error?.message || error));
+  }, []);
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return undefined;
+    return onSnapshot(doc(db, 'usuarios', uid, 'juegos', 'memoriaSabores'), snap => {
+      const nivel = Number(snap.data()?.nivel) || 1;
+      setNivelMemoriaSabores(Math.max(1, Math.min(200, nivel)));
+    }, error => console.warn('[Inicio] No se pudo actualizar el progreso de Memoria de Sabores', error?.message || error));
   }, []);
 
   useEffect(() => {
@@ -1371,15 +1381,14 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
         <RuletaDiariaModal visible={ruletaAbierta} onClose={() => { setRuletaAbierta(false); setOverlayActive(false); }} />
         <PreguntonasModal visible={preguntonasAbiertas} parejaUid={estadoInicio?.pareja} nombrePareja={parejaInicio?.nombre || 'Tu pareja'} onClose={() => { setPreguntonasAbiertas(false); setOverlayActive(false); }} />
         <TouchableOpacity style={styles.jugarBtn} activeOpacity={0.82} onPress={() => {
-          const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
-          navigation?.navigate(isAdmin ? 'juegos' : 'conexiones');
+          navigation?.navigate('dulces');
         }}>
           <Image source={JUGAR_IMAGE} style={styles.jugarImagen} contentFit="contain" cachePolicy="memory-disk" transition={0} />
           <View style={styles.jugarContenido}>
-            <MaterialIcons name="extension" size={21} color="#fff1b8" />
+            <MaterialIcons name="psychology" size={21} color="#fff1b8" />
             <View>
               <Text style={styles.jugarTexto}>JUGAR</Text>
-              {nivelJuego != null && <Text style={styles.jugarDescripcion}>Eres nivel {nivelJuego}</Text>}
+              {nivelMemoriaSabores != null && <Text style={styles.jugarDescripcion}>Eres nivel {nivelMemoriaSabores}</Text>}
             </View>
           </View>
         </TouchableOpacity>

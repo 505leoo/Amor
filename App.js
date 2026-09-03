@@ -40,6 +40,7 @@ import Iconos from './menus/Iconos';
 import Pase from './menus/Pase';
 import Juegos from './Juegos/Juegos';
 import ConexionesGame from './Juegos/Conexiones/ConexionesGame';
+import DulcesGame from './Juegos/Dulces/DulcesGame';
 import Rutas from './Rutas';
 import Comerciante from './Comerciante';
 import Anuncios from './components/Anuncios';
@@ -62,7 +63,7 @@ const KNOWN_SCREENS = new Set([
   'intro', 'noticias', 'anuncios', 'login', 'register', 'main', 'reporteSemanal', 'coleccion', 'tienda',
   'perfil', 'buzon', 'trofeos', 'menu', 'pistas', 'temporadas', 'temporada1', 'temporada2',
   'kitty', 'paleta', 'historia1', 'capsula1', 'librotemp1', 'animalitos', 'canjear',
-  'comerciante', 'lotes', 'rutas', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones',
+  'comerciante', 'lotes', 'rutas', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones', 'dulces',
 ]);
 
 export default function App() {
@@ -548,6 +549,7 @@ export default function App() {
           {currentScreen === 'pase'               && <Pase             navigation={navigation} />}
           {currentScreen === 'juegos'             && <Juegos           navigation={navigation} />}
           {currentScreen === 'conexiones'         && <ConexionesGame   navigation={navigation} />}
+          {currentScreen === 'dulces'             && <DulcesGame       navigation={navigation} />}
           {currentScreen !== 'intro' && (
             <UpdateModal
               status={estadoActualizacion}
