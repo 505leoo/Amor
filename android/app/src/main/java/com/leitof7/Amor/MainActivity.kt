@@ -17,6 +17,9 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
+    // Reafirmar FCM justo antes de iniciar el listener garantiza que el
+    // fallback quede activo también cuando Android recrea la Activity.
+    Pushy.toggleFCM(true, applicationContext)
     Pushy.listen(this)
   }
 

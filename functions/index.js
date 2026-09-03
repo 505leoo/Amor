@@ -1,7 +1,7 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions");
 const {onCall, HttpsError} = require("firebase-functions/v2/https");
-const {onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onDocumentUpdated, onDocumentWritten} = require("firebase-functions/v2/firestore");
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const logger = require("firebase-functions/logger");
@@ -182,10 +182,6 @@ exports.sendPushyNotification = functions.https.onCall(
 
         const payload = {
           to: token,
-          notification: {
-            title: title,
-            body: body,
-          },
           data: dataObj,
           ...(collapseKey ? {collapse_key: collapseKey} : {}),
         };
@@ -497,9 +493,12 @@ exports.adminCommunityBroadcast = onCall(async (request) => {
 // Cola editable desde Firestore. Para disparar una plantilla, Administración
 // únicamente cambia `enviar` de "no" a "si". El trigger toma un bloqueo,
 // devuelve el campo a "no" y conserva todo el historial del último intento.
-exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{notificationId}", async (event) => {
-  const before = event.data && event.data.before.data() || {};
-  const after = event.data && event.data.after.data() || {};
+exports.enviarNotificacionDesdeFirestore = onDocumentWritten("notificaciones/{notificationId}", async (event) => {
+  const beforeSnap = event.data && event.data.before;
+  const afterSnap = event.data && event.data.after;
+  if (!afterSnap || !afterSnap.exists) return null;
+  const before = beforeSnap && beforeSnap.exists ? beforeSnap.data() || {} : {};
+  const after = afterSnap.data() || {};
   const quiereEnviar = (value) => value === true || ["si", "sí", "yes"].includes(String(value || "").trim().toLowerCase());
   if (!quiereEnviar(after.enviar) || quiereEnviar(before.enviar)) return null;
 
@@ -578,7 +577,6 @@ exports.enviarNotificacionDesdeFirestore = onDocumentUpdated("notificaciones/{no
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({
           to: registrationIds,
-          notification: {title, body, sound: "default"},
           data: {
             title,
             message: body,
