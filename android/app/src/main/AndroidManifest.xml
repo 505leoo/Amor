@@ -37,11 +37,6 @@
         <data android:scheme="amor"/>
       </intent-filter>
     </activity>
-    <receiver android:name=".PushReceiver" android:exported="false">
-      <intent-filter>
-        <action android:name="pushy.me"/>
-      </intent-filter>
-    </receiver>
     <receiver android:name="me.pushy.sdk.receivers.PushyUpdateReceiver" android:exported="false">
       <intent-filter>
         <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>

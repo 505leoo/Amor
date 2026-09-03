@@ -1,31 +1,24 @@
 import { registerRootComponent } from 'expo';
 import RNPushy from 'pushy-react-native';
-import { AppState, Vibration } from 'react-native';
 
 import App from './App';
 
 RNPushy.setNotificationListener(async (data) => {
   try {
-    // En segundo plano PushReceiver.kt muestra la notificación directamente.
-    // No la reprogrames desde Headless JS: quedaría pendiente hasta abrir la app.
-    if (AppState.currentState !== 'active') return;
-    const Notifications = require('expo-notifications');
-    await Notifications.setNotificationChannelAsync('amor-notifications-v2', {
-      name: 'Notificaciones de Amor',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 220, 120, 280],
-      lightColor: '#D9577F',
-    });
-    if (data.vibrate !== false && data.vibrate !== 'false') Vibration.vibrate([0, 220, 120, 280]);
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: data.title || '💕',
-        body: data.message || '',
-        data,
-      },
-      trigger: { channelId: 'amor-notifications-v2' },
-    });
-  } catch (e) {}
+    // Este listener está registrado a nivel de entrada, por lo que Pushy
+    // también puede ejecutarlo mediante Headless JS con la app cerrada.
+    // Pushy.notify es el mecanismo oficial para publicar la notificación en
+    // Android; no dependemos de que React haya montado la interfaz.
+    const title = data?.title || '💕 Amor';
+    const message = data?.message || data?.body || '';
+    if (typeof RNPushy.notify === 'function') {
+      RNPushy.notify(title, message, data || {});
+    } else {
+      console.warn('[Pushy] notify no está disponible en este build');
+    }
+  } catch (e) {
+    console.error('[Pushy] No se pudo mostrar la notificación', e);
+  }
 });
 
 // El token por sí solo no mantiene conectado al dispositivo. Pushy exige
