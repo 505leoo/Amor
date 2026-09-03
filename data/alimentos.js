@@ -36,7 +36,9 @@ export const calcularSaciedad = (cuidado, ahoraMs = Date.now()) => {
   const base = Number.isFinite(Number(cuidado?.saciedad)) ? Number(cuidado.saciedad) : 100;
   const marcaCliente = convertirFechaAMs(cuidado?.actualizadaEnMs);
   const marcaFirestore = convertirFechaAMs(cuidado?.actualizadaEn);
-  const actualizadoMs = marcaCliente || marcaFirestore || ahoraMs;
+  // Firestore es la fuente más confiable cuando existe; el valor local queda
+  // como respaldo para documentos creados antes de guardar actualizadaEn.
+  const actualizadoMs = marcaFirestore || marcaCliente || ahoraMs;
   const ahoraValido = convertirFechaAMs(ahoraMs) || Date.now();
   const horas = Math.max(0, ahoraValido - actualizadoMs) / 3600000;
   return Math.max(0, Math.min(100, base - horas * PERDIDA_SACIEDAD_POR_HORA));

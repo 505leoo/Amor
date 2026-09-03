@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, memo, useState, createContext, useContext } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Easing, Modal, PanResponder, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Animated, Easing, Modal, PanResponder, ScrollView, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Svg, { Path, Circle, Rect, Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { Image } from 'expo-image';
@@ -744,6 +744,13 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   useEffect(() => {
     const interval = setInterval(() => setAhora(Date.now()), 10000);
     return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const suscripcion = AppState.addEventListener('change', estadoApp => {
+      if (estadoApp === 'active') setAhora(Date.now());
+    });
+    return () => suscripcion.remove();
   }, []);
 
   useEffect(() => {
