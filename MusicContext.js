@@ -7,7 +7,7 @@ const UKELELE = require('./assets/sounds/ukelele.mp3');
 const CLICK = require('./assets/sounds/click.mp3');
 const ENTER = require('./assets/sounds/enter.mp3');
 const VOLUMEN_GLOBAL = 0.22;
-const CLICK_COOLDOWN_MS = 600;
+const CLICK_COOLDOWN_MS = 120;
 
 export const useMusicPlayer = () => {
   const context = useContext(MusicContext);
@@ -86,7 +86,7 @@ export const MusicProvider = ({ children, onVisualClick }) => {
     if (!inicio) return;
     const touch = event.nativeEvent;
     const distancia = Math.hypot((touch.pageX || 0) - inicio.x, (touch.pageY || 0) - inicio.y);
-    if (distancia <= 10 && Date.now() - inicio.at <= 700) {
+    if (distancia <= 10 && Date.now() - inicio.at <= 360) {
       onVisualClick?.(touch.pageX || inicio.x, touch.pageY || inicio.y);
       reproducirClick();
     }

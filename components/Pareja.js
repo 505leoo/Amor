@@ -26,9 +26,9 @@ const getUsuariosCacheados = async () => {
   return usuariosRequest;
 };
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
-// El heartbeat se publica cada 2 minutos. Cinco minutos toleran una escritura
-// demorada o una pausa breve sin mostrar que la pareja desapareció.
-const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+// La actividad se publica cada 45 segundos. La etiqueta "Conectado/a" solo se
+// mantiene durante 2 minutos; después pasa a mostrar el tiempo real.
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
 
 const fechaActividad = valor => {
   if (!valor) return null;
@@ -156,7 +156,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
   useEffect(() => {
     if (isPaused) return undefined;
     setAhora(Date.now());
-    const timer = setInterval(() => setAhora(Date.now()), 60000);
+    const timer = setInterval(() => setAhora(Date.now()), 15000);
     return () => clearInterval(timer);
   }, [isPaused]);
 

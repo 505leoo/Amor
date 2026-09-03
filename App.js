@@ -79,6 +79,7 @@ export default function App() {
   const [tutorialActivo, setTutorialActivo] = useState(false);
   const [estadoActualizacion, setEstadoActualizacion] = useState('checking');
   const [versionActualizacion, setVersionActualizacion] = useState(null);
+  const [descripcionActualizacion, setDescripcionActualizacion] = useState(null);
   const [bootVisible, setBootVisible] = useState(true);
   const bootOpacity = useRef(new Animated.Value(1)).current;
   const userRef = useRef(null);
@@ -119,7 +120,12 @@ export default function App() {
         || manifest?.extra?.updateVersion
         || manifest?.metadata?.updateVersion
         || null;
+      const description = manifest?.extra?.expoClient?.extra?.updateDescription
+        || manifest?.extra?.updateDescription
+        || manifest?.metadata?.updateDescription
+        || null;
       setVersionActualizacion(version);
+      setDescripcionActualizacion(typeof description === 'string' ? description.trim() : null);
       setEstadoActualizacion('available');
       updateStatusRef.current = 'available';
     } catch (error) {
@@ -400,7 +406,7 @@ export default function App() {
     });
   }, [authChecked, bootOpacity, loading]);
 
-  // Presencia liviana: no lee nada y solo escribe cada dos minutos mientras
+  // Presencia liviana: no lee nada y solo escribe cada 45 segundos mientras
   // la aplicación está realmente en primer plano.
   useEffect(() => {
     const publicarActividad = () => {
@@ -408,11 +414,12 @@ export default function App() {
       if (!currentUser || AppState.currentState !== 'active') return;
       setDoc(doc(db, 'usuarios', currentUser.uid), {
         ultimaActividad: serverTimestamp(),
+        componenteActual: global.currentScreen || 'main',
         isOnline: true,
       }, { merge: true }).catch(() => {});
     };
     publicarActividad();
-    const interval = setInterval(publicarActividad, 2 * 60 * 1000);
+    const interval = setInterval(publicarActividad, 45 * 1000);
     const subscription = AppState.addEventListener('change', estado => {
       if (estado === 'active') publicarActividad();
     });
@@ -554,6 +561,7 @@ export default function App() {
             <UpdateModal
               status={estadoActualizacion}
               version={versionActualizacion}
+              description={descripcionActualizacion}
               onAccept={instalarActualizacion}
             />
           )}

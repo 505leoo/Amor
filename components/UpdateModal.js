@@ -2,7 +2,7 @@ import React from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-export default function UpdateModal({ status, version, onAccept }) {
+export default function UpdateModal({ status, version, description, onAccept }) {
   const visible = status === 'available' || status === 'downloading';
 
   return (
@@ -15,7 +15,7 @@ export default function UpdateModal({ status, version, onAccept }) {
           <Text style={styles.title}>¡Hay una nueva versión!</Text>
           {!!version && <View style={styles.badge}><Text style={styles.badgeText}>VERSIÓN {version}</Text></View>}
           <Text style={styles.description}>
-            Preparamos nuevas mejoras con mucho cariño para que su rinconcito se sienta más bonito, cómodo y especial.
+            {description || 'Preparamos nuevas mejoras con mucho cariño para que su rinconcito se sienta más bonito, cómodo y especial.'}
           </Text>
           {status === 'downloading' ? (
             <View style={styles.loading}>

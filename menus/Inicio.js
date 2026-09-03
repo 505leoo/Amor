@@ -33,6 +33,23 @@ const OverlayContext = createContext(false);
 export const useOverlayActive = () => useContext(OverlayContext);
 const NOOP = () => {};
 const HALCON_IMAGE = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
+
+const fechaDeActividad = valor => {
+  if (!valor) return null;
+  if (typeof valor?.toDate === 'function') return valor.toDate();
+  const fecha = new Date(valor?.seconds ? valor.seconds * 1000 : valor);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
+};
+const horaDeActividad = valor => {
+  const fecha = fechaDeActividad(valor);
+  if (!fecha) return 'hora no disponible';
+  return fecha.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+};
+const nombreComponente = valor => ({
+  main: 'Inicio', inicio: 'Inicio', conexiones: 'Hilito', dulces: 'Memoria de Sabores',
+  juegos: 'Juegos', comerciante: 'Comerciante', perfil: 'Perfil', pareja: 'Pareja',
+  animalitos: 'Animalitos', temporadas: 'Temporadas', buzon: 'Buzón',
+}[String(valor || '').toLowerCase()] || 'Amor');
 const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
 const JUGAR_IMAGE = require('../assets/inicio/jugar.png');
 const selectEstadoInicio = data => ({
@@ -1131,10 +1148,16 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     });
   }, [userAlimentos]);
   const { data: parejaInicio } = useUserDocument(
-    data => data ? { nombre: data.nombre || data.datosCompletos?.nombre || 'Tu pareja', exp: Number(data.exp) || 0, ultimaActividad: data.ultimaActividad } : null,
+    data => data ? { nombre: data.nombre || data.datosCompletos?.nombre || 'Tu pareja', exp: Number(data.exp) || 0, ultimaActividad: data.ultimaActividad, componenteActual: data.componenteActual } : null,
     estadoInicio?.pareja || '',
   );
   const [actividadPareja, setActividadPareja] = useState(null);
+  const [relojActividad, setRelojActividad] = useState(Date.now());
+
+  useEffect(() => {
+    const interval = setInterval(() => setRelojActividad(Date.now()), 45000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const uidPareja = estadoInicio?.pareja;
@@ -1229,11 +1252,13 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     if (parejaInicio && actividadPareja) {
       const nombrePareja = parejaInicio.nombre || 'Tu pareja';
       const actividad = actividadPareja;
+      const timestamp = horaDeActividad(actividad.creadoEn);
+      const componenteActual = nombreComponente(parejaInicio.componenteActual);
       const mensajesActividad = {
-        nivel: { icono: 'trending-up', titulo: `${nombrePareja} subió al nivel ${actividad.nivel}`, detalle: 'Su historia sigue creciendo.', insignia: 'NIVEL' },
-        compra: { icono: 'shopping-bag', titulo: `${nombrePareja} gastó ${actividad.cantidad} monedas`, detalle: 'Encontró algo bonito en el Comerciante.', insignia: 'COMPRA' },
-        epico: { icono: 'auto-awesome', titulo: `${nombrePareja} consiguió algo épico`, detalle: `Ganó ${actividad.cantidad} diamantes.`, insignia: 'ÉPICO' },
-        monedas: { icono: 'monetization-on', titulo: `${nombrePareja} obtuvo ${actividad.cantidad} monedas`, detalle: 'Una recompensa se sumó a su aventura.', insignia: 'MONEDAS' },
+        nivel: { icono: 'trending-up', titulo: `${nombrePareja} subió al nivel ${actividad.nivel}`, detalle: `${timestamp} · ${componenteActual}`, insignia: 'NIVEL' },
+        compra: { icono: 'shopping-bag', titulo: `${nombrePareja} gastó ${actividad.cantidad} monedas`, detalle: `${timestamp} · ${componenteActual}`, insignia: 'COMPRA' },
+        epico: { icono: 'auto-awesome', titulo: `${nombrePareja} consiguió algo épico`, detalle: `${timestamp} · ${componenteActual}`, insignia: 'ÉPICO' },
+        monedas: { icono: 'monetization-on', titulo: `${nombrePareja} obtuvo ${actividad.cantidad} monedas`, detalle: `${timestamp} · ${componenteActual}`, insignia: 'MONEDAS' },
       };
       const mensajeActividad = mensajesActividad[actividad.tipo];
       if (mensajeActividad) return { ...mensajeActividad, accion: () => navigation?.navigate('perfil', { uid: estadoInicio?.pareja }) };
@@ -1261,7 +1286,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
             icono: 'extension', titulo: mensajeJuego.titulo, detalle: mensajeJuego.detalle, insignia: faltanParaBonus === 1 ? '1 MÁS' : '+5 EXP',
             accion: () => navigation?.navigate('conexiones'),
           };
-  }, [abrirComerciante, actividadPareja, comercianteNuevo, estadoInicio?.animalito, estadoInicio?.pareja, faltanParaBonus, misionesNuevas, navigation, nivelJuego, parejaInicio, partidasCompletadas, pendientesReclamar]);
+  }, [abrirComerciante, actividadPareja, comercianteNuevo, estadoInicio?.animalito, estadoInicio?.pareja, faltanParaBonus, misionesNuevas, navigation, nivelJuego, parejaInicio, partidasCompletadas, pendientesReclamar, relojActividad]);
 
   if (tutorialActivo) return <TutorialInicio navigation={navigation} />;
 
@@ -1270,6 +1295,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
       <View style={[styles.container, style]}>
         <RoomBackground />
         <StatusBar hidden={true} />
+        <Text style={styles.pruebaHola}>Hola</Text>
         <MoneyMenu />
         <QuickMenu />
         <SiguientePaso icono={siguientePaso.icono} titulo={siguientePaso.titulo} detalle={siguientePaso.detalle} insignia={siguientePaso.insignia} onPress={siguientePaso.accion} />
@@ -1809,6 +1835,19 @@ const overlayStyles = StyleSheet.create({
     textShadowRadius: 3,
     marginTop: 4,
     letterSpacing: 1,
+  },
+  pruebaHola: {
+    position: 'absolute',
+    top: '45%',
+    left: 0,
+    right: 0,
+    zIndex: 9999,
+    elevation: 20,
+    textAlign: 'center',
+    fontSize: 42,
+    lineHeight: 50,
+    fontWeight: '900',
+    color: '#ffffff',
   },
 });
 

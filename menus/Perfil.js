@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated, Modal, ScrollView, StatusBar, StyleSheet, Text,
   TouchableOpacity, View,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { collection, deleteField, doc, onSnapshot, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
@@ -227,11 +228,13 @@ const legacyBadgeTargets = legacyMap => {
   return [...targets];
 };
 
-const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained, requirement, tierName, targetLevel = 0, earnedReason, expanded, onExpandedChange, onArrange }) => {
+const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained, requirement, tierName, targetLevel = 0, earnedReason, expanded, onExpandedChange, onArrange, onArrangePress, fadeIn = false, fadeActive = false, fadeTrigger = 0, fadeDuration = 60 }) => {
   const rotation = useRef(new Animated.Value(0)).current;
   const animating = useRef(false);
   const desiredBack = useRef(Boolean(expanded));
   const renderedBack = useRef(false);
+  const longPressed = useRef(false);
+  const badgeOpacity = useRef(new Animated.Value(fadeIn ? 0 : 1)).current;
   const [showBack, setShowBack] = useState(false);
   const [showRequirement, setShowRequirement] = useState(false);
   const unlocked = targetLevel > 0;
@@ -259,11 +262,41 @@ const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained
     desiredBack.current = Boolean(expanded);
     runQueuedFlip();
   }, [expanded]);
-  const toggle = () => onExpandedChange?.(!expanded);
+  useEffect(() => {
+    if (!fadeIn) return undefined;
+    Animated.timing(badgeOpacity, { toValue: 1, duration: fadeDuration, useNativeDriver: true }).start();
+    return undefined;
+  }, [badgeOpacity, fadeDuration, fadeIn]);
+  useEffect(() => {
+    if (!fadeActive || !fadeTrigger) return undefined;
+    badgeOpacity.stopAnimation();
+    badgeOpacity.setValue(0);
+    Animated.timing(badgeOpacity, { toValue: 1, duration: 60, useNativeDriver: true }).start();
+    return undefined;
+  }, [badgeOpacity, fadeActive, fadeTrigger]);
+  const toggle = () => {
+    if (longPressed.current) {
+      longPressed.current = false;
+      return;
+    }
+    onExpandedChange?.(!expanded);
+  };
+  const handlePress = () => {
+    if (longPressed.current) {
+      longPressed.current = false;
+      return;
+    }
+    if (onArrangePress?.()) return;
+    toggle();
+  };
+  const arrange = () => {
+    longPressed.current = true;
+    onArrange?.();
+  };
   return <View style={styles.badgeItem}>
-    <Animated.View style={[styles.badgeFace, { transform: [{ perspective: 700 }, { rotateY }] }]}>
+    <Animated.View style={[styles.badgeFace, { opacity: badgeOpacity, transform: [{ perspective: 700 }, { rotateY }] }]}> 
       {showBack ? <View style={styles.badgeBack}>
-        <TouchableOpacity onPress={toggle} activeOpacity={0.9}>
+        <TouchableOpacity onPress={handlePress} onLongPress={arrange} delayLongPress={450} hitSlop={4} pressRetentionOffset={8} activeOpacity={0.9}>
         <LinearGradient colors={unlocked ? colors : ['#b9ad9d', '#80766c', '#5e5751']} style={[styles.badgeBackMedal, legendary && unlocked && styles.badgeBackMedalLegend]}>
           {showRequirement ? <>
             <MaterialIcons name={legendary ? 'verified' : 'trending-up'} size={13} color="#fff4d1" />
@@ -277,7 +310,7 @@ const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained
         </LinearGradient>
         </TouchableOpacity>
         {unlocked && <TouchableOpacity style={[styles.badgeQuestion, showRequirement && styles.badgeQuestionActive]} onPress={() => setShowRequirement(value => !value)} activeOpacity={0.75}><Text style={styles.badgeQuestionText}>?</Text></TouchableOpacity>}
-      </View> : <TouchableOpacity style={styles.badgeFront} onPress={toggle} onLongPress={onArrange} activeOpacity={0.9}>
+      </View> : <TouchableOpacity style={styles.badgeFront} onPress={handlePress} onLongPress={arrange} delayLongPress={450} hitSlop={4} pressRetentionOffset={8} activeOpacity={0.9}>
         <View style={[styles.badgeWing, styles.badgeWingLeft, legendary && styles.badgeWingLegend, !unlocked && styles.badgeLocked]} />
         <View style={[styles.badgeWing, styles.badgeWingRight, legendary && styles.badgeWingLegend, !unlocked && styles.badgeLocked]} />
         <LinearGradient colors={unlocked ? colors : ['#b9ad9d', '#80766c', '#5e5751']} style={[styles.badgeMedal, legendary && unlocked && styles.badgeMedalLegend]}>
@@ -603,7 +636,10 @@ const Perfil = ({ navigation, route }) => {
   const [openBadgeId, setOpenBadgeId] = useState(null);
   const [chapasExpandidas, setChapasExpandidas] = useState(false);
   const [chapaSeleccionada, setChapaSeleccionada] = useState(null);
+  const chapaSeleccionadaRef = useRef(null);
   const [chapasOrden, setChapasOrden] = useState([]);
+  const [badgeFadeIds, setBadgeFadeIds] = useState([]);
+  const [badgeFadeVersion, setBadgeFadeVersion] = useState(0);
   const [busyFrameId, setBusyFrameId] = useState(null);
   const [rinconSaving, setRinconSaving] = useState(false);
   const [rinconUnlocking, setRinconUnlocking] = useState(null);
@@ -634,12 +670,13 @@ const Perfil = ({ navigation, route }) => {
     rinconSaveRef.current = false;
     rinconUnlockRef.current = false;
     legacyCleanupRef.current = false;
+    chapaSeleccionadaRef.current = null;
     if (!targetUid) return undefined;
     let conexiones = {};
     let memoriaSabores = {};
     const unsubscribeUser = onSnapshot(doc(db, 'usuarios', targetUid), snap => {
       const raw = snap.exists() ? (snap.data() || {}) : {};
-      setUserData({
+      setUserData(previous => ({
         ...raw,
         uid: targetUid,
         nombre: raw.datosCompletos?.nombre || raw.nombre || (!soloLectura ? currentUser?.displayName : null) || 'Usuario',
@@ -660,14 +697,18 @@ const Perfil = ({ navigation, route }) => {
         animalitos: raw.animalitos || {},
         skinsDesbloqueadas: raw.skinsDesbloqueadas || {},
         cartasAnimalitos: Math.max(0, Number(raw.cartasAnimalitos) || 0),
-        juegos: { ...(raw.juegos || {}), conexiones: { ...(raw.juegos?.conexiones || {}), ...conexiones } },
+        juegos: {
+          ...(raw.juegos || {}),
+          conexiones: { ...(raw.juegos?.conexiones || {}), ...conexiones },
+          memoriaSabores: Object.keys(memoriaSabores).length ? memoriaSabores : (previous?.juegos?.memoriaSabores || raw.juegos?.memoriaSabores || {}),
+        },
         marcoPerfil: raw.marcoPerfil || 'corazon',
         marcosComprados: raw.marcosComprados || {},
         marcosDesbloqueados: { corazon: true, ...(raw.marcosComprados || {}) },
         chapasPerfil: raw.chapasPerfil || {},
         rinconcito: raw.rinconcito || {},
         rinconcitoDesbloqueos: raw.rinconcitoDesbloqueos || {},
-      });
+      }));
     }, () => setUserData(null));
     const unsubscribeGame = onSnapshot(doc(db, 'usuarios', targetUid, 'juegos', 'conexiones'), snap => {
       if (!snap.exists()) return;
@@ -722,6 +763,7 @@ const Perfil = ({ navigation, route }) => {
   }, [animalStates, userData?.animalito, userData?.iconoLocalId, userData?.iconoUrl, userData?.iconosDesbloqueados, userData?.skin, userData?.skinsDesbloqueadas]);
 
   const accountAge = useMemo(() => registrationAge(userData?.fechaRegistro), [userData?.fechaRegistro]);
+  const dulcesLevel = Math.max(1, Number(userData?.juegos?.memoriaSabores?.nivel) || 1);
 
   const badgeCatalog = useMemo(() => {
     const evolvingBadge = ({ id, icon, title, value, unit, thresholds, levelOverride, displayValue }) => {
@@ -754,7 +796,7 @@ const Perfil = ({ navigation, route }) => {
         { value: 100, requisito: 'Alcanza el nivel 100 en Hilito.', motivo: 'Se convirtió en leyenda al alcanzar el nivel 100 en Hilito.' },
         { value: 200, requisito: 'Alcanza el nivel 200 en Hilito.', motivo: 'Superó la leyenda y alcanzó el nivel 200 en Hilito.' },
       ] }),
-      evolvingBadge({ id: 'maestria_dulces', icon: 'psychology', title: 'Maestría en Dulces', value: Math.max(0, Number(userData?.juegos?.memoriaSabores?.nivel || 1) - 1), unit: 'niveles', thresholds: [
+      evolvingBadge({ id: 'maestria_dulces', icon: 'psychology', title: 'Maestría en Dulces', value: dulcesLevel, displayValue: `Nivel ${dulcesLevel}`, unit: 'niveles', thresholds: [
         { value: 10, requisito: 'Alcanza el nivel 10 en Memoria de Sabores.', motivo: 'Descubrió los sabores hasta el nivel 10.' },
         { value: 50, requisito: 'Alcanza el nivel 50 en Memoria de Sabores.', motivo: 'Demostró una memoria dulce excepcional.' },
         { value: 100, requisito: 'Alcanza el nivel 100 en Memoria de Sabores.', motivo: 'Se convirtió en una maestra o maestro de los sabores.' },
@@ -773,7 +815,7 @@ const Perfil = ({ navigation, route }) => {
         { value: 12, requisito: 'Consigue 12 iconos o trajes especiales.', motivo: 'Reunió 12 iconos y trajes especiales.' },
       ] }),
     ];
-  }, [accountAge, mastery.nivel, ownedAnimals.length, unlockedStyleCount, userData?.juegos?.memoriaSabores?.nivel]);
+  }, [accountAge, dulcesLevel, mastery.nivel, ownedAnimals.length, unlockedStyleCount]);
 
   useEffect(() => {
     if (soloLectura || !userData?.uid) return;
@@ -838,31 +880,46 @@ const Perfil = ({ navigation, route }) => {
 
   const orderedBadges = useMemo(() => {
     const byId = new Map(badgeCatalog.map(badge => [badge.id, badge]));
-    return [...chapasOrden.map(id => byId.get(id)).filter(Boolean), ...badgeCatalog.filter(badge => !chapasOrden.includes(badge.id))];
-  }, [badgeCatalog, chapasOrden]);
+    const fallbackOrder = ['antiguedad_amor', 'maestria_hilito', 'guardian_animalitos', 'coleccion_estilo', 'maestria_dulces'];
+    const savedOrder = Array.isArray(userData?.chapasOrden) ? userData.chapasOrden : [];
+    const initialOrder = chapasOrden.length ? chapasOrden : savedOrder.length ? savedOrder : [...fallbackOrder, ...badgeCatalog.map(badge => badge.id)];
+    return [...initialOrder.map(id => byId.get(id)).filter(Boolean), ...badgeCatalog.filter(badge => !initialOrder.includes(badge.id))];
+  }, [badgeCatalog, chapasOrden, userData?.chapasOrden]);
 
   const seleccionarChapa = useCallback(id => {
     if (soloLectura) return;
-    if (!chapaSeleccionada) {
+    const index = orderedBadges.findIndex(badge => badge.id === id);
+    if (index < 0) return false;
+    const selectedId = chapaSeleccionadaRef.current;
+    if (!selectedId) {
+      setOpenBadgeId(null);
+      chapaSeleccionadaRef.current = id;
       setChapaSeleccionada(id);
-      return;
+      Haptics.selectionAsync().catch(() => {});
+      return false;
     }
-    if (chapaSeleccionada === id) {
+    if (selectedId === id) {
+      setOpenBadgeId(null);
+      chapaSeleccionadaRef.current = null;
       setChapaSeleccionada(null);
-      return;
+      Haptics.selectionAsync().catch(() => {});
+      return true;
     }
-    const from = orderedBadges.findIndex(badge => badge.id === chapaSeleccionada);
+    const from = orderedBadges.findIndex(badge => badge.id === selectedId);
     const to = orderedBadges.findIndex(badge => badge.id === id);
-    if (from < 0 || to < 0 || from >= 4 || to >= 4) {
-      setChapaSeleccionada(id);
-      return;
-    }
+    if (from < 0 || to < 0) return true;
     const nextOrder = [...orderedBadges.map(badge => badge.id)];
     [nextOrder[from], nextOrder[to]] = [nextOrder[to], nextOrder[from]];
+    setOpenBadgeId(null);
+    chapaSeleccionadaRef.current = null;
     setChapasOrden(nextOrder);
     setChapaSeleccionada(null);
+    setBadgeFadeIds([selectedId, id]);
+    setBadgeFadeVersion(version => version + 1);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     if (userData?.uid) updateDoc(doc(db, 'usuarios', userData.uid), { chapasOrden: nextOrder }).catch(() => {});
-  }, [chapaSeleccionada, orderedBadges, soloLectura, userData?.uid]);
+    return true;
+  }, [orderedBadges, soloLectura, userData?.uid]);
 
   const renderBadge = badge => {
     const persisted = badgeRecords[badge.id] || legacyBadgeRecord(d.chapasPerfil, badge.id);
@@ -871,7 +928,12 @@ const Perfil = ({ navigation, route }) => {
     const effectiveTier = effectiveLevel > 0 ? BADGE_TIERS[Math.min(effectiveLevel, BADGE_TIERS.length) - 1] : null;
     const milestone = effectiveLevel > 0 ? badge.thresholds[Math.min(effectiveLevel, badge.thresholds.length) - 1] : null;
     const obtained = persistedLevel >= effectiveLevel ? persisted : effectiveLevel > 0 ? { nivel: effectiveLevel, rango: effectiveTier?.id, obtenidaEn: milestone?.obtenidaEn || null, motivo: milestone?.motivo } : null;
-    return <View key={badge.id} style={[styles.badgeSlot, chapaSeleccionada === badge.id && styles.badgeSlotSelected]}><ProfileBadge {...badge} onArrange={() => seleccionarChapa(badge.id)} obtained={obtained} earnedReason={milestone?.motivo} expanded={openBadgeId === badge.id} onExpandedChange={open => setOpenBadgeId(open ? badge.id : null)} targetLevel={effectiveLevel} tierName={effectiveTier?.nombre || 'Sin rango'} colors={effectiveTier?.colors || badge.colors} legendary={effectiveLevel >= BADGE_TIERS.length} detail={effectiveTier ? `${effectiveTier.nombre} · ${badge.displayValue || `${badge.value} ${badge.unit}`}` : badge.detail} /></View>;
+    const selected = chapaSeleccionada === badge.id;
+    const position = orderedBadges.findIndex(item => item.id === badge.id);
+    return <View key={badge.id} style={[styles.badgeSlot, selected && styles.badgeSlotSelected]}>
+      {selected && <View pointerEvents="none" style={styles.badgeSelectedMark} />}
+      <ProfileBadge {...badge} onArrange={() => seleccionarChapa(badge.id)} onArrangePress={() => chapaSeleccionadaRef.current ? seleccionarChapa(badge.id) : false} fadeIn={position < 4} fadeDuration={badgeFadeIds.includes(badge.id) ? 60 : 180} fadeActive={badgeFadeIds.includes(badge.id)} fadeTrigger={badgeFadeVersion} obtained={obtained} earnedReason={milestone?.motivo} expanded={openBadgeId === badge.id} onExpandedChange={open => setOpenBadgeId(open ? badge.id : null)} targetLevel={effectiveLevel} tierName={effectiveTier?.nombre || 'Sin rango'} colors={effectiveTier?.colors || badge.colors} legendary={effectiveLevel >= BADGE_TIERS.length} detail={effectiveTier ? `${effectiveTier.nombre} · ${badge.displayValue || `${badge.value} ${badge.unit}`}` : badge.detail} />
+    </View>;
   };
 
   if (!userData) return <View style={styles.root}><StatusBar hidden /><RoomBackground /></View>;
@@ -1037,14 +1099,18 @@ const Perfil = ({ navigation, route }) => {
         </View>
 
         <View style={styles.rightPage}>
-          <TouchableOpacity style={styles.sectionHeaderPink} onPress={() => { setChapasExpandidas(value => !value); setChapaSeleccionada(null); }} activeOpacity={0.82}>
-            <Text style={styles.sectionHeaderText}>CHAPAS</Text><View style={styles.headerPaw}><MaterialIcons name="pets" size={11} color="#fff1d7" /></View><View style={styles.chapasArrowTab}><MaterialIcons name={chapasExpandidas ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={20} color="#fff1d7" /></View>
+          <TouchableOpacity style={styles.chapasHeader} onPress={() => { setChapasExpandidas(value => !value); chapaSeleccionadaRef.current = null; setChapaSeleccionada(null); }} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel={chapasExpandidas ? 'Ocultar chapas' : 'Ver todas las chapas'}>
+            <Text style={styles.sectionHeaderText}>CHAPAS</Text>
+            <View style={styles.headerPaw}><MaterialIcons name="pets" size={11} color="#fff1d7" /></View>
+            <View pointerEvents="none" style={styles.chapasTabChevron}>
+              <Text style={styles.chapasChevronText}>{chapasExpandidas ? '▲' : '▼'}</Text>
+            </View>
           </TouchableOpacity>
           {!chapasExpandidas ? <>
             <View style={styles.badgesGrid}>{orderedBadges.slice(0, 4).map(renderBadge)}</View>
-            {!soloLectura && <Text style={styles.badgeReorderHint}>{chapaSeleccionada ? 'Tocá otra chapa principal para intercambiarla' : 'Tocá dos chapas principales para cambiar su lugar'}</Text>}
+            {!soloLectura && <Text style={styles.badgeReorderHint}>{chapaSeleccionada ? 'Tocá otra chapa para cambiarla de lugar' : 'Mantené presionada una chapa para seleccionarla'}</Text>}
           </> : <ScrollView style={styles.badgesScroll} contentContainerStyle={styles.badgesScrollContent} showsVerticalScrollIndicator={false}>
-            <Text style={styles.badgesScrollHint}>CHAPAS PRINCIPALES · TOCÁ DOS PARA CAMBIARLAS DE LUGAR</Text>
+            <Text style={styles.badgesScrollHint}>MANTENÉ UNA CHAPA Y TOCÁ OTRA PARA CAMBIARLAS</Text>
             <View style={styles.badgesGridExpanded}>{orderedBadges.map(renderBadge)}</View>
           </ScrollView>}
 
@@ -1108,7 +1174,7 @@ const styles = StyleSheet.create({
   backgroundGlow: { position: 'absolute', top: -160, left: '17%', width: 520, height: 300, borderRadius: 260, backgroundColor: 'rgba(255,205,129,0.12)' },
   backgroundLeafOne: { position: 'absolute', left: -55, bottom: -65, width: 180, height: 125, borderRadius: 90, backgroundColor: 'rgba(70,107,72,0.27)', transform: [{ rotate: '24deg' }] },
   backgroundLeafTwo: { position: 'absolute', right: -40, top: 60, width: 130, height: 90, borderRadius: 70, backgroundColor: 'rgba(149,81,82,0.18)', transform: [{ rotate: '-28deg' }] },
-  book: { position: 'absolute', top: 43, bottom: 9, left: 13, right: 13, flexDirection: 'row', gap: 10, overflow: 'visible' },
+  book: { position: 'absolute', top: 24, bottom: 9, left: 13, right: 13, flexDirection: 'row', gap: 10, overflow: 'visible' },
   bookTopLight: { position: 'absolute', top: 2, left: 8, right: 8, height: 8, zIndex: 4, borderTopLeftRadius: 10, borderTopRightRadius: 10, backgroundColor: 'rgba(255,255,255,0.42)' },
   bookSpine: { position: 'absolute', zIndex: 8, left: '49.65%', top: 0, bottom: 0, width: 8, backgroundColor: 'rgba(130,79,43,0.16)', borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(112,67,36,0.18)', shadowColor: '#6a3e26', shadowOpacity: 0.3, shadowRadius: 5 },
   leftPage: { flex: 1, minWidth: 0, paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8, borderRadius: 16, backgroundColor: 'rgba(255,248,244,0.70)', borderWidth: 1.2, borderColor: 'rgba(173,119,137,0.28)', shadowColor: '#805968', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.14, shadowRadius: 8, elevation: 3 },
@@ -1278,8 +1344,9 @@ const styles = StyleSheet.create({
   statEmoji: { fontSize: 14, lineHeight: 17 },
   bigStatValue: { maxWidth: '94%', color: '#fff8df', fontSize: 9.5, lineHeight: 11, fontWeight: '900', textShadowColor: 'rgba(48,28,72,0.5)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   bigStatLabel: { color: '#f3e4ff', fontSize: 5, fontWeight: '900', letterSpacing: 0.25 },
-  sectionHeaderPink: { alignSelf: 'center', minWidth: 166, height: 28, marginBottom: 5, paddingLeft: 16, paddingRight: 2, borderRadius: 8, flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#d7647c', borderWidth: 1, borderColor: '#a9435b', shadowColor: '#8f4353', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 2, elevation: 3 },
-  chapasArrowTab: { width: 27, height: 26, marginLeft: 3, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(126,42,65,0.42)', borderLeftWidth: 1, borderLeftColor: 'rgba(255,241,215,0.38)' },
+  chapasHeader: { width: '100%', alignSelf: 'stretch', minHeight: 34, marginBottom: 6, paddingHorizontal: 38, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d7647c', borderWidth: 1, borderColor: '#a9435b', shadowColor: '#8f4353', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 2, elevation: 5, position: 'relative', zIndex: 20 },
+  chapasTabChevron: { position: 'absolute', right: 48, top: 3, width: 34, height: 26, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#9e3f59', borderLeftWidth: 1, borderLeftColor: 'rgba(255,241,215,0.55)', zIndex: 21, elevation: 6 },
+  chapasChevronText: { color: '#fff1d7', fontSize: 13, lineHeight: 16, fontWeight: '900' },
   headerPaw: { width: 17, height: 17, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(126,42,65,0.35)' },
   sectionHeaderText: { color: '#fff4dc', fontSize: 8, fontWeight: '900', letterSpacing: 0.35 },
   rinconPreview: { flex: 1, minHeight: 82, position: 'relative', overflow: 'hidden', marginTop: 5, marginHorizontal: 1, borderRadius: 11, borderWidth: 1.4, borderColor: '#785435', shadowColor: '#55331f', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.34, shadowRadius: 4, elevation: 5 },
@@ -1308,14 +1375,15 @@ const styles = StyleSheet.create({
   rinconPreviewTitle: { color: '#fff9e4', fontSize: 10.2, lineHeight: 12, fontWeight: '900', textShadowColor: 'rgba(42,25,17,0.65)', textShadowRadius: 2 },
   rinconEditChip: { height: 18, marginTop: 1, paddingHorizontal: 7, borderRadius: 9, flexDirection: 'row', gap: 3, alignItems: 'center', backgroundColor: 'rgba(255,240,199,0.92)', borderWidth: 0.8, borderColor: 'rgba(112,72,39,0.55)' },
   rinconEditChipText: { color: '#6b4327', fontSize: 4.8, fontWeight: '900', letterSpacing: 0.35 },
-  badgesGrid: { height: 84, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-around', borderBottomWidth: 1, borderBottomColor: 'rgba(150,102,60,0.17)' },
-  badgesGridExpanded: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'space-around', paddingBottom: 8 },
+  badgesGrid: { height: 84, flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'flex-start', borderBottomWidth: 1, borderBottomColor: 'rgba(150,102,60,0.17)' },
+  badgesGridExpanded: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', justifyContent: 'flex-start', paddingBottom: 8 },
   badgesScroll: { height: 255, borderBottomWidth: 1, borderBottomColor: 'rgba(150,102,60,0.17)' },
   badgesScrollContent: { paddingTop: 3, paddingBottom: 8 },
   badgesScrollHint: { color: '#986646', fontSize: 5.5, fontWeight: '900', letterSpacing: 0.45, marginBottom: 3, textAlign: 'center' },
   badgeReorderHint: { color: '#986646', fontSize: 5.5, fontWeight: '800', marginTop: 2, textAlign: 'center' },
-  badgeSlot: { width: '24%', height: 82, alignItems: 'center' },
-  badgeSlotSelected: { borderRadius: 8, backgroundColor: 'rgba(244,202,107,0.25)', borderWidth: 1, borderColor: '#d99832' },
+  badgeSlot: { width: '25%', height: 82, alignItems: 'center' },
+  badgeSlotSelected: { borderRadius: 7, backgroundColor: 'rgba(244,202,107,0.08)', borderBottomWidth: 1.5, borderBottomColor: '#d99832' },
+  badgeSelectedMark: { position: 'absolute', top: 3, right: 3, zIndex: 10, width: 6, height: 6, borderRadius: 3, backgroundColor: '#d99832' },
   badgeItem: { width: '100%', height: 82, position: 'relative' },
   badgeFace: { ...StyleSheet.absoluteFillObject, alignItems: 'center', backfaceVisibility: 'hidden' },
   badgeFront: { width: '100%', height: '100%', alignItems: 'center' },

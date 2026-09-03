@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const fs = require('fs');
 const { execSync } = require('child_process');
+const readline = require('readline');
 
 function readJSON(path) {
   return JSON.parse(fs.readFileSync(path, 'utf8'));
@@ -8,6 +9,19 @@ function readJSON(path) {
 
 function writeJSON(path, obj) {
   fs.writeFileSync(path, JSON.stringify(obj, null, 2) + '\n');
+}
+
+function pedirResumen() {
+  const summaryArg = process.argv.indexOf('--summary');
+  if (summaryArg !== -1 && process.argv[summaryArg + 1]) return Promise.resolve(process.argv.slice(summaryArg + 1).join(' '));
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    return Promise.resolve('Nuevas mejoras y detalles preparados con mucho cariño para Amor.');
+  }
+  const interfaz = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => interfaz.question('Resumen de esta actualización: ', respuesta => {
+    interfaz.close();
+    resolve(respuesta.trim() || 'Nuevas mejoras y detalles preparados con mucho cariño para Amor.');
+  }));
 }
 
 function bumpVersion(version) {
@@ -29,14 +43,15 @@ function bumpVersion(version) {
   return [major, minor, patch].join('.');
 }
 
-async function notificarActualizacion(version) {
+async function notificarActualizacion(version, resumen) {
   const admin = require('../functions/node_modules/firebase-admin');
   if (!admin.apps.length) admin.initializeApp({ projectId: 'amor-9df0d' });
   const ref = admin.firestore().collection('notificaciones').doc('notificacion_1_actualizacion');
   await ref.set({
     nombre: 'Notificación 1',
     titulo: 'Una nueva actualización llegó a Amor',
-    descripcion: `La versión ${version} ya está disponible con nuevos detalles, mejoras y pequeñas sorpresas.`,
+    descripcion: resumen,
+    resumen,
     enviar: 'si',
     vibrar: true,
     version,
@@ -56,6 +71,8 @@ async function run() {
     const pkg = readJSON(pkgPath);
     const currentVersion = pkg.version;
     const newVersion = bumpVersion(currentVersion);
+    const resumen = await pedirResumen();
+    console.log(`Resumen guardado para ${newVersion}: ${resumen}`);
 
     // update package.json
     pkg.version = newVersion;
@@ -79,6 +96,7 @@ async function run() {
         // instalada muestre qué versión nueva está disponible antes de bajarla.
         app.expo.extra = app.expo.extra || {};
         app.expo.extra.updateVersion = newVersion;
+        app.expo.extra.updateDescription = resumen;
 
         if (useAppRuntime) {
           // Publish using the runtime already in app.json
@@ -152,7 +170,7 @@ async function run() {
     if (!noPublish && !noNotify) {
       try {
         console.log(`Sending update notification for ${newVersion}...`);
-        await notificarActualizacion(newVersion);
+        await notificarActualizacion(newVersion, resumen);
         console.log('Update notification queued successfully.');
       } catch (notificationError) {
         console.error('Update published, but the notification could not be queued:', notificationError.message);

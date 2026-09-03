@@ -9,10 +9,10 @@ const LINES = [
 const Target = ({ x, y, onFinish }) => {
   const progress = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(progress, { toValue: 1, duration: 320, useNativeDriver: true }).start(onFinish);
+    Animated.timing(progress, { toValue: 1, duration: 220, useNativeDriver: true }).start(onFinish);
   }, [onFinish, progress]);
   return <Animated.View pointerEvents="none" style={[styles.target, { left: x - 14, top: y - 14 }, {
-    opacity: progress.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+    opacity: progress.interpolate({ inputRange: [0, 0.08, 1], outputRange: [0, 1, 0] }),
     transform: [{ scale: progress.interpolate({ inputRange: [0, 0.25, 1], outputRange: [1.18, 1, 0.82] }) }],
   }]}>
     {LINES.map(line => <View key={line.key} style={[styles.line, { transform: [{ translateX: line.x }, { translateY: line.y }, { rotate: line.rotate }] }]} />)}
