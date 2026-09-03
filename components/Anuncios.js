@@ -5,11 +5,9 @@ import { Asset } from 'expo-asset';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 
 const EVENTOS_ANUNCIOS = {
-  reporte: { titulo: 'Reporte Semanal', accesible: 'Abrir reporte semanal', fondo: require('../assets/inicio/anuncios/anuncioreporte.png') },
-  fechas: { titulo: 'Cumpleaños de Aurora', accesible: 'Cumpleaños de Aurora' },
   lotes: { titulo: 'Lotes', accesible: 'Ver lote de Ardilla' },
 };
-const EVENTOS_ORDEN = ['fechas', 'lotes', 'reporte'];
+const EVENTOS_ORDEN = ['lotes'];
 
 const ARDILLA_BASE = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png');
 const ARDILLA_TRAJE_1 = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png');
@@ -181,21 +179,18 @@ function FechaAurora() {
   );
 }
 
-export default function Anuncios({ visible, onClose, onOpen, renderContent, evento = 'reporte', eventosDisponibles = EVENTOS_ORDEN }) {
+export default function Anuncios({ visible, onClose, onOpen, renderContent, evento = 'lotes' }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const closeOpacity = useRef(new Animated.Value(0.45)).current;
-  const eventos = ['fechas', ...eventosDisponibles.filter(key => key !== 'fechas' && EVENTOS_ANUNCIOS[key])];
+  // Este carrusel queda reservado únicamente para el anuncio de Lotes.
+  const eventos = EVENTOS_ORDEN;
   const [pagina, setPagina] = useState(0);
   useEffect(() => {
     setPagina(0);
-  }, [evento, eventosDisponibles]);
-  const eventoActual = EVENTOS_ANUNCIOS[eventos[pagina]] || EVENTOS_ANUNCIOS.reporte;
-  const eventoKey = eventos[pagina] || 'reporte';
+  }, [evento]);
+  const eventoActual = EVENTOS_ANUNCIOS.lotes;
+  const eventoKey = 'lotes';
   const cerrarAnuncio = () => {
-    if (pagina < eventos.length - 1) {
-      setPagina(actual => actual + 1);
-      return;
-    }
     onClose?.();
   };
 
