@@ -57,6 +57,18 @@ import GlobalClickEffect from './components/GlobalClickEffect';
 const APP_VERSION = require('./app.json').expo?.extra?.updateVersion
   || require('./app.json').expo?.version
   || require('./package.json').version;
+const UPDATE_ATTEMPT_STORAGE_KEY = '@amor/ota-update-attempt-v1';
+const UPDATE_ATTEMPT_COOLDOWN_MS = 15 * 60 * 1000;
+
+const obtenerDatosActualizacion = manifest => {
+  const extra = manifest?.extra?.expoClient?.extra || manifest?.extra || {};
+  return {
+    id: manifest?.id || manifest?.metadata?.id || null,
+    version: extra.updateVersion || manifest?.metadata?.updateVersion || null,
+    description: extra.updateDescription || manifest?.metadata?.updateDescription || null,
+    createdAt: manifest?.createdAt || manifest?.commitTime || null,
+  };
+};
 
 const ROOT_SCREENS = new Set(['intro', 'login', 'main']);
 const KNOWN_SCREENS = new Set([
@@ -87,6 +99,7 @@ export default function App() {
   const updateCheckInFlightRef = useRef(false);
   const lastUpdateCheckRef = useRef(0);
   const updateStatusRef = useRef('checking');
+  const updateCandidateRef = useRef(null);
 
   useEffect(() => {
     updateStatusRef.current = estadoActualizacion;
@@ -105,10 +118,11 @@ export default function App() {
     updateCheckInFlightRef.current = true;
     lastUpdateCheckRef.current = ahora;
     try {
-      const { isAvailable, manifest } = await Promise.race([
+      const resultado = await Promise.race([
         Updates.checkForUpdateAsync(),
         new Promise((_, reject) => setTimeout(() => reject(new Error('update-check-timeout')), 12000)),
       ]);
+      const { isAvailable, manifest } = resultado || {};
       if (!isAvailable) {
         if (!['available', 'downloading'].includes(updateStatusRef.current)) {
           setEstadoActualizacion('unavailable');
@@ -116,14 +130,50 @@ export default function App() {
         return;
       }
 
-      const version = manifest?.extra?.expoClient?.extra?.updateVersion
-        || manifest?.extra?.updateVersion
-        || manifest?.metadata?.updateVersion
-        || null;
-      const description = manifest?.extra?.expoClient?.extra?.updateDescription
-        || manifest?.extra?.updateDescription
-        || manifest?.metadata?.updateDescription
-        || null;
+      const candidata = obtenerDatosActualizacion(manifest);
+      const version = candidata.version;
+      const description = candidata.description;
+      const claveCandidata = candidata.id
+        || (version ? `version:${version}` : null)
+        || (candidata.createdAt ? `created:${candidata.createdAt}` : null);
+      const datosActuales = obtenerDatosActualizacion(Updates.manifest);
+      const claveActual = Updates.updateId
+        || datosActuales.id
+        || (datosActuales.version ? `version:${datosActuales.version}` : null);
+      const intentoGuardado = await AsyncStorage.getItem(UPDATE_ATTEMPT_STORAGE_KEY)
+        .then(valor => {
+          try { return valor ? JSON.parse(valor) : null; } catch { return null; }
+        })
+        .catch(() => null);
+
+      console.log('[Updates] Actualización disponible', {
+        id: candidata.id,
+        version,
+        actual: Updates.updateId || datosActuales.version || 'embedded',
+      });
+
+      // Si el manifiesto candidato ya es el que está corriendo, no volvemos a
+      // abrir el aviso aunque el servidor haya respondido con datos atrasados.
+      if (claveCandidata && claveActual && claveCandidata === claveActual) {
+        await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
+        setEstadoActualizacion('unavailable');
+        return;
+      }
+
+      // Evita el bucle cuando una actualización se descarga pero el runtime la
+      // rechaza al reiniciar y vuelve al bundle anterior. Una versión nueva
+      // genera una clave distinta y vuelve a mostrarse normalmente.
+      if (claveCandidata && intentoGuardado?.clave === claveCandidata
+        && ahora - Number(intentoGuardado.intentoEn || 0) < UPDATE_ATTEMPT_COOLDOWN_MS) {
+        console.warn('[Updates] Aviso omitido temporalmente para evitar un bucle', { clave: claveCandidata });
+        setVersionActualizacion(version);
+        setDescripcionActualizacion(typeof description === 'string' ? description.trim() : null);
+        updateStatusRef.current = 'unavailable';
+        setEstadoActualizacion('unavailable');
+        return;
+      }
+
+      updateCandidateRef.current = { clave: claveCandidata, id: candidata.id, version };
       setVersionActualizacion(version);
       setDescripcionActualizacion(typeof description === 'string' ? description.trim() : null);
       setEstadoActualizacion('available');
@@ -163,14 +213,31 @@ export default function App() {
   const instalarActualizacion = useCallback(async () => {
     if (estadoActualizacion === 'downloading') return;
     setEstadoActualizacion('downloading');
+    updateStatusRef.current = 'downloading';
+    const candidata = updateCandidateRef.current;
+    if (candidata?.clave) {
+      await AsyncStorage.setItem(UPDATE_ATTEMPT_STORAGE_KEY, JSON.stringify({
+        clave: candidata.clave,
+        version: candidata.version || null,
+        intentoEn: Date.now(),
+        updateIdAntes: Updates.updateId || null,
+      })).catch(() => {});
+    }
     try {
-      await Updates.fetchUpdateAsync();
+      const resultado = await Updates.fetchUpdateAsync();
+      console.log('[Updates] Descarga finalizada', {
+        isNew: resultado?.isNew,
+        updateId: resultado?.manifest?.id || candidata?.id || null,
+      });
+      if (!resultado?.isNew) throw new Error('update-not-downloaded');
       await Updates.reloadAsync();
     } catch (error) {
       console.warn('[Updates] No se pudo instalar la actualización', error?.message || error);
-      updateStatusRef.current = 'available';
-      setEstadoActualizacion('available');
-      global.showToast?.({ type: 'error', text: 'No pudimos actualizar todavía. Revisa tu conexión e inténtalo nuevamente.' });
+      // No volvemos a ponerla en "available": eso reabre el modal y crea el
+      // bucle. El intento queda guardado para que el próximo arranque continúe
+      // normalmente y pueda reintentar después del período de seguridad.
+      updateStatusRef.current = 'error';
+      setEstadoActualizacion('error');
     }
   }, [estadoActualizacion]);
 

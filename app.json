@@ -2,7 +2,7 @@
   "expo": {
     "name": "Amor",
     "slug": "Amor",
-    "version": "1.1.23",
+    "version": "1.1.24",
     "orientation": "landscape",
     "icon": "./assets/16.png",
     "userInterfaceStyle": "light",
@@ -95,8 +95,8 @@
         "projectId": "3e224fbe-d6f2-48c1-8903-61bf13953cf2"
       },
       "expo-navigation-bar": {},
-      "updateVersion": "1.1.23",
-      "updateDescription": "Mejoramos la estabilidad de la aplicación."
+      "updateVersion": "1.1.24",
+      "updateDescription": "Solución problema con las actualizaciones."
     },
     "owner": "505leoo"
   }
