@@ -657,11 +657,31 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
     });
 
     await notificationRef.set({
+      titulo: title,
+      mensaje: body,
       enviar: false,
       estado: result.failureCount ? "enviada_con_errores" : "enviada",
       enviadaEn: admin.firestore.FieldValue.serverTimestamp(),
       enviados: result.successCount,
       error: result.failureCount ? `${result.failureCount} dispositivos no recibieron el aviso.` : admin.firestore.FieldValue.delete(),
+      // Limpieza gradual de los campos que generaba la versión anterior.
+      nombre: admin.firestore.FieldValue.delete(),
+      descripcion: admin.firestore.FieldValue.delete(),
+      cuerpo: admin.firestore.FieldValue.delete(),
+      texto: admin.firestore.FieldValue.delete(),
+      pushy: admin.firestore.FieldValue.delete(),
+      vibrar: admin.firestore.FieldValue.delete(),
+      estadoTexto: admin.firestore.FieldValue.delete(),
+      dispositivosObjetivo: admin.firestore.FieldValue.delete(),
+      dispositivosLlegados: admin.firestore.FieldValue.delete(),
+      dispositivosFallidos: admin.firestore.FieldValue.delete(),
+      ultimaVezEnviada: admin.firestore.FieldValue.delete(),
+      ultimaVezEnviadaMs: admin.firestore.FieldValue.delete(),
+      ultimoIntentoEn: admin.firestore.FieldValue.delete(),
+      ultimoIntentoMs: admin.firestore.FieldValue.delete(),
+      proximoEnvioMs: admin.firestore.FieldValue.delete(),
+      actualizadaEn: admin.firestore.FieldValue.delete(),
+      errorUltimoEnvio: admin.firestore.FieldValue.delete(),
     }, {merge: true});
     await broadcastStateRef.set({
       lastFirestoreSentMs: now,
