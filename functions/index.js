@@ -578,7 +578,10 @@ exports.adminCommunityBroadcast = onCall(async (request) => {
 // Cola editable desde Firestore. Para disparar una plantilla, Administración
 // únicamente cambia `enviar` de "no" a "si". El trigger toma un bloqueo,
 // devuelve el campo a "no" y conserva todo el historial del último intento.
-exports.enviarNotificacionDesdeFirestore = onDocumentWritten("notificaciones/{notificationId}", async (event) => {
+exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
+  document: "notificaciones/{notificationId}",
+  region: "southamerica-east1",
+}, async (event) => {
   const beforeSnap = event.data && event.data.before;
   const afterSnap = event.data && event.data.after;
   if (!afterSnap || !afterSnap.exists) return null;
