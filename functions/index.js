@@ -14,15 +14,13 @@ const buzonExpiration = () => admin.firestore.Timestamp.fromMillis(Date.now() + 
 const FIRESTORE_NOTIFICATION_TEMPLATES = [
   {
     id: "notificacion_1_actualizacion",
-    nombre: "Notificación 1",
     titulo: "Una nueva actualización llegó a Amor",
-    descripcion: "Hay nuevos detalles, mejoras y pequeñas sorpresas esperándote. Entra a Amor y descubre todo lo que cambió.",
+    mensaje: "Hay nuevos detalles, mejoras y pequeñas sorpresas esperándote.",
   },
   {
     id: "notificacion_2_sorpresa",
-    nombre: "Notificación 2",
     titulo: "Amor tiene algo bonito para ti",
-    descripcion: "Una sorpresa acaba de aparecer. Vuelve cuando puedas y descubre qué preparamos con cariño.",
+    mensaje: "Una sorpresa acaba de aparecer. Vuelve cuando puedas.",
   },
 ];
 
@@ -33,17 +31,9 @@ const ensureFirestoreNotificationTemplates = async (db) => {
     const snap = await ref.get();
     if (snap.exists) continue;
     await ref.set({
-      nombre: template.nombre,
       titulo: template.titulo,
-      descripcion: template.descripcion,
-      enviar: "no",
-      vibrar: true,
-      estado: "lista",
-      estadoTexto: "Lista para enviar",
-      dispositivosObjetivo: 0,
-      dispositivosLlegados: 0,
-      creadaEn: admin.firestore.FieldValue.serverTimestamp(),
-      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+      mensaje: template.mensaje,
+      enviar: false,
     });
     creadas.push(template.id);
   }
@@ -65,6 +55,23 @@ const FCM_RETRYABLE_CODES = new Set([
 const normalizeFcmToken = (value) => {
   const token = typeof value === "string" ? value.trim() : "";
   return token.length >= 20 && token.length <= 4096 && !/\s/.test(token) ? token : null;
+};
+
+const normalizeNotificationText = (value, maxLength) => String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, maxLength);
+
+// El documento de Firestore puede quedarse intencionalmente mínimo:
+// { titulo: "Amor", mensaje: "Hola", enviar: true }.
+// Se mantienen los nombres antiguos para no romper las plantillas ya creadas.
+const readFirestoreNotification = (data = {}) => {
+  const title = normalizeNotificationText(data.titulo || data.title || data.nombre, 80) || "Amor";
+  const body = normalizeNotificationText(
+      data.mensaje || data.descripcion || data.cuerpo || data.texto || data.pushy || data.titulo || data.title,
+      240,
+  );
+  return {title, body};
 };
 
 const getUserFcmTokens = (data = {}) => [...new Set([
@@ -587,7 +594,7 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
   if (!afterSnap || !afterSnap.exists) return null;
   const before = beforeSnap && beforeSnap.exists ? beforeSnap.data() || {} : {};
   const after = afterSnap.data() || {};
-  const quiereEnviar = (value) => value === true || ["si", "sí", "yes"].includes(String(value || "").trim().toLowerCase());
+  const quiereEnviar = (value) => value === true || ["1", "si", "sí", "yes", "send", "enviar"].includes(String(value || "").trim().toLowerCase());
   if (!quiereEnviar(after.enviar) || quiereEnviar(before.enviar)) return null;
 
   const db = admin.firestore();
@@ -596,8 +603,7 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
   const notificationId = event.params.notificationId;
   const now = Date.now();
   const cooldownMs = 60 * 1000;
-  const title = String(after.titulo || "").trim().replace(/\s+/g, " ");
-  const body = String(after.descripcion || after.cuerpo || "").trim().replace(/\s+/g, " ");
+  const {title, body} = readFirestoreNotification(after);
 
   try {
     const lockTaken = await db.runTransaction(async (tx) => {
@@ -608,22 +614,15 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
       const nextAllowedAt = (Number(broadcastState.lastFirestoreSentMs) || 0) + cooldownMs;
       if (now < nextAllowedAt || now < (Number(broadcastState.firestoreSendingUntil) || 0)) {
         tx.set(notificationRef, {
-          enviar: "no",
+          enviar: false,
           estado: "esperando_cooldown",
-          estadoTexto: now < nextAllowedAt ? "Esperando el límite de un minuto" : "Ya hay otro envío en curso",
-          proximoEnvioMs: Math.max(nextAllowedAt, Number(broadcastState.firestoreSendingUntil) || 0),
-          actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
         }, {merge: true});
         return false;
       }
       tx.set(notificationRef, {
-        enviar: "no",
-        estado: "procesando",
-        estadoTexto: "Preparando el envío…",
-        ultimoIntentoEn: admin.firestore.FieldValue.serverTimestamp(),
-        ultimoIntentoMs: now,
-        errorUltimoEnvio: admin.firestore.FieldValue.delete(),
-        actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+        enviar: false,
+        estado: "enviando",
+        error: admin.firestore.FieldValue.delete(),
       }, {merge: true});
       tx.set(broadcastStateRef, {firestoreSendingUntil: now + 60 * 1000, firestoreSendingBy: notificationId}, {merge: true});
       return true;
@@ -634,13 +633,11 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
     throw error;
   }
 
-  if (title.length < 4 || title.length > 60 || body.length < 10 || body.length > 180) {
+  if (!body) {
     await notificationRef.set({
-      enviar: "no",
+      enviar: false,
       estado: "error",
-      estadoTexto: "Notificación no enviada",
-      errorUltimoEnvio: "El título o la descripción no tienen un tamaño válido.",
-      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+      error: "Escribe un mensaje para enviar.",
     }, {merge: true});
     await broadcastStateRef.set({firestoreSendingUntil: 0}, {merge: true}).catch(() => {});
     return null;
@@ -660,15 +657,11 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
     });
 
     await notificationRef.set({
-      enviar: "no",
-      estado: "finalizada",
-      estadoTexto: result.failureCount ? "Envío finalizado con algunos errores" : "Envío aceptado por FCM",
-      ultimaVezEnviada: admin.firestore.FieldValue.serverTimestamp(),
-      ultimaVezEnviadaMs: now,
-      dispositivosObjetivo: result.targetCount,
-      dispositivosLlegados: result.successCount,
-      dispositivosFallidos: result.failureCount,
-      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+      enviar: false,
+      estado: result.failureCount ? "enviada_con_errores" : "enviada",
+      enviadaEn: admin.firestore.FieldValue.serverTimestamp(),
+      enviados: result.successCount,
+      error: result.failureCount ? `${result.failureCount} dispositivos no recibieron el aviso.` : admin.firestore.FieldValue.delete(),
     }, {merge: true});
     await broadcastStateRef.set({
       lastFirestoreSentMs: now,
@@ -683,11 +676,9 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
   } catch (error) {
     logger.error("[FirestoreBroadcast] Error", {notificationId, error});
     await notificationRef.set({
-      enviar: "no",
+      enviar: false,
       estado: "error",
-      estadoTexto: "Notificación no enviada",
-      errorUltimoEnvio: String(error.message || error),
-      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
+      error: String(error.message || error).slice(0, 180),
     }, {merge: true});
     await broadcastStateRef.set({firestoreSendingUntil: 0}, {merge: true}).catch(() => {});
     return null;
