@@ -8,8 +8,6 @@ import com.facebook.react.ReactActivityDelegate
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnabled
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
-import me.pushy.sdk.Pushy
-
 class MainActivity : ReactActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     // Set the theme to AppTheme BEFORE onCreate to support
@@ -17,10 +15,6 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
-    // Reafirmar FCM justo antes de iniciar el listener garantiza que el
-    // fallback quede activo también cuando Android recrea la Activity.
-    Pushy.toggleFCM(true, applicationContext)
-    Pushy.listen(this)
   }
 
   /**

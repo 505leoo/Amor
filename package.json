@@ -39,7 +39,6 @@
     "expo-video-thumbnails": "~57.0.1",
     "firebase": "^12.10.0",
     "lottie-react-native": "~7.3.8",
-    "pushy-react-native": "^1.0.61",
     "react": "19.2.3",
     "react-native": "^0.86.2",
     "react-native-svg": "15.15.4"

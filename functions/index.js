@@ -5,7 +5,7 @@ const {onDocumentUpdated, onDocumentWritten} = require("firebase-functions/v2/fi
 const {onSchedule} = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 const logger = require("firebase-functions/logger");
-const {fetch} = require("undici");
+const crypto = require("crypto");
 
 admin.initializeApp();
 
@@ -51,201 +51,299 @@ const ensureFirestoreNotificationTemplates = async (db) => {
   return creadas;
 };
 
-exports.sendPushyNotification = functions.https.onCall(
-    async (data, context) => {
-      logger.info("[PUSHY] Received data:", data);
+const FCM_BATCH_SIZE = 500;
+const FCM_INVALID_TOKEN_CODES = new Set([
+  "messaging/invalid-registration-token",
+  "messaging/registration-token-not-registered",
+]);
+const FCM_RETRYABLE_CODES = new Set([
+  "messaging/internal-error",
+  "messaging/server-unavailable",
+  "messaging/unknown-error",
+]);
 
-      const {
-        token,
-        title,
-        body,
-        data: payloadData,
-        collapseKey,
-      } = data.data || data;
+const normalizeFcmToken = (value) => {
+  const token = typeof value === "string" ? value.trim() : "";
+  return token.length >= 20 && token.length <= 4096 && !/\s/.test(token) ? token : null;
+};
 
-      if (!token || !title || !body) {
-        logger.error("[PUSHY] Missing fields:", {token, title, body});
-        throw new functions.https.HttpsError(
-            "invalid-argument",
-            "Missing required fields",
-        );
+const getUserFcmTokens = (data = {}) => [...new Set([
+  normalizeFcmToken(data.fcmToken),
+  ...(Array.isArray(data.fcmTokens) ? data.fcmTokens.map(normalizeFcmToken) : []),
+].filter(Boolean))];
+
+const collectFcmRecipients = (userDocs) => {
+  const tokens = [];
+  const owners = new Map();
+  for (const userDoc of userDocs) {
+    const userData = userDoc.data() || {};
+    for (const token of getUserFcmTokens(userData)) {
+      if (!owners.has(token)) {
+        owners.set(token, []);
+        tokens.push(token);
       }
+      owners.get(token).push({ref: userDoc.ref, data: userData});
+    }
+  }
+  return {tokens, owners};
+};
 
-      if (!context.auth) {
-        throw new functions.https.HttpsError(
-            "unauthenticated",
-            "Authentication is required",
-        );
+const normalizeFcmData = (payload = {}) => {
+  const result = {};
+  let totalLength = 0;
+  for (const [rawKey, rawValue] of Object.entries(payload || {})) {
+    if (rawValue === undefined || rawValue === null) continue;
+    let key = String(rawKey).trim().replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80);
+    if (!key || key === "from" || key === "message_type" || /^(google|gcm)\./i.test(key)) key = `amor_${key || "data"}`;
+    let value;
+    try {
+      value = typeof rawValue === "string" ? rawValue : JSON.stringify(rawValue);
+    } catch (_) {
+      value = String(rawValue);
+    }
+    value = String(value).slice(0, 1800);
+    if (totalLength + key.length + value.length > 3500) break;
+    result[key] = value;
+    totalLength += key.length + value.length;
+  }
+  return result;
+};
+
+const normalizeCollapseKey = (value) => {
+  const key = String(value || "").trim().replace(/[^a-zA-Z0-9_.-]/g, "_");
+  return key ? key.slice(0, 64) : undefined;
+};
+
+const sendMulticastWithRetry = async (message) => {
+  try {
+    return await admin.messaging().sendEachForMulticast(message);
+  } catch (error) {
+    const code = error && error.code;
+    if (code && !FCM_RETRYABLE_CODES.has(code)) throw error;
+    logger.warn("[FCM] Falló el lote completo; reintentando una vez", {code: code || "network_error"});
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    return admin.messaging().sendEachForMulticast(message);
+  }
+};
+
+const cleanupInvalidFcmTokens = async (invalidTokens, owners) => {
+  if (!invalidTokens.length || !owners) return;
+  const updates = new Map();
+  for (const token of invalidTokens) {
+    for (const owner of owners.get(token) || []) {
+      const path = owner.ref.path;
+      if (!updates.has(path)) updates.set(path, {ref: owner.ref, data: owner.data, tokens: new Set()});
+      updates.get(path).tokens.add(token);
+    }
+  }
+  const entries = [...updates.values()];
+  for (let index = 0; index < entries.length; index += 450) {
+    const batch = admin.firestore().batch();
+    for (const entry of entries.slice(index, index + 450)) {
+      const tokens = [...entry.tokens];
+      const update = {fcmTokens: admin.firestore.FieldValue.arrayRemove(...tokens)};
+      if (tokens.includes(entry.data.fcmToken)) {
+        update.fcmToken = admin.firestore.FieldValue.delete();
       }
+      batch.set(entry.ref, update, {merge: true});
+    }
+    await batch.commit();
+  }
+  logger.info("[FCM] Tokens inválidos eliminados", {count: invalidTokens.length});
+};
 
-      // El teléfono solo puede enviar al token de su pareja actual. Ocultar
-      // botones en el cliente no evita que alguien invoque la función a mano.
-      const db = admin.firestore();
-      const senderSnap = await db.collection("usuarios")
-          .doc(context.auth.uid).get();
-      const partnerUid = senderSnap.exists ? senderSnap.data().pareja : null;
-      const partnerSnap = partnerUid ? await db.collection("usuarios")
-          .doc(partnerUid).get() : null;
-      const partnerData = partnerSnap && partnerSnap.exists ?
-        partnerSnap.data() : {};
-      const allowedTokens = [
-        partnerData.MyPushyToken,
-        partnerData.pushyToken,
-      ].filter(Boolean);
-      if (!allowedTokens.includes(token)) {
-        throw new functions.https.HttpsError(
-            "permission-denied",
-            "The target is not the authenticated user's partner",
-        );
+const sendFcmToTokens = async ({
+  tokens,
+  title,
+  body,
+  data = {},
+  collapseKey,
+  vibrate = true,
+  owners,
+}) => {
+  const uniqueTokens = [...new Set((tokens || []).map(normalizeFcmToken).filter(Boolean))];
+  const invalidTokens = [];
+  const failures = [];
+  let successCount = 0;
+  const normalizedCollapseKey = normalizeCollapseKey(collapseKey);
+  const baseMessage = {
+    notification: {title: String(title), body: String(body)},
+    data: normalizeFcmData(data),
+    android: {
+      priority: "high",
+      ttl: 24 * 60 * 60 * 1000,
+      restrictedPackageName: "com.leitof7.amor",
+      ...(normalizedCollapseKey ? {collapseKey: normalizedCollapseKey} : {}),
+      notification: {
+        channelId: "amor-notifications",
+        sound: "default",
+        ...(vibrate ? {defaultVibrateTimings: true} : {}),
+      },
+    },
+  };
+
+  for (let index = 0; index < uniqueTokens.length; index += FCM_BATCH_SIZE) {
+    const batchTokens = uniqueTokens.slice(index, index + FCM_BATCH_SIZE);
+    const first = await sendMulticastWithRetry({...baseMessage, tokens: batchTokens});
+    const outcomes = first.responses.map((response, responseIndex) => ({
+      token: batchTokens[responseIndex],
+      response,
+    }));
+    const retryable = outcomes.filter(({response}) => !response.success && FCM_RETRYABLE_CODES.has(response.error && response.error.code));
+    if (retryable.length) {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const retry = await sendMulticastWithRetry({
+        ...baseMessage,
+        tokens: retryable.map((item) => item.token),
+      });
+      retry.responses.forEach((response, retryIndex) => {
+        const original = outcomes.find((item) => item.token === retryable[retryIndex].token);
+        if (original) original.response = response;
+      });
+    }
+
+    for (const {token, response} of outcomes) {
+      if (response.success) {
+        successCount += 1;
+        continue;
       }
+      const code = response.error && response.error.code || "messaging/unknown-error";
+      failures.push({tokenPreview: `${token.slice(0, 8)}…`, code});
+      if (FCM_INVALID_TOKEN_CODES.has(code)) invalidTokens.push(token);
+    }
+  }
 
-      const apiSecret = process.env.PUSHY_API_SECRET;
-      if (!apiSecret) {
-        logger.error("[PUSHY] API secret for Pushy is not configured");
-        throw new functions.https.HttpsError(
-            "failed-precondition",
-            "Pushy API not configured",
-        );
-      }
+  await cleanupInvalidFcmTokens([...new Set(invalidTokens)], owners);
+  return {
+    successCount,
+    failureCount: uniqueTokens.length - successCount,
+    targetCount: uniqueTokens.length,
+    failures,
+  };
+};
 
-      const FIRESTORE_WINDOW_MS = 120 * 1000; // 120s window
-      const MAX_PENDING_PER_TOKEN = 2;
-      const docRef = db.collection("pushy_recent").doc(token);
+exports.registerFcmToken = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Inicia sesión.");
+  const token = normalizeFcmToken(request.data && request.data.token);
+  const platform = String(request.data && request.data.platform || "android").toLowerCase();
+  if (!token || platform !== "android") throw new HttpsError("invalid-argument", "Token FCM inválido.");
 
-      logger.info("[PUSHY] Pre-send check for token:",
-          token.substring(0, 10) + "...");
-      logger.info("[PUSHY] collapseKey:",
-          {collapseKey});
+  const db = admin.firestore();
+  const userRef = db.collection("usuarios").doc(request.auth.uid);
+  const [primarySnap, listSnap] = await Promise.all([
+    db.collection("usuarios").where("fcmToken", "==", token).get(),
+    db.collection("usuarios").where("fcmTokens", "array-contains", token).get(),
+  ]);
+  const previousOwners = new Map();
+  [...primarySnap.docs, ...listSnap.docs].forEach((userDoc) => {
+    if (userDoc.id !== request.auth.uid) previousOwners.set(userDoc.ref.path, userDoc);
+  });
 
-      try {
-        await db.runTransaction(async (tx) => {
-          const snap = await tx.get(docRef);
-          let sends = [];
-          const now = Date.now();
-          const cutoff = FIRESTORE_WINDOW_MS;
-          if (snap.exists) {
-            sends = snap.data().sends || [];
-            sends = sends.filter((s) => (now - s.ts) < cutoff);
-          }
+  const batch = db.batch();
+  for (const userDoc of previousOwners.values()) {
+    const update = {fcmTokens: admin.firestore.FieldValue.arrayRemove(token)};
+    if ((userDoc.data() || {}).fcmToken === token) update.fcmToken = admin.firestore.FieldValue.delete();
+    batch.set(userDoc.ref, update, {merge: true});
+  }
+  batch.set(userRef, {
+    fcmToken: token,
+    fcmTokens: admin.firestore.FieldValue.arrayUnion(token),
+    fcmPlatform: "android",
+    fcmTokenUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, {merge: true});
+  await batch.commit();
+  logger.info("[FCM] Token registrado", {uid: request.auth.uid, reassignedFrom: previousOwners.size});
+  return {success: true};
+});
 
-          if (collapseKey) {
-            const idx = sends.findIndex((s) => s.collapseKey === collapseKey);
-            if (idx !== -1) {
-              sends[idx].ts = now;
-              tx.set(docRef, {sends}, {merge: true});
-              logger.info("[PUSHY] CollapseKey present");
-              logger.info("[PUSHY] Updated timestamp in Firestore");
-              logger.info("[PUSHY] Skipping duplicate send", {collapseKey});
-              return;
-            }
-          }
+exports.unregisterFcmToken = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Inicia sesión.");
+  const token = normalizeFcmToken(request.data && request.data.token);
+  if (!token) throw new HttpsError("invalid-argument", "Token FCM inválido.");
+  const userRef = admin.firestore().collection("usuarios").doc(request.auth.uid);
+  const snap = await userRef.get();
+  if (!snap.exists) return {success: true};
+  const update = {
+    fcmTokens: admin.firestore.FieldValue.arrayRemove(token),
+    fcmTokenUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  if ((snap.data() || {}).fcmToken === token) update.fcmToken = admin.firestore.FieldValue.delete();
+  await userRef.set(update, {merge: true});
+  return {success: true};
+});
 
-          if (sends.length >= MAX_PENDING_PER_TOKEN) {
-            logger.warn("[PUSHY] Token exceeded max pending sends in window");
-            const tokenPreview = token.substring(0, 10) + "...";
-            logger.warn("[PUSHY] token:", tokenPreview);
-            logger.warn("[PUSHY] pending:",
-                {pending: sends.length});
-            throw new functions.https.HttpsError(
-                "resource-exhausted",
-                "queue_limit_reached",
-            );
-          }
+exports.sendFcmNotification = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Inicia sesión.");
+  const title = String(request.data && request.data.title || "").trim().replace(/\s+/g, " ");
+  const body = String(request.data && request.data.body || "").trim().replace(/\s+/g, " ");
+  const payloadData = request.data && request.data.data || {};
+  if (title.length < 2 || title.length > 100 || body.length < 2 || body.length > 500) {
+    throw new HttpsError("invalid-argument", "Revisa el título y el mensaje.");
+  }
 
-          sends.push({
-            collapseKey: collapseKey || null,
-            ts: now,
-          });
-          tx.set(docRef, {sends}, {merge: true});
-          logger.info("[PUSHY] Registered pending send in Firestore");
-          logger.info("[PUSHY] token:",
-              token.substring(0, 10) + "...");
-          logger.info("[PUSHY] pending:",
-              {pending: sends.length});
-        });
-      } catch (err) {
-        if (err instanceof functions.https.HttpsError) throw err;
-        logger.error("[PUSHY] Transaction error:", err);
-        throw new functions.https.HttpsError("internal", "transaction_failed");
-      }
+  const db = admin.firestore();
+  const senderSnap = await db.collection("usuarios").doc(request.auth.uid).get();
+  const partnerUid = senderSnap.exists ? (senderSnap.data() || {}).pareja : null;
+  if (!partnerUid || partnerUid === request.auth.uid) {
+    throw new HttpsError("failed-precondition", "No tienes una pareja vinculada.");
+  }
+  const partnerSnap = await db.collection("usuarios").doc(partnerUid).get();
+  if (!partnerSnap.exists) throw new HttpsError("not-found", "No encontramos a tu pareja.");
+  const recipients = collectFcmRecipients([partnerSnap]);
+  if (!recipients.tokens.length) return {success: false, sent: 0, error: "no_fcm_token"};
 
-      logger.info("[PUSHY] Sending to token:",
-          token.substring(0, 10) + "...");
-      logger.info("[PUSHY] Message:",
-          {title: title, body: body});
-
-      try {
-        const dataObj = Object.assign({
-          title: title,
-          message: body,
-        }, (payloadData || {}));
-
-        const payload = {
-          to: token,
-          data: dataObj,
-          ...(collapseKey ? {collapse_key: collapseKey} : {}),
-        };
-
-        const bodyStr = JSON.stringify(payload);
-        logger.info("[PUSHY] Payload:", bodyStr);
-
-        const apiUrl = `https://api.pushy.me/push?api_key=${apiSecret}`;
-        logger.info("[PUSHY] Calling API:", apiUrl.replace(apiSecret, "***"));
-
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: bodyStr,
-        });
-
-        logger.info("[PUSHY] Response status:", response.status);
-
-        const result = await response.json();
-        logger.info("[PUSHY] Response body:", result);
-
-        if (!response.ok) {
-          logger.error("[PUSHY] API returned error:", result);
-          throw new Error(`Pushy API error: ${JSON.stringify(result)}`);
-        }
-
-        try {
-          await db.runTransaction(async (tx) => {
-            const snap = await tx.get(docRef);
-            if (!snap.exists) return;
-            let sends = snap.data().sends || [];
-            const now = Date.now();
-            sends = sends.filter((s) => (now - s.ts) < FIRESTORE_WINDOW_MS);
-            let removed = false;
-            if (collapseKey) {
-              const idx = sends.findIndex((s) => s.collapseKey === collapseKey);
-              if (idx !== -1) {
-                // Keep the collapseKey entry to preserve duplicate suppression
-                // for the rest of the window and refresh its timestamp.
-                sends[idx].ts = now;
-                removed = true;
-              }
-            }
-            if (!removed && sends.length > 0) {
-              sends.shift();
-            }
-            tx.set(docRef, {sends}, {merge: true});
-            logger.info("[PUSHY] Updated pending send after successful push");
-            logger.info("[PUSHY] token:", token.substring(0, 10) + "...");
-            logger.info("[PUSHY] remaining:", {remaining: sends.length});
-          });
-        } catch (cleanupErr) {
-          logger.warn(
-              "[PUSHY] Failed updating pending entry after send:",
-              cleanupErr,
-          );
-        }
-
-        return {success: true, result};
-      } catch (error) {
-        logger.error("[PUSHY] Error sending notification:", error);
-        throw new functions.https.HttpsError("internal", error.message);
-      }
+  const collapseKey = normalizeCollapseKey(payloadData.collapseKey);
+  const dedupeKey = crypto.createHash("sha256")
+      .update(`${request.auth.uid}|${partnerUid}|${collapseKey || `${title}|${body}`}`)
+      .digest("hex");
+  const dedupeRef = db.collection("fcm_recent").doc(dedupeKey);
+  const pairKey = crypto.createHash("sha256").update(`${request.auth.uid}|${partnerUid}`).digest("hex");
+  const rateRef = db.collection("fcm_rate_limits").doc(pairKey);
+  const now = Date.now();
+  const claimed = await db.runTransaction(async (tx) => {
+    const [dedupeSnap, rateSnap] = await Promise.all([tx.get(dedupeRef), tx.get(rateRef)]);
+    if (dedupeSnap.exists && now - Number((dedupeSnap.data() || {}).sentAtMs) < 15000) return false;
+    const recentSends = (rateSnap.exists && Array.isArray((rateSnap.data() || {}).recentSends) ?
+      rateSnap.data().recentSends : []).map(Number).filter((sentAt) => now - sentAt < 60 * 1000);
+    if (recentSends.length >= 10) {
+      throw new HttpsError("resource-exhausted", "Espera un momento antes de enviar más avisos.");
+    }
+    tx.set(dedupeRef, {
+      sentAtMs: now,
+      expiresAt: admin.firestore.Timestamp.fromMillis(now + 60 * 60 * 1000),
     });
+    tx.set(rateRef, {
+      recentSends: [...recentSends, now],
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return true;
+  });
+  if (!claimed) return {success: true, sent: 0, deduplicated: true};
+
+  const result = await sendFcmToTokens({
+    ...recipients,
+    title,
+    body,
+    collapseKey,
+    data: {
+      ...payloadData,
+      fromUserId: request.auth.uid,
+      partnerId: partnerUid,
+    },
+  });
+  logger.info("[FCM] Notificación de pareja procesada", {
+    from: request.auth.uid,
+    to: partnerUid,
+    sent: result.successCount,
+    failed: result.failureCount,
+  });
+  return {
+    success: result.successCount > 0,
+    sent: result.successCount,
+    failed: result.failureCount,
+    error: result.successCount ? null : "fcm_send_failed",
+  };
+});
 
 // Ruleta diaria: el premio y el límite se resuelven en servidor para que el
 // cliente no pueda repetir giros ni modificar la recompensa.
@@ -449,39 +547,26 @@ exports.adminCommunityBroadcast = onCall(async (request) => {
 
   try {
     const users = await db.collection("usuarios").get();
-    const tokens = [...new Set(users.docs.map((userDoc) => {
-      const data = userDoc.data() || {};
-      return data.MyPushyToken || data.pushyToken || null;
-    }).filter(Boolean))];
-    const apiSecret = process.env.PUSHY_API_SECRET;
-    if (!apiSecret) throw new HttpsError("failed-precondition", "Pushy no está configurado.");
-    let sent = 0;
-    for (let index = 0; index < tokens.length; index += 1000) {
-      const registrationIds = tokens.slice(index, index + 1000);
-      const response = await fetch(`https://api.pushy.me/push?api_key=${apiSecret}`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          registration_ids: registrationIds,
-          notification: {title, body},
-          data: {title, message: body, type: "community_broadcast"},
-          collapse_key: `community-${now}`,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(`Pushy broadcast error: ${JSON.stringify(result)}`);
-      sent += registrationIds.length;
-    }
+    const recipients = collectFcmRecipients(users.docs);
+    if (!recipients.tokens.length) throw new HttpsError("failed-precondition", "No hay dispositivos registrados.");
+    const result = await sendFcmToTokens({
+      ...recipients,
+      title,
+      body,
+      data: {type: "community_broadcast"},
+      collapseKey: `community-${now}`,
+    });
     await stateRef.set({
       lastSentMs: now,
       lastTitle: title,
       lastBody: body,
       lastSentBy: request.auth.uid,
-      lastRecipientCount: sent,
+      lastRecipientCount: result.successCount,
+      lastFailedCount: result.failureCount,
       sentAt: admin.firestore.FieldValue.serverTimestamp(),
       sendingUntil: 0,
     }, {merge: true});
-    return {ok: true, sent, nextAllowedAt: now + cooldownMs};
+    return {ok: result.successCount > 0, sent: result.successCount, failed: result.failureCount, nextAllowedAt: now + cooldownMs};
   } catch (error) {
     await stateRef.set({sendingUntil: 0}, {merge: true}).catch(() => {});
     if (error instanceof HttpsError) throw error;
@@ -560,58 +645,34 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten("notificaciones/{no
 
   try {
     const users = await db.collection("usuarios").get();
-    const tokens = [...new Set(users.docs.map((userDoc) => {
-      const data = userDoc.data() || {};
-      return data.MyPushyToken || data.pushyToken || null;
-    }).filter(Boolean))];
-    if (!tokens.length) throw new Error("No hay dispositivos registrados.");
-    const apiSecret = process.env.PUSHY_API_SECRET;
-    if (!apiSecret) throw new Error("Pushy no está configurado.");
-
-    const pushes = [];
-    let objetivo = 0;
-    for (let index = 0; index < tokens.length; index += 1000) {
-      const registrationIds = tokens.slice(index, index + 1000);
-      const response = await fetch(`https://api.pushy.me/push?api_key=${apiSecret}`, {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({
-          to: registrationIds,
-          data: {
-            title,
-            message: body,
-            type: "firestore_broadcast",
-            notificationId,
-            vibrate: after.vibrar !== false,
-          },
-          collapse_key: `firestore-${notificationId}-${now}`.slice(0, 32),
-          time_to_live: 86400,
-        }),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.id) throw new Error(`Pushy: ${result.error || response.status}`);
-      const devices = Math.max(0, Number(result.info && result.info.devices) || registrationIds.length);
-      objetivo += devices;
-      pushes.push({id: result.id, dispositivos: devices});
-    }
+    const recipients = collectFcmRecipients(users.docs);
+    if (!recipients.tokens.length) throw new Error("No hay dispositivos registrados.");
+    const result = await sendFcmToTokens({
+      ...recipients,
+      title,
+      body,
+      data: {type: "firestore_broadcast", notificationId},
+      collapseKey: `firestore-${notificationId}-${now}`,
+      vibrate: after.vibrar !== false,
+    });
 
     await notificationRef.set({
       enviar: "no",
-      estado: "esperando_entregas",
-      estadoTexto: "Esperando confirmaciones…",
+      estado: "finalizada",
+      estadoTexto: result.failureCount ? "Envío finalizado con algunos errores" : "Envío aceptado por FCM",
       ultimaVezEnviada: admin.firestore.FieldValue.serverTimestamp(),
       ultimaVezEnviadaMs: now,
-      dispositivosObjetivo: objetivo,
-      dispositivosLlegados: 0,
-      pushyEnvios: pushes,
-      conteoCierraEnMs: now + 5 * 60 * 1000,
+      dispositivosObjetivo: result.targetCount,
+      dispositivosLlegados: result.successCount,
+      dispositivosFallidos: result.failureCount,
       actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
     }, {merge: true});
     await broadcastStateRef.set({
       lastFirestoreSentMs: now,
       lastFirestoreTitle: title,
       lastFirestoreBody: body,
-      lastFirestoreRecipientCount: objetivo,
+      lastFirestoreRecipientCount: result.successCount,
+      lastFirestoreFailedCount: result.failureCount,
       lastFirestoreSentAt: admin.firestore.FieldValue.serverTimestamp(),
       firestoreSendingUntil: 0,
     }, {merge: true});
@@ -660,49 +721,6 @@ exports.registrarActividadPareja = onDocumentUpdated("usuarios/{userId}", async 
     ...actividad,
     creadoEn: admin.firestore.FieldValue.serverTimestamp(),
   });
-});
-
-// Pushy informa qué Android todavía no recibió el mensaje. Durante cinco
-// minutos actualizamos el contador y luego congelamos el resultado final.
-exports.actualizarEntregasNotificaciones = onSchedule({
-  schedule: "every 1 minutes",
-  timeZone: "America/Argentina/Buenos_Aires",
-}, async () => {
-  const apiSecret = process.env.PUSHY_API_SECRET;
-  const db = admin.firestore();
-  await ensureFirestoreNotificationTemplates(db);
-  if (!apiSecret) return null;
-  const now = Date.now();
-  const snap = await db.collection("notificaciones").where("estado", "==", "esperando_entregas").limit(50).get();
-  for (const notificationDoc of snap.docs) {
-    const data = notificationDoc.data() || {};
-    const pushes = Array.isArray(data.pushyEnvios) ? data.pushyEnvios : [];
-    let objetivo = 0;
-    let pendientes = 0;
-    for (const push of pushes) {
-      const dispositivos = Math.max(0, Number(push.dispositivos) || 0);
-      objetivo += dispositivos;
-      try {
-        const response = await fetch(`https://api.pushy.me/pushes/${encodeURIComponent(push.id)}?api_key=${apiSecret}`);
-        const result = await response.json();
-        if (response.ok) pendientes += Math.min(dispositivos, Array.isArray(result.push && result.push.pending_devices) ? result.push.pending_devices.length : 0);
-        else pendientes += dispositivos;
-      } catch (_) {
-        pendientes += dispositivos;
-      }
-    }
-    const llegados = Math.max(0, objetivo - pendientes);
-    const finalizado = now >= (Number(data.conteoCierraEnMs) || 0);
-    await notificationDoc.ref.set({
-      dispositivosObjetivo: objetivo,
-      dispositivosLlegados: llegados,
-      estado: finalizado ? "finalizada" : "esperando_entregas",
-      estadoTexto: finalizado ? "Envío finalizado" : "Esperando confirmaciones…",
-      conteoActualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
-      actualizadaEn: admin.firestore.FieldValue.serverTimestamp(),
-    }, {merge: true});
-  }
-  return null;
 });
 
 // ─── Crédito de Menta ──────────────────────────────────────────────────────

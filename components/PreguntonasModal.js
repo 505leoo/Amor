@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Modal, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { deleteDoc, doc, getDoc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
+import { deleteDoc, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
-import PushyService from '../utils/PushyService';
+import NotificationSystem from '../utils/NotificationSystem';
 
 const CATEGORIAS = {
   fidelidad: {
@@ -257,11 +257,7 @@ export default function PreguntonasModal({ visible, onClose, parejaUid, nombrePa
         return true;
       });
       if (!autorizado) return;
-      const parejaSnap = await getDoc(doc(db, 'usuarios', parejaUid));
-      const parejaData = parejaSnap.data() || {};
-      const token = parejaData.MyPushyToken || parejaData.pushyToken;
-      if (!token) throw new Error('sin_token');
-      const resultado = await PushyService.sendCustomNotification([token], 'Una Preguntona te espera 💞', 'Tu pareja ya eligió una temática. Cuando quieras, te toca elegir a vos.', { tipo: 'preguntonas', collapseKey: `preguntonas-${sesionId}` });
+      const resultado = await NotificationSystem.sendToPartner(uid, 'Una Preguntona te espera 💞', 'Tu pareja ya eligió una temática. Cuando quieras, te toca elegir a vos.', { tipo: 'preguntonas', collapseKey: `preguntonas-${sesionId}` });
       if (!resultado?.success) throw new Error(resultado?.error || 'push_fallido');
       global.showToast?.({ type: 'success', text1: 'Le enviamos un recordatorio suave' });
     } catch {

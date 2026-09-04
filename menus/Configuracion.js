@@ -92,7 +92,7 @@ export const ConfiguracionModal = ({ visible, onClose }) => {
       if (nuevaConfig.notificaciones) {
         await NotificationSystem.registerForPushNotifications().catch(() => {});
       } else {
-        await NotificationSystem.clearPushTokenForUser(uid).catch(() => {});
+        await NotificationSystem.clearDeviceTokenForUser(uid).catch(() => {});
         NotificationSystem.clearNotificationListeners();
       }
     }
@@ -103,7 +103,7 @@ export const ConfiguracionModal = ({ visible, onClose }) => {
     if (accion === 'logout') {
       const usuarioId = auth.currentUser?.uid;
       cerrarConfiguracion();
-      await NotificationSystem.clearPushTokenForUser(usuarioId);
+      await NotificationSystem.clearDeviceTokenForUser(usuarioId);
       await NotificationSystem.notifyUserOffline();
       NotificationSystem.clearNotificationListeners();
       await signOut(auth).catch(() => {});

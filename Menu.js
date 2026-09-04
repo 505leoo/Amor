@@ -242,7 +242,7 @@ const Menu = ({ navigation, route }) => {
           onPress: async () => {
             try {
               const uid = auth.currentUser?.uid;
-              if (uid) await NotificationSystem.clearPushTokenForUser(uid);
+              if (uid) await NotificationSystem.clearDeviceTokenForUser(uid);
               await signOut(auth);
               if (navigation && typeof navigation.reset === 'function') {
                 navigation.reset({
