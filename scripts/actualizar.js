@@ -60,6 +60,20 @@ async function notificarActualizacion(version, resumen) {
   }, { merge: true });
 }
 
+async function sincronizarLoveSystem(version, resumen) {
+  const admin = require('../functions/node_modules/firebase-admin');
+  if (!admin.apps.length) admin.initializeApp({ projectId: 'amor-9df0d' });
+  const db = admin.firestore();
+  await db.collection('actualizaciones').doc('amor').set({
+    appId: 'amor',
+    otaVersion: version,
+    otaDescription: resumen,
+    otaUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    publishedBy: 'Amor',
+  }, { merge: true });
+}
+
 async function run() {
   try {
     // stage all changes
@@ -167,6 +181,19 @@ async function run() {
     }
 
     const noNotify = process.argv.includes('--no-notify');
+    const noSystemSync = process.argv.includes('--no-system-sync');
+    if (!noPublish && !noSystemSync) {
+      try {
+        console.log(`Sincronizando OTA ${newVersion} con Love System...`);
+        await sincronizarLoveSystem(newVersion, resumen);
+        console.log('Love System sincronizado correctamente.');
+      } catch (syncError) {
+        console.error('La OTA fue publicada, pero no se pudo sincronizar Love System:', syncError.message);
+      }
+    } else if (noSystemSync) {
+      console.log('Skipping Love System sync (--no-system-sync)');
+    }
+
     if (!noPublish && !noNotify) {
       try {
         console.log(`Sending update notification for ${newVersion}...`);
