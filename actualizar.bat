@@ -6,6 +6,14 @@ REM actualizar build     -> sync runtime to package.json version and build (eas 
 @echo off
 setlocal enabledelayedexpansion
 
+REM Amor usa la cuenta EAS de 505leoo.
+REM Guardá el token una sola vez en Windows como EAS_TOKEN_AMOR.
+set "EXPO_TOKEN=%EAS_TOKEN_AMOR%"
+if "%EXPO_TOKEN%"=="" (
+  echo Falta EAS_TOKEN_AMOR. Configuralo con setx EAS_TOKEN_AMOR "TU_TOKEN_DE_505LEOO"
+  exit /b 1
+)
+
 REM parse --dry flag (only if there are args)
 set DRY=0
 if not "%*"=="" (
