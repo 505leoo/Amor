@@ -52,6 +52,7 @@ import { reporteId, semanaActual } from './components/ReporteSemanal';
 import { temporadaParaUsuario } from './hooks/useTemporadaActual';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import UpdateModal from './components/UpdateModal';
+import SystemUpdateGate from './components/SystemUpdateGate';
 import GlobalClickEffect from './components/GlobalClickEffect';
 
 const APP_VERSION = require('./app.json').expo?.extra?.updateVersion
@@ -631,6 +632,9 @@ export default function App() {
               description={descripcionActualizacion}
               onAccept={instalarActualizacion}
             />
+          )}
+          {userRef.current && currentScreen !== 'intro' && currentScreen !== 'login' && (
+            <SystemUpdateGate version={APP_VERSION} />
           )}
         </MusicProvider>
         </MisionesProvider>
