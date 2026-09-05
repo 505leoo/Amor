@@ -1,50 +1,34 @@
 @echo off
-REM Helper to run actualizar flows on Windows. Usage:
-REM actualizar           -> runs hotfix (use app.json runtime)
-REM actualizar build     -> sync runtime to package.json version and build (eas build)
+setlocal EnableDelayedExpansion
 
-@echo off
-setlocal enabledelayedexpansion
+REM Amor usa EAS 505leoo; LoveWeb usa EAS Leitof7.
+echo Elegi la cuenta EAS para Amor:
+echo [1] 505leoo (Amor)
+echo [2] Leitof7 (LoveWeb)
+choice /C 12 /N /M "Cuenta: "
+if errorlevel 2 set "EXPO_TOKEN=!EAS_TOKEN_LOVEWEB!"
+if errorlevel 1 if not errorlevel 2 set "EXPO_TOKEN=!EAS_TOKEN_AMOR!"
+if not defined EXPO_TOKEN goto missing
 
-REM Amor usa la cuenta EAS de 505leoo.
-REM Guardá el token una sola vez en Windows como EAS_TOKEN_AMOR.
-set "EXPO_TOKEN=%EAS_TOKEN_AMOR%"
-if "%EXPO_TOKEN%"=="" (
-  echo Falta EAS_TOKEN_AMOR. Configuralo con setx EAS_TOKEN_AMOR "TU_TOKEN_DE_505LEOO"
-  exit /b 1
-)
+set "DRY=0"
+if /I "%1"=="--dry" set "DRY=1"
+if /I "%2"=="--dry" set "DRY=1"
+if /I "%1"=="build" goto build
+if "!DRY!"=="1" goto dry
+npm run actualizar:hotfix %*
+exit /b %ERRORLEVEL%
 
-REM parse --dry flag (only if there are args)
-set DRY=0
-if not "%*"=="" (
-  for %%A in (%*) do (
-    if /I "%%~A"=="--dry" set DRY=1
-  )
-)
+:dry
+npm run actualizar:hotfix -- --no-commit --no-push --no-publish
+exit /b %ERRORLEVEL%
 
-IF "%1"=="build" (
-  echo [actualizar build] running sync + publish (or dry-run)...
-  if "%DRY%"=="1" (
-    npm run actualizar:sync -- --no-commit --no-push --no-publish
-  ) else (
-    npm run actualizar:sync
-  )
-  if %ERRORLEVEL% neq 0 (
-    echo [actualizar] actualizar:sync failed.
-    exit /b %ERRORLEVEL%
-  )
-  echo [actualizar build] starting eas build for android (profile: production)...
-  eas build -p android --profile production
-  exit /b %ERRORLEVEL%
-)
+:build
+if "!DRY!"=="1" npm run actualizar:sync -- --no-commit --no-push --no-publish
+if "!DRY!"=="0" npm run actualizar:sync
+if not "%ERRORLEVEL%"=="0" exit /b %ERRORLEVEL%
+eas build -p android --profile production
+exit /b %ERRORLEVEL%
 
-REM default: hotfix using app.json runtime
-if "%DRY%"=="1" (
-  echo [actualizar] running hotfix (dry) using app.json runtime...
-  npm run actualizar:hotfix -- --no-commit --no-push --no-publish
-) else (
-  echo [actualizar] running hotfix using app.json runtime...
-  npm run actualizar:hotfix %*
-)
-
-endlocal
+:missing
+echo Falta el token de la cuenta elegida. Configuralo con setx EAS_TOKEN_AMOR "TU_TOKEN_DE_505LEOO" o setx EAS_TOKEN_LOVEWEB "TU_TOKEN_DE_LEITOF7"
+exit /b 1

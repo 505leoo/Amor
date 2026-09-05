@@ -1,13 +1,13 @@
 {
   "name": "amor",
-  "version": "1.1.30",
+  "version": "1.1.32",
   "main": "index.js",
   "scripts": {
     "start": "expo start --dev-client",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "actualizar": "node ./scripts/actualizar.js --use-app-runtime",
+    "actualizar": "actualizar.bat",
     "actualizar:hotfix": "node ./scripts/actualizar.js --use-app-runtime",
     "actualizar:sync": "node ./scripts/actualizar.js --sync-runtime",
     "validate": "node ./scripts/validate.js",

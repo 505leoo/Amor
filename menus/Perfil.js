@@ -228,7 +228,7 @@ const legacyBadgeTargets = legacyMap => {
   return [...targets];
 };
 
-const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained, requirement, tierName, targetLevel = 0, earnedReason, expanded, onExpandedChange, onArrange, onArrangePress, fadeIn = false, fadeActive = false, fadeTrigger = 0, fadeDuration = 60 }) => {
+const ProfileBadge = ({ icon, colors, title, detail, legendary = false, tierId = 'bronce', obtained, requirement, tierName, targetLevel = 0, earnedReason, expanded, onExpandedChange, onArrange, onArrangePress, fadeIn = false, fadeActive = false, fadeTrigger = 0, fadeDuration = 60 }) => {
   const rotation = useRef(new Animated.Value(0)).current;
   const animating = useRef(false);
   const desiredBack = useRef(Boolean(expanded));
@@ -297,7 +297,7 @@ const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained
     <Animated.View style={[styles.badgeFace, { opacity: badgeOpacity, transform: [{ perspective: 700 }, { rotateY }] }]}> 
       {showBack ? <View style={styles.badgeBack}>
         <TouchableOpacity onPress={handlePress} onLongPress={arrange} delayLongPress={450} hitSlop={4} pressRetentionOffset={8} activeOpacity={0.9}>
-        <LinearGradient colors={unlocked ? colors : ['#b9ad9d', '#80766c', '#5e5751']} style={[styles.badgeBackMedal, legendary && unlocked && styles.badgeBackMedalLegend]}>
+        <LinearGradient colors={unlocked ? colors : ['#b9ad9d', '#80766c', '#5e5751']} style={[styles.badgeBackMedal, unlocked && styles[`badgeBackMedal_${tierId}`], legendary && unlocked && styles.badgeBackMedalLegend]}>
           {showRequirement ? <>
             <MaterialIcons name={legendary ? 'verified' : 'trending-up'} size={13} color="#fff4d1" />
             <Text style={styles.badgeBackTitle}>{legendary ? 'Chapa completada' : 'Para evolucionar'}</Text>
@@ -311,11 +311,11 @@ const ProfileBadge = ({ icon, colors, title, detail, legendary = false, obtained
         </TouchableOpacity>
         {unlocked && <TouchableOpacity style={[styles.badgeQuestion, showRequirement && styles.badgeQuestionActive]} onPress={() => setShowRequirement(value => !value)} activeOpacity={0.75}><Text style={styles.badgeQuestionText}>?</Text></TouchableOpacity>}
       </View> : <TouchableOpacity style={styles.badgeFront} onPress={handlePress} onLongPress={arrange} delayLongPress={450} hitSlop={4} pressRetentionOffset={8} activeOpacity={0.9}>
-        <View style={[styles.badgeWing, styles.badgeWingLeft, legendary && styles.badgeWingLegend, !unlocked && styles.badgeLocked]} />
-        <View style={[styles.badgeWing, styles.badgeWingRight, legendary && styles.badgeWingLegend, !unlocked && styles.badgeLocked]} />
-        <LinearGradient colors={unlocked ? colors : ['#b9ad9d', '#80766c', '#5e5751']} style={[styles.badgeMedal, legendary && unlocked && styles.badgeMedalLegend]}>
+        <View style={[styles.badgeWing, styles.badgeWingLeft, unlocked && styles[`badgeWing_${tierId}`], legendary && styles.badgeWingLegend, !unlocked && styles.badgeLocked]} />
+        <View style={[styles.badgeWing, styles.badgeWingRight, unlocked && styles[`badgeWing_${tierId}`], legendary && styles.badgeWingLegend, !unlocked && styles.badgeLocked]} />
+        <LinearGradient colors={unlocked ? colors : ['#b9ad9d', '#80766c', '#5e5751']} style={[styles.badgeMedal, unlocked && styles[`badgeMedal_${tierId}`], legendary && unlocked && styles.badgeMedalLegend]}>
           <View style={styles.badgeInnerRing}><MaterialIcons name={unlocked ? icon : 'lock'} size={legendary ? 27 : 24} color={unlocked ? '#fff8dc' : '#ddd4c9'} /></View>
-          <View style={styles.badgeGem} />
+          <View style={[styles.badgeGem, unlocked && styles[`badgeGem_${tierId}`]]} />
           {legendary && unlocked && <Text style={styles.badgeCrown}>♛</Text>}
         </LinearGradient>
         <Text style={[styles.badgeTitle, legendary && unlocked && styles.badgeTitleLegend]} numberOfLines={1}>{title}</Text>
@@ -932,7 +932,7 @@ const Perfil = ({ navigation, route }) => {
     const position = orderedBadges.findIndex(item => item.id === badge.id);
     return <View key={badge.id} style={[styles.badgeSlot, selected && styles.badgeSlotSelected]}>
       {selected && <View pointerEvents="none" style={styles.badgeSelectedMark} />}
-      <ProfileBadge {...badge} onArrange={() => seleccionarChapa(badge.id)} onArrangePress={() => chapaSeleccionadaRef.current ? seleccionarChapa(badge.id) : false} fadeIn={position < 4} fadeDuration={badgeFadeIds.includes(badge.id) ? 60 : 180} fadeActive={badgeFadeIds.includes(badge.id)} fadeTrigger={badgeFadeVersion} obtained={obtained} earnedReason={milestone?.motivo} expanded={openBadgeId === badge.id} onExpandedChange={open => setOpenBadgeId(open ? badge.id : null)} targetLevel={effectiveLevel} tierName={effectiveTier?.nombre || 'Sin rango'} colors={effectiveTier?.colors || badge.colors} legendary={effectiveLevel >= BADGE_TIERS.length} detail={effectiveTier ? `${effectiveTier.nombre} · ${badge.displayValue || `${badge.value} ${badge.unit}`}` : badge.detail} />
+      <ProfileBadge {...badge} onArrange={() => seleccionarChapa(badge.id)} onArrangePress={() => chapaSeleccionadaRef.current ? seleccionarChapa(badge.id) : false} fadeIn={position < 4} fadeDuration={badgeFadeIds.includes(badge.id) ? 60 : 180} fadeActive={badgeFadeIds.includes(badge.id)} fadeTrigger={badgeFadeVersion} obtained={obtained} earnedReason={milestone?.motivo} expanded={openBadgeId === badge.id} onExpandedChange={open => setOpenBadgeId(open ? badge.id : null)} targetLevel={effectiveLevel} tierId={effectiveTier?.id || 'bronce'} tierName={effectiveTier?.nombre || 'Sin rango'} colors={effectiveTier?.colors || badge.colors} legendary={effectiveLevel >= BADGE_TIERS.length} detail={effectiveTier ? `${effectiveTier.nombre} · ${badge.displayValue || `${badge.value} ${badge.unit}`}` : badge.detail} />
     </View>;
   };
 
@@ -1390,6 +1390,10 @@ const styles = StyleSheet.create({
   badgeBack: { width: 55, height: 55, position: 'relative', justifyContent: 'flex-start', alignItems: 'center' },
   badgeBackMedal: { width: 51, height: 51, borderRadius: 26, paddingHorizontal: 3, paddingVertical: 3, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#f8df9c', shadowColor: '#6d4932', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.36, shadowRadius: 3, elevation: 5 },
   badgeBackMedalLegend: { width: 53, height: 53, borderRadius: 27, marginTop: -2, shadowColor: '#f3bd39', shadowOpacity: 0.85, shadowRadius: 7, elevation: 9 },
+  badgeBackMedal_bronce: { borderColor: '#ffd0a0', shadowColor: '#a9542d' },
+  badgeBackMedal_plata: { borderColor: '#ffffff', shadowColor: '#aab9c5', shadowOpacity: 0.7, shadowRadius: 5, elevation: 7 },
+  badgeBackMedal_oro: { borderColor: '#fff5a8', shadowColor: '#e8a825', shadowOpacity: 0.8, shadowRadius: 6, elevation: 8 },
+  badgeBackMedal_mitica: { borderColor: '#f7d8ff', shadowColor: '#b55ade', shadowOpacity: 0.9, shadowRadius: 8, elevation: 10 },
   badgeBackTier: { color: '#fff1c6', fontSize: 4.2, lineHeight: 5, fontWeight: '900', letterSpacing: 0.35 },
   badgeBackTitle: { marginTop: 1, color: '#fff7df', fontSize: 3.8, lineHeight: 4.4, fontWeight: '900', textAlign: 'center' },
   badgeBackReason: { marginTop: 1, color: '#fff4dd', fontSize: 3.3, lineHeight: 3.9, fontWeight: '700', textAlign: 'center' },
@@ -1400,11 +1404,23 @@ const styles = StyleSheet.create({
   badgeWingLeft: { left: 5, transform: [{ rotate: '-28deg' }] },
   badgeWingRight: { right: 5, transform: [{ rotate: '28deg' }] },
   badgeWingLegend: { backgroundColor: '#ffe28a', borderColor: '#b97818' },
+  badgeWing_bronce: { backgroundColor: '#d88955', borderColor: '#7b4028' },
+  badgeWing_plata: { backgroundColor: '#dce4eb', borderColor: '#71808d' },
+  badgeWing_oro: { backgroundColor: '#ffd34f', borderColor: '#a86612' },
+  badgeWing_mitica: { backgroundColor: '#d88cf0', borderColor: '#6a318d' },
   badgeLocked: { opacity: 0.48, backgroundColor: '#9a9085', borderColor: '#716860' },
   badgeMedal: { width: 47, height: 47, borderRadius: 24, padding: 4, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#f8df9c', shadowColor: '#6d4932', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.36, shadowRadius: 3, elevation: 5 },
   badgeMedalLegend: { width: 51, height: 51, borderRadius: 26, marginTop: -2, shadowColor: '#f3bd39', shadowOpacity: 0.85, shadowRadius: 7, elevation: 9 },
+  badgeMedal_bronce: { borderColor: '#ffd0a0', shadowColor: '#a9542d' },
+  badgeMedal_plata: { borderColor: '#ffffff', shadowColor: '#aab9c5', shadowOpacity: 0.7, shadowRadius: 5, elevation: 7 },
+  badgeMedal_oro: { borderColor: '#fff5a8', shadowColor: '#e8a825', shadowOpacity: 0.8, shadowRadius: 6, elevation: 8 },
+  badgeMedal_mitica: { borderColor: '#f7d8ff', shadowColor: '#b55ade', shadowOpacity: 0.9, shadowRadius: 8, elevation: 10 },
   badgeInnerRing: { width: '100%', height: '100%', borderRadius: 22, alignItems: 'center', justifyContent: 'center', borderWidth: 1.2, borderColor: 'rgba(255,248,218,0.72)', backgroundColor: 'rgba(69,34,29,0.15)' },
   badgeGem: { position: 'absolute', bottom: -4, width: 13, height: 8, borderRadius: 4, backgroundColor: '#fff0b4', borderWidth: 1, borderColor: '#9d6a2a' },
+  badgeGem_bronce: { backgroundColor: '#f3a16e', borderColor: '#783d25' },
+  badgeGem_plata: { backgroundColor: '#f4fbff', borderColor: '#71808d' },
+  badgeGem_oro: { backgroundColor: '#fff8a6', borderColor: '#a86612', shadowColor: '#fff0a0', shadowOpacity: 0.9, shadowRadius: 3 },
+  badgeGem_mitica: { backgroundColor: '#f5c8ff', borderColor: '#6a318d', shadowColor: '#e6a0ff', shadowOpacity: 0.95, shadowRadius: 4 },
   badgeCrown: { position: 'absolute', top: -11, fontSize: 15, color: '#fff0a0', textShadowColor: '#8b5114', textShadowRadius: 3 },
   badgeTitle: { width: '100%', marginTop: 5, color: '#4c3021', fontSize: 6.4, fontWeight: '900', textAlign: 'center' },
   badgeTitleLegend: { color: '#8a5715' },
