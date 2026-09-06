@@ -24,7 +24,9 @@ async function run() {
 
   const admin = require('../functions/node_modules/firebase-admin');
   if (!admin.apps.length) admin.initializeApp({ projectId: 'amor-9df0d' });
-  await admin.firestore().collection('actualizaciones').doc('amor').set({
+  const db = admin.firestore();
+  db.settings({ preferRest: true });
+  await db.collection('actualizaciones').doc('amor').set({
     appId: 'amor',
     runtimeVersion,
     easBuildId: result.id,

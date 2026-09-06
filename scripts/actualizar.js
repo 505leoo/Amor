@@ -11,6 +11,16 @@ function writeJSON(path, obj) {
   fs.writeFileSync(path, JSON.stringify(obj, null, 2) + '\n');
 }
 
+let adminFirestore = null;
+function getAdminFirestore() {
+  if (adminFirestore) return adminFirestore;
+  const admin = require('../functions/node_modules/firebase-admin');
+  if (!admin.apps.length) admin.initializeApp({ projectId: 'amor-9df0d' });
+  adminFirestore = admin.firestore();
+  adminFirestore.settings({ preferRest: true });
+  return adminFirestore;
+}
+
 function pedirResumen() {
   const summaryArg = process.argv.indexOf('--summary');
   if (summaryArg !== -1 && process.argv[summaryArg + 1]) return Promise.resolve(process.argv.slice(summaryArg + 1).join(' '));
@@ -45,8 +55,7 @@ function bumpVersion(version) {
 
 async function notificarActualizacion(version, resumen) {
   const admin = require('../functions/node_modules/firebase-admin');
-  if (!admin.apps.length) admin.initializeApp({ projectId: 'amor-9df0d' });
-  const ref = admin.firestore().collection('notificaciones').doc('notificacion_1_actualizacion');
+  const ref = getAdminFirestore().collection('notificaciones').doc('notificacion_1_actualizacion');
   await ref.set({
     nombre: 'Notificación 1',
     titulo: 'Una nueva actualización llegó a Amor',
@@ -62,8 +71,7 @@ async function notificarActualizacion(version, resumen) {
 
 async function sincronizarLoveSystem(version, resumen) {
   const admin = require('../functions/node_modules/firebase-admin');
-  if (!admin.apps.length) admin.initializeApp({ projectId: 'amor-9df0d' });
-  const db = admin.firestore();
+  const db = getAdminFirestore();
   await db.collection('actualizaciones').doc('amor').set({
     appId: 'amor',
     otaVersion: version,
