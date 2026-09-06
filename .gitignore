@@ -8,6 +8,8 @@ node_modules/
 amor-9df0d-firebase-adminsdk-fbsvc-09b3626e0e.json
 dist/
 web-build/
+.runtime-version-backup.json
+.eas-build-result.json
 expo-env.d.ts
 
 # Native

@@ -58,6 +58,9 @@ import GlobalClickEffect from './components/GlobalClickEffect';
 const APP_VERSION = require('./app.json').expo?.extra?.updateVersion
   || require('./app.json').expo?.version
   || require('./package.json').version;
+const APP_RUNTIME_VERSION = Updates.runtimeVersion
+  || require('./app.json').expo?.runtimeVersion
+  || null;
 const UPDATE_ATTEMPT_STORAGE_KEY = '@amor/ota-update-attempt-v1';
 const UPDATE_ATTEMPT_COOLDOWN_MS = 15 * 60 * 1000;
 
@@ -419,6 +422,10 @@ export default function App() {
             // Marca la última sesión para que Pareja pueda mostrar un estado
             // online real, con expiración en lugar de un texto fijo.
             updates.ultimaActividad = new Date().toISOString();
+            updates.amorInstalada = true;
+            updates.amorVersion = APP_VERSION;
+            updates.amorRuntimeVersion = APP_RUNTIME_VERSION;
+            updates.amorUltimaConexion = serverTimestamp();
             if (data.appVersion !== APP_VERSION) updates.appVersion = APP_VERSION;
             if (data.fechaUltimaRacha   === undefined) updates.fechaUltimaRacha   = new Date().toISOString();
             if (Object.keys(updates).length > 0)
@@ -431,6 +438,10 @@ export default function App() {
               correo: currentUser.email || null,
               displayName: currentUser.displayName || 'Usuario',
               appVersion: APP_VERSION,
+              amorInstalada: true,
+              amorVersion: APP_VERSION,
+              amorRuntimeVersion: APP_RUNTIME_VERSION,
+              amorUltimaConexion: serverTimestamp(),
               ultimaActividad: new Date().toISOString(),
               fechaUltimaRacha: new Date().toISOString(),
             }, { merge: true }).catch(() => {});
