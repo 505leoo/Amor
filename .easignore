@@ -16,6 +16,34 @@ coverage/
 *.hbc
 *.log
 
+# Herramientas y metadatos locales
+.amazonq/
+.vscode/
+.gradle-user/
+.gradle-user-home/
+.agent.md
+
+# Recursos antiguos no referenciados por el código actual
+assets/inicio/iniciot2.png
+assets/inicio/iconos/icono-ardilla-bellota.png
+assets/inicio/halcon-icono.png
+assets/inicio/anuncios/anunciocumple.png
+assets/inicio/anuncios/anuncioreporte.png
+assets/inicio/menta1.png
+assets/juegos/juegos_overlay.png
+assets/menu/img1.jpg
+assets/temporadas/neutral.png
+assets/temporadas/libro/panel2.png
+assets/temporadas/libro/Temporada1/evento1.png
+assets/temporadas/libro/Temporada1/Historia/eventohis1.png
+assets/temporadas/libro/Temporada2/kitty2.png
+assets/temporadas/libro/Temporada2/desktop.ini
+assets/icon.png
+assets/adaptive-icon.png
+assets/splash.png
+assets/splash-icon.png
+assets/favicon.png
+
 # Archivos de configuración local
 .expo/
 .git/
