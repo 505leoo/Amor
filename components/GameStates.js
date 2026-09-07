@@ -19,11 +19,12 @@ export const GameEmptyState = ({ icon = 'auto-awesome', title = 'Todavía no hay
   </View>
 );
 
-export const GameErrorState = ({ title = 'Algo se enredó', message = 'No pudimos cargar esta parte. Tu progreso sigue a salvo.', onRetry }) => (
+export const GameErrorState = ({ title = 'Algo se enredó', message = 'No pudimos cargar esta parte. Tu progreso sigue a salvo.', errorDetail, onRetry }) => (
   <View style={[styles.state, styles.error]}>
     <View style={[styles.icon, styles.errorIcon]}><MaterialIcons name="cloud-off" size={24} color={gameColors.danger} /></View>
     <Text style={styles.title}>{title}</Text>
     <Text style={styles.message}>{message}</Text>
+    {errorDetail ? <Text style={styles.errorDetail} selectable>{errorDetail}</Text> : null}
     {onRetry ? <TouchableOpacity style={styles.button} onPress={onRetry} activeOpacity={0.78} accessibilityRole="button"><Text style={styles.buttonText}>VOLVER A INTENTAR</Text></TouchableOpacity> : null}
   </View>
 );
@@ -36,7 +37,7 @@ const styles = StyleSheet.create({
   errorIcon: { backgroundColor: '#f5d9c7', borderColor: '#d69a77' },
   title: { ...gameText, marginTop: 8, fontSize: 12, fontWeight: '900', textAlign: 'center' },
   message: { ...gameText, marginTop: 5, maxWidth: 260, color: gameColors.textSoft, fontSize: 8, lineHeight: 11, fontWeight: '700', textAlign: 'center' },
+  errorDetail: { ...gameText, marginTop: 8, maxWidth: 280, color: gameColors.danger, fontSize: 8, lineHeight: 11, textAlign: 'center' },
   button: { marginTop: 11, minWidth: 120, alignItems: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 9, backgroundColor: gameColors.green, borderWidth: 1, borderColor: gameColors.greenDark },
   buttonText: { ...gameText, color: gameColors.white, fontSize: 7, fontWeight: '900', letterSpacing: 0.5 },
 });
-
