@@ -59,6 +59,7 @@ async function notificarActualizacion(version, resumen) {
   await ref.set({
     nombre: 'Notificación 1',
     titulo: 'Una nueva actualización llegó a Amor',
+    mensaje: resumen,
     descripcion: resumen,
     resumen,
     enviar: 'si',

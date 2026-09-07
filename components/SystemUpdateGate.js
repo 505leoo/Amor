@@ -43,7 +43,7 @@ export default function SystemUpdateGate({ visible = true }) {
   }, [check]);
   const required = policy?.status !== 'revoked'
     && policy?.obligatoria !== false
-    && Boolean(policy.downloadUrl)
+    && Boolean(policy?.downloadUrl)
     && isRuntimeOlder(APP_RUNTIME_VERSION, policy.runtimeVersion);
   async function openSystem() { setOpening(true); try { await Linking.openURL('loveweb://'); } catch { setOpening(false); } }
   if (!visible || loading || !required) return null;

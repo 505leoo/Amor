@@ -24,7 +24,6 @@ const ensureAndroidNotificationChannel = async () => {
     name: 'Amor',
     description: 'Avisos de tu pareja y novedades importantes de Amor.',
     importance: Notifications.AndroidImportance.MAX,
-    sound: 'default',
     vibrationPattern: [0, 220, 140, 220],
     enableVibrate: true,
     lightColor: '#FF6B8A',
