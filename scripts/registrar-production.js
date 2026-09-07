@@ -21,6 +21,8 @@ async function run() {
   const result = findBuild(readJSON('.eas-build-result.json'));
   if (!runtimeVersion) throw new Error('app.json no tiene runtimeVersion.');
   if (!result?.id) throw new Error('EAS no devolvio un buildId valido.');
+  const buildVersion = String(expo.version || expo.extra?.updateVersion || runtimeVersion).trim();
+  const expectedFileName = `amor-${result.id}.apk`;
 
   const admin = require('../functions/node_modules/firebase-admin');
   if (!admin.apps.length) admin.initializeApp({ projectId: 'amor-9df0d' });
@@ -28,16 +30,24 @@ async function run() {
   db.settings({ preferRest: true });
   await db.collection('actualizaciones').doc('amor').set({
     appId: 'amor',
+    appName: 'Amor',
     runtimeVersion,
+    buildVersion,
     easBuildId: result.id,
-    expectedFileName: `amor-${result.id}.apk`,
+    expectedFileName,
+    fileName: expectedFileName,
+    status: 'pending',
+    obligatoria: false,
+    downloadUrl: admin.firestore.FieldValue.delete(),
+    md5: admin.firestore.FieldValue.delete(),
+    size: admin.firestore.FieldValue.delete(),
     installationUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     publishedBy: 'Amor production build',
   }, { merge: true });
 
   console.log(`Build ${result.id} registrada con runtime ${runtimeVersion}.`);
-  console.log(`Nombre esperado en Love System: amor-${result.id}.apk`);
+  console.log(`Nombre esperado en Love System: ${expectedFileName}`);
 }
 
 run().catch(error => {

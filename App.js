@@ -645,7 +645,7 @@ export default function App() {
             />
           )}
           {userRef.current && currentScreen !== 'intro' && currentScreen !== 'login' && (
-            <SystemUpdateGate version={APP_VERSION} />
+            <SystemUpdateGate />
           )}
         </MusicProvider>
         </MisionesProvider>
