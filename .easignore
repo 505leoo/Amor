@@ -46,6 +46,7 @@ assets/favicon.png
 
 # Archivos de configuración local
 .expo/
+.git
 .git/
 .gitignore
 .gitattributes
