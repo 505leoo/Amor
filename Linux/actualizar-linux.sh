@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pega tu token EAS entre las comillas. No compartas ni publiques este archivo
-# después de agregar el token.
-EAS_TOKEN_AMOR="${EAS_TOKEN_AMOR:-V3ss2-_Bzqd8FWQ523CUnMrRrlZiPDBZ18YClEhi}"
+# Configura EAS_TOKEN_AMOR en tu sesión antes de ejecutar este script.
+EAS_TOKEN_AMOR="${EAS_TOKEN_AMOR:-}"
 
-if [[ "$EAS_TOKEN_AMOR" == "PEGA_AQUI_TU_TOKEN_EAS" ]]; then
-  echo "Falta configurar EAS_TOKEN_AMOR en actualizar-linux.sh."
+if [[ -z "$EAS_TOKEN_AMOR" ]]; then
+  echo "Falta configurar EAS_TOKEN_AMOR en la sesión actual."
+  echo "Ejemplo: export EAS_TOKEN_AMOR='tu_token'; ./Linux/actualizar-linux.sh"
   exit 1
 fi
 
