@@ -5,6 +5,17 @@ ios/
 # Node modules
 node_modules/
 
+# Exportaciones y compilaciones locales (no forman parte de la app)
+dist/
+web-build/
+.codex-remote-attachments/
+coverage/
+*.apk
+*.aab
+*.ipa
+*.hbc
+*.log
+
 # Archivos de configuración local
 .expo/
 .git/
