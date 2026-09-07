@@ -37,6 +37,9 @@ const PENALIZACION_DIA_SIN_AVANCE = 3;
 const PENALIZACION_AVANCE_ESTANCADO = 5;
 const MAX_CONDUCTA_EVENTOS = 24;
 const BITACORA_INTERVALO_MS = 10 * 60 * 1000;
+// Mantenerlo alineado con data/alimentos.js: la saciedad completa tarda
+// aproximadamente 8 horas en llegar a cero.
+const PERDIDA_SACIEDAD_POR_HORA = 100 / 8;
 const OBJETIVOS_RACHA = {
   inicio: {puntos: 2},
   nivel: {puntos: 0, meta: 12, hitos: {7: 1, 12: 2}},
@@ -166,7 +169,7 @@ const currentSatiety = (careData = {}, nowMs = Date.now()) => {
   const base = Number.isFinite(baseValue) ? baseValue : 100;
   const updatedAt = timestampToMillis(careData.actualizadaEnMs) || timestampToMillis(careData.actualizadaEn) || nowMs;
   const elapsedHours = Math.max(0, nowMs - updatedAt) / 3600000;
-  return Math.max(0, Math.min(100, base - elapsedHours * 25));
+  return Math.max(0, Math.min(100, base - elapsedHours * PERDIDA_SACIEDAD_POR_HORA));
 };
 
 const hungerBand = (satiety) => {

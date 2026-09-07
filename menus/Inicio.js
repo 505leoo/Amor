@@ -904,6 +904,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
     <View style={styles.satietyPanel}>
       <View style={styles.satietyTrack}>
         <Animated.View style={[styles.satietyFill, { height: saciedadAnimada.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }), backgroundColor: saciedadAnimada.interpolate({ inputRange: [0, 15, 40, 70, 100], outputRange: ['#887aa4', '#c65f62', '#d8844f', '#d0a342', '#72a85f'] }) }]} />
+        <Text style={styles.satietyPercentage} pointerEvents="none" numberOfLines={1}>{Math.round(saciedad)}%</Text>
       </View>
       <View style={styles.satietyIconWrap}><IconoHambre /></View>
     </View>
@@ -1475,6 +1476,7 @@ const styles = StyleSheet.create({
   satietyIconWrap: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(112,73,55,0.72)', borderWidth: 1, borderColor: 'rgba(255,224,157,0.7)', borderRadius: 3 },
   satietyTrack: { flex: 1, width: 10, overflow: 'hidden', borderRadius: 3, backgroundColor: 'rgba(86,57,54,0.48)', borderWidth: 1, borderColor: 'rgba(255,241,210,0.82)', justifyContent: 'flex-end', shadowColor: '#6c4935', shadowOffset: { width: 1, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
   satietyFill: { width: '100%', borderRadius: 2, borderTopWidth: 1, borderTopColor: 'rgba(255,246,190,0.65)', shadowColor: '#fff2c4', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 2, elevation: 2 },
+  satietyPercentage: { position: 'absolute', top: '50%', left: '50%', zIndex: 2, width: 30, height: 9, marginLeft: -15, marginTop: -4.5, color: 'rgba(255,255,255,0.76)', fontSize: 6.2, lineHeight: 7, fontWeight: '800', letterSpacing: 0.1, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false, textShadowColor: 'rgba(54,35,38,0.65)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1.5, transform: [{ rotate: '-90deg' }] },
   foodTray: { position: 'absolute', left: '50%', bottom: 96, marginLeft: -120, zIndex: 710, elevation: 710, width: 190, height: 36, paddingHorizontal: 8, borderRadius: 18, flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: 'rgba(255,250,240,0.98)', borderWidth: 1, borderColor: '#dfc49a', shadowColor: '#674a35', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 6 },
   foodTrayBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4e3d1', borderWidth: 1, borderColor: '#e0b97a', marginRight: 4 },
   foodTrayBadgeEmoji: { fontSize: 18 },

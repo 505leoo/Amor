@@ -173,7 +173,6 @@ export const RachaProgressToast = ({ visible, fromPoints = 0, toPoints = 3, onHi
     <LinearGradient colors={['#785b60', '#a07470']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={toastStyles.card}>
       <View style={toastStyles.topRow}><View style={toastStyles.spark}><Text style={toastStyles.sparkText}>{delta < 0 ? '↓' : '✦'}</Text></View><View style={toastStyles.copy}><Text style={toastStyles.kicker}>RACHA ACUMULADA</Text><Text style={toastStyles.title}>{textoCambio}</Text></View><Text style={toastStyles.score}>{safeToPoints} pts</Text></View>
       <View style={toastStyles.track}><Animated.View style={[toastStyles.fill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}><LinearGradient colors={['#f4cf88', '#d98d73']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} /></Animated.View></View>
-      <Text style={toastStyles.hint}>{delta < 0 ? 'Cuidá mejor la conducta para recuperar terreno.' : 'Cada 10 puntos encienden un nuevo día de racha.'}</Text>
     </LinearGradient>
   </Animated.View>;
 };
@@ -290,7 +289,7 @@ export const RachaVisualModal = ({ visible, onClose }) => {
         <View style={modalStyles.countdownHolder}><RachaCountdown emphasis /></View>
         <View style={modalStyles.contentRow}>
           <View style={modalStyles.summaryColumn}>
-            <View style={modalStyles.hero}><View style={modalStyles.flame}><Text style={modalStyles.flameText}>🔥</Text></View><View><Text style={modalStyles.heroNumber}>{streakDays} {streakDays === 1 ? 'día' : 'días'}</Text><Text style={modalStyles.heroCaption}>{totalPoints} puntos acumulados · cada 10 puntos encienden un día.</Text></View></View>
+            <View style={modalStyles.hero}><View style={modalStyles.flame}><Text style={modalStyles.flameText}>🔥</Text></View><View><Text style={modalStyles.heroNumber}>{streakDays} {streakDays === 1 ? 'día' : 'días'}</Text><Text style={modalStyles.heroCaption}>{totalPoints} puntos acumulados</Text></View></View>
             <View style={modalStyles.progressCard}><View style={modalStyles.progressHeader}><Text style={modalStyles.progressTitle}>AVANCE ACUMULADO</Text><Text style={modalStyles.progressScore}>{totalPoints} pts</Text></View><RachaSegmentedBar points={totalPoints} dailyPoints={dailyPoints} /></View>
           </View>
           <View style={modalStyles.missionsColumn}>
@@ -318,7 +317,7 @@ const toastStyles = StyleSheet.create({
   wrap: { position: 'absolute', top: 44, alignSelf: 'center', width: 242, zIndex: 3000, elevation: 3000 },
   card: { paddingHorizontal: 9, paddingVertical: 8, borderRadius: 13, borderWidth: 1, borderColor: 'rgba(255,250,238,0.7)', shadowColor: '#30383a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 16 },
   topRow: { flexDirection: 'row', alignItems: 'center' }, spark: { width: 25, height: 25, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#e3b675' }, sparkText: { color: '#754d4e', fontSize: 14, fontWeight: '900' }, copy: { flex: 1, marginLeft: 6 }, kicker: { color: '#f5e9dc', fontSize: 6, fontWeight: '900', letterSpacing: 0.65 }, title: { marginTop: 1, color: '#fffaf0', fontFamily: 'Delius', fontSize: 7.8, fontWeight: '900' }, score: { color: '#ffe4b2', fontFamily: 'Delius', fontSize: 8.5, fontWeight: '900' },
-  track: { height: 5, marginTop: 7, overflow: 'hidden', borderRadius: 5, backgroundColor: 'rgba(60,35,38,0.48)' }, fill: { height: '100%', borderRadius: 5, backgroundColor: '#e3af6b' }, hint: { marginTop: 4, color: 'rgba(255,247,236,0.82)', fontFamily: 'Delius', fontSize: 5.8, textAlign: 'center' },
+  track: { height: 5, marginTop: 7, overflow: 'hidden', borderRadius: 5, backgroundColor: 'rgba(60,35,38,0.48)' }, fill: { height: '100%', borderRadius: 5, backgroundColor: '#e3af6b' },
 });
 
 const ritualStyles = StyleSheet.create({
