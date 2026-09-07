@@ -11,8 +11,7 @@ import TabButtons from './components/TabButtons';
 import RecompensaOverlay from './components/RecompensaOverlay';
 import { auth, db, functions } from './firebaseConfig';
 import { contenidoDisponible, numeroTemporada, useTemporadaActual } from './hooks/useTemporadaActual';
-import { useMisiones } from './MisionesContext';
-import { actualizarPasoTutorial } from './components/Tutorial';
+import { useRacha } from './RachaContext';
 import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 import { ALIMENTOS } from './data/alimentos';
 
@@ -108,7 +107,7 @@ export default function Comerciante({ navigation, temporada }) {
   const saliendoRef = useRef(false);
   const temporadaActualHook = useTemporadaActual();
   const temporadaActual = temporada || temporadaActualHook;
-  const { registrarProgreso } = useMisiones();
+  const { registrarObjetivo } = useRacha();
   const [credito, setCredito] = useState(null);
   const [monedas, setMonedas] = useState(0);
   const [procesandoCredito, setProcesandoCredito] = useState(false);
@@ -125,7 +124,6 @@ export default function Comerciante({ navigation, temporada }) {
   const [animalitosDesbloqueados, setAnimalitosDesbloqueados] = useState([]);
   const [animalitosEstado, setAnimalitosEstado] = useState({});
   const [productosFadeAnim] = useState(new Animated.Value(0));
-  const tutorialActivo = usuario?.tutorial === 'no';
 
   useEffect(() => {
     Image.prefetch(COMERCIO_IMAGE, { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
@@ -248,8 +246,6 @@ export default function Comerciante({ navigation, temporada }) {
     || (usuario?.animalito === animalId && usuario?.skin === skinId)
   );
   const tieneIcono = icono => Boolean(usuario?.iconosDesbloqueados?.[icono.id] || usuario?.iconoUrl === icono.url);
-  const tutorialPaso = Number(usuario?.tutorialPaso || 0);
-  const tutorialCompraActiva = tutorialActivo && tutorialPaso === 3;
   const rotacion = cicloComercio(ahora);
   const comprasRotacion = usuario?.comercio?.compras?.[rotacion.key] || {};
   const productoComprado = producto => producto.tipo !== 'alimento' && Boolean(comprasRotacion[producto.id]);
@@ -307,12 +303,9 @@ export default function Comerciante({ navigation, temporada }) {
     { id: 'diamantes_10', tipo: 'diamantes', icon: 'diamond', nombre: 'Diamantes', cantidad: 10, cantidadLabel: 'x10', precio: 420 },
     { id: 'cartas_1', tipo: 'cartasAnimalitos', icon: 'style', nombre: 'Carta universal', cantidad: 1, cantidadLabel: 'x1', precio: 140 },
   ];
-  // Durante el tutorial solo se ofrece el paquete especial de 3 cartas y
-  // únicamente mientras el tutorial está detenido en el paso del comerciante.
-  // Después de comprarlo, el paso avanza y la tienda queda sin compras.
-  const productos = tutorialActivo
-    ? (tutorialCompraActiva ? [{ ...productosDisponibles.find(producto => producto.id === 'cartas_3'), precio: 120 }] : [])
-    : productosDisponibles.filter(producto => producto.tipo === 'alimento' || producto.tipo === 'diamantes').slice(0, 14);
+  const productos = productosDisponibles
+    .filter(producto => producto.tipo === 'alimento' || producto.tipo === 'diamantes')
+    .slice(0, 14);
   const productosVisibles = productos.filter(producto => producto.tipo === 'alimento' || producto.tipo === 'diamantes');
 
   const salirComerciante = () => {
@@ -326,7 +319,6 @@ export default function Comerciante({ navigation, temporada }) {
     if (comprando) return;
     const uid = auth.currentUser?.uid;
     if (!uid) return;
-    if (tutorialActivo && (!tutorialCompraActiva || producto.id !== 'cartas_3')) return;
     setComprando(true);
     try {
       await runTransaction(db, async transaction => {
@@ -382,8 +374,7 @@ export default function Comerciante({ navigation, temporada }) {
         transaction.set(ref, update, { merge: true });
         transaction.set(comercioRef, { ...comercio, compras: comprasActualizadas }, { merge: true });
       });
-      await registrarProgreso('compras_hoy');
-      actualizarPasoTutorial(uid, 4).catch(() => {});
+      registrarObjetivo('comerciante').catch(() => {});
       global.showToast?.({ text1: `${producto.nombre} añadido`, type: 'success' });
       setProductoSeleccionado(null);
     } catch (error) {
@@ -478,7 +469,7 @@ export default function Comerciante({ navigation, temporada }) {
               })}
             </Animated.View>
           </View>
-          {!tutorialActivo && <TouchableOpacity style={[styles.creditoPanel, vencido && styles.creditoPanelVencido]} activeOpacity={0.78} onPress={() => setMostrarPrestamos(true)}>
+          <TouchableOpacity style={[styles.creditoPanel, vencido && styles.creditoPanelVencido]} activeOpacity={0.78} onPress={() => setMostrarPrestamos(true)}>
             <View style={styles.creditoIcono}><MaterialIcons name="volunteer-activism" size={17} color={vencido ? '#a64a56' : '#76552f'} /></View>
             <View style={styles.creditoInfo}>
               <Text style={[styles.creditoTitulo, vencido && styles.creditoTextoVencido]}>PRÉSTAMOS DE MENTITA</Text>
@@ -489,7 +480,7 @@ export default function Comerciante({ navigation, temporada }) {
             <View style={styles.creditoAccion}>
               <MaterialIcons name="chevron-right" size={17} color="#76552f" />
             </View>
-          </TouchableOpacity>}
+          </TouchableOpacity>
           <View style={styles.comercioOpciones}>
             <View style={styles.comercioOpcion}>
               <MaterialIcons name="refresh" size={14} color="#76552f" />

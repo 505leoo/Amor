@@ -4,8 +4,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { auth, db, functions } from '../firebaseConfig';
-import { actualizarPasoTutorial } from '../components/Tutorial';
-import { useMisiones } from '../MisionesContext';
 
 const regalos = [
   { tipo: 'dinero', titulo: 'Monedas', icono: 'monetization-on', cantidades: [100, 250, 500] },
@@ -15,7 +13,6 @@ const regalos = [
 ];
 
 export const RecompensasModal = ({ visible, onClose }) => {
-  const { registrarProgreso } = useMisiones();
   const [tab, setTab] = useState('inicio');
   const [regalo, setRegalo] = useState(null);
   const [cantidad, setCantidad] = useState(null);
@@ -49,7 +46,6 @@ export const RecompensasModal = ({ visible, onClose }) => {
     try {
       setEnviando(true);
       await httpsCallable(functions, 'regaloPareja')({ tipo: regalo.tipo, cantidad });
-      await registrarProgreso('regalos_hoy');
       setEnviado(true);
       global.showToast?.({ text1: `Enviaste x${cantidad} ${regalo.titulo}`, type: 'success' });
       setTimeout(cerrar, 850);
@@ -65,7 +61,6 @@ export const RecompensasModal = ({ visible, onClose }) => {
     try {
       setReclamando(current => ({ ...current, [id]: true }));
       await httpsCallable(functions, 'reclamarRegaloPareja')({ regaloId: id });
-      if (auth.currentUser?.uid) actualizarPasoTutorial(auth.currentUser.uid, 1).catch(() => {});
       setReclamados(current => ({ ...current, [id]: true }));
       global.showToast?.({ text1: 'Regalo reclamado', type: 'success' });
     } catch (e) {

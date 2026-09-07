@@ -11,8 +11,7 @@ import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'fireba
 import { auth, db } from '../../firebaseConfig';
 import RoomBackground from '../../components/RoomBackground';
 import TabButtons from '../../components/TabButtons';
-import { useMisiones } from '../../MisionesContext';
-import { actualizarPasoTutorial } from '../../components/Tutorial';
+import { useRacha } from '../../RachaContext';
 import { resolverAvatarUsuario } from '../../data/iconosLocales';
 
 const { width: W, height: H } = Dimensions.get('window');
@@ -479,7 +478,7 @@ const Board = memo(({ level, paths, onTouchStart, onTouchMove, hintCells, reveal
 });
 
 export default memo(function ConexionesGame({ navigation }) {
-  const { registrarProgreso } = useMisiones();
+  const { registrarObjetivo } = useRacha();
   const uid = auth.currentUser?.uid;
   const [status, setStatus] = useState('lobby');
   const [hasActiveBoard, setHasActiveBoard] = useState(false);
@@ -947,10 +946,9 @@ export default memo(function ConexionesGame({ navigation }) {
     setBonusReward(null);
     setRewardPending(Boolean(uid));
     setStatus('won');
-    registrarProgreso('partidas_hoy');
-    actualizarPasoTutorial(uid, 8).catch(() => {});
     saveProgress(nextProgress, level, stars)
-      .then(result => {
+      .then(async result => {
+        await registrarObjetivo('nivel').catch(() => null);
         if (roundIdRef.current === completedRound) {
           setReward(result?.earned || 0);
           setExpReward(result?.exp || 0);
@@ -963,7 +961,7 @@ export default memo(function ConexionesGame({ navigation }) {
       .finally(() => {
         if (roundIdRef.current === completedRound) setRewardPending(false);
       });
-  }, [duration, elapsed, hintUsed, level, moves, progress, registrarProgreso, saveProgress, startedAt, timeLeft, uid]);
+  }, [duration, elapsed, hintUsed, level, moves, progress, registrarObjetivo, saveProgress, startedAt, timeLeft, uid]);
 
   // Dejamos que React Native pinte el último tramo antes de mostrar el modal.
   // Si el usuario corrige la ruta durante ese instante, el cleanup cancela la

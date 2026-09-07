@@ -7,7 +7,7 @@ export const ANIMALITOS = [
     colorRareza: '#78a950',
     icono: '🦅',
     habilidad: 'Instinto Natural',
-    habilidadTexto: '+10% de EXP obtenida en misiones.',
+    habilidadTexto: '+10% de EXP obtenida en objetivos diarios.',
     legacyUnlockField: 'halconDesbloqueado',
     comercio: { color: '#a9722f', fondo: '#f3e5c8', borde: '#c69a5b' },
     imagen: require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),

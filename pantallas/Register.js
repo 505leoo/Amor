@@ -248,8 +248,6 @@ export default function Register({ navigation, temporada = 't1' }) {
         ultimaActividad: new Date().toISOString(),
         fechaUltimaRacha: new Date().toISOString(),
         ownedStickers: [],
-        tutorial: 'no',
-        tutorialPaso: 0,
       });
       await setDoc(doc(db, 'buzon', `bienvenida-${cred.user.uid}`), {
         para: cred.user.uid,

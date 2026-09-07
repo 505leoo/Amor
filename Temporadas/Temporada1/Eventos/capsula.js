@@ -428,11 +428,6 @@ function ModalEventoChicles({ onClose }) {
   );
 }
 
-// ── Misiones diarias del evento Cápsula ──────────────────────────────────────
-// Usa el contexto global — las misiones son externas al juego (login, mensajes,
-// minutos jugados, etc.) y la recompensa son chicles para poder seguir jugando.
-// No se pasa misionesEvento ni eventoKey — MisionesDiarias usa useMisiones() global.
-
 // ── Pantalla principal ────────────────────────────────────────────────────────
 export default function Capsula({ navigation, route }) {
   const [pasos,      setPasos]      = useState(0);
@@ -486,11 +481,6 @@ export default function Capsula({ navigation, route }) {
     if (uid) {
       updateDoc(doc(db, 'usuarios', uid), { chicles: increment(-2) }).catch(() => {});
       updateDoc(doc(db, 'usuarios', uid), { capsula1Pasos: increment(1) }).catch(() => {});
-      // Progreso misión: pasos
-      const diaKey = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
-      setDoc(doc(db, 'misiones_diarias', diaKey), {
-        [`${uid}_capsula`]: { progreso: { capsula_pasos_hoy: increment(1) } }
-      }, { merge: true }).catch(() => {});
     }
     pasosRef.current += 1;
     setChicles(v => v - 1);
@@ -513,13 +503,6 @@ export default function Capsula({ navigation, route }) {
       if (uid) {
         await setDoc(doc(db, 'Historias', uid), {
           temporada1: { [`nodo${idx}`]: true },
-        }, { merge: true }).catch(() => {});
-      }
-      // Progreso misión: checkpoints
-      if (uid) {
-        const diaKey = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
-        setDoc(doc(db, 'misiones_diarias', diaKey), {
-          [`${uid}_capsula`]: { progreso: { capsula_checkpoints_hoy: increment(1) } }
         }, { merge: true }).catch(() => {});
       }
       setReward({ titulo: CP_LABELS[idx], texto: CP_REWARDS[idx] });
@@ -602,7 +585,6 @@ const s = StyleSheet.create({
   caminoWrap:   { position: 'absolute', right: 10, top: 0, bottom: 0, justifyContent: 'center', alignItems: 'center' },
   cpHit:        { position: 'absolute' },
   vamosWrap:    { position: 'absolute', right: 125, bottom: 40 },
-  misionesWrap: { position: 'absolute', bottom: 32, left: 120 },
   eventoHeader: { position: 'absolute', top: 148, left: 74, width: 175, alignItems: 'center' },
   eventoHeaderTitle: { fontFamily: 'Omori', fontSize: 22, color: GOLD3, textAlign: 'center', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 5 },
   eventoHeaderText: { marginTop: 7, fontFamily: 'Delius', fontSize: 10, lineHeight: 15, color: CREAM, textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },

@@ -223,7 +223,7 @@ const Trofeos = ({ navigation }) => {
 
               <View style={styles.sectionsContainer}>
                 <View style={styles.missionsContainer}>
-                  <Text style={styles.missionsTitle}>Misiones</Text>
+                  <Text style={styles.missionsTitle}>Desafíos</Text>
 
                   {availableTrofeos.map((trofeo, index) => (
                     <View key={trofeo.id} style={styles.missionCard}>
@@ -249,7 +249,7 @@ const Trofeos = ({ navigation }) => {
                   {availableTrofeos.length === 0 && (
                     <View style={styles.missionPlaceholder}>
                       <Text style={styles.missionPlaceholderText}>
-                        No hay misiones disponibles
+                        No hay desafíos disponibles
                       </Text>
                     </View>
                   )}
@@ -272,7 +272,7 @@ const Trofeos = ({ navigation }) => {
                         Copa de Oro
                       </Text>
                       <Text style={styles.rewardDesc}>
-                        Completa todas las misiones
+                        Completa todos los desafíos
                       </Text>
                     </View>
                     <View style={styles.rewardBtn}>

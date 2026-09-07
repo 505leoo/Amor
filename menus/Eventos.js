@@ -5,7 +5,7 @@ import { useTemporadaActual } from '../hooks/useTemporadaActual';
 
 const EVENTOS_POR_TEMPORADA = {
   t1: {
-    evento: { id: 'chicles', categoria: 'EVENTOS', titulo: 'CHICLES', destino: 'capsula1', descripcion: 'Resuelve misiones, completa el camino compartiendo chicles.', imagen: require('../assets/inicio/eventos/eventochicle.png') },
+    evento: { id: 'chicles', categoria: 'EVENTOS', titulo: 'CHICLES', destino: 'capsula1', descripcion: 'Completá el camino compartiendo chicles.', imagen: require('../assets/inicio/eventos/eventochicle.png') },
   },
   t2: {
     historia: { id: 'rutaAurora', categoria: 'EVENTO DE HISTORIA', titulo: 'RUTAS', destino: 'rutas', descripcion: 'Acompañá a Aurora durante su día y guardá cada momento como un recuerdo.', imagen: require('../assets/inicio/eventos/eventorutas.png'), tema: 'blanco' },

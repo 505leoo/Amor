@@ -127,14 +127,13 @@ const Avatar = memo(({ uri, size = 48 }) => {
   );
 });
 
-export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud, tutorialSolicitudEnviada = false }) {
+export default memo(function Pareja({ navigation, isPaused }) {
   const uidInicial = auth.currentUser?.uid;
   const datosIniciales = getCachedUserData(uidInicial);
   const parejaInicial = datosIniciales ? datosIniciales.pareja || null : undefined;
   const datosParejaIniciales = parejaInicial ? getCachedUserData(parejaInicial) : null;
   const contenidoEnCache = Boolean(parejaInicial ? datosParejaIniciales : usuariosCache);
   const { data: parejaActual, loaded: userLoaded, uid } = useUserDocument(data => data?.pareja || null);
-  const { data: tutorialSolicitudGuardada } = useUserDocument(data => Boolean(data?.tutorialSolicitudEnviada));
   const [pareja, setPareja] = useState(parejaInicial); // undefined = cargando
   const [usuarios, setUsuarios] = useState(() => usuariosCache?.filter(user => user.id !== uidInicial && !user.pareja) || []);
   const [loading, setLoading] = useState(() => !usuariosCache);
@@ -152,6 +151,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
   if (parejaDataActual) ultimaParejaData.current = parejaDataActual;
   const parejaData = parejaDataActual || (ultimaParejaData.current?.id === pareja ? ultimaParejaData.current : null);
   const progresoNivelPareja = Math.max(0, Math.min(100, Math.round(((Number(parejaData?.exp) || 0) % 100))));
+  const rachaPareja = Math.max(0, Number(parejaData?.rachaDiaria?.diasConsecutivos) || 0);
 
   useEffect(() => {
     if (isPaused) return undefined;
@@ -203,7 +203,6 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
       
       await Promise.all(promesas);
       setSolicitudEnviada(true);
-      onTutorialSolicitud?.();
       global.showToast?.({ text1: 'Solicitud enviada ✓', type: 'success' });
     } catch (e) {
       console.error('Error al enviar solicitud:', e);
@@ -230,7 +229,6 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
         estado: 'pendiente',
       });
       setEnviados(prev => ({ ...prev, [destinatario.id]: true }));
-      onTutorialSolicitud?.();
       global.showToast?.({ text1: 'Invitación enviada ✓', type: 'success' });
     } catch (e) {
       console.error('Error al enviar invitación:', e);
@@ -264,7 +262,7 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
             <ProfileFrame avatar={resolverAvatarUsuario(parejaData, ICONO_DEFAULT)} frameId={parejaData.marcoPerfil || 'corazon'} compact />
             <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} activeOpacity={0.7} style={styles.parejaInfoContainer}>
               <View style={styles.parejaNombreLinea}><Text style={[styles.usuarioNombre, styles.parejaNameStyle]} numberOfLines={1}>{parejaData.nombre}</Text><IndicadorOnline usuario={parejaData} ahora={ahora} /></View>
-              <View style={styles.parejaProgresoCompacto}><Text style={styles.parejaNivelCompacto}>Nivel {1 + Math.floor((parejaData.exp || 0) / 100)}</Text><View style={styles.parejaBarraCompacta}><View style={[styles.parejaBarraFillCompacta, { width: `${progresoNivelPareja}%` }]} /></View><Text style={styles.parejaExpCompacta}>{progresoNivelPareja}/100</Text></View>
+              <View style={styles.parejaProgresoCompacto}><View style={styles.parejaRachaCompacta}><MaterialIcons name="local-fire-department" size={10} color="#b6534c" /><Text style={styles.parejaRachaNumero}>{rachaPareja}</Text></View><Text style={styles.parejaNivelCompacto}>Nivel {1 + Math.floor((parejaData.exp || 0) / 100)}</Text><View style={styles.parejaBarraCompacta}><View style={[styles.parejaBarraFillCompacta, { width: `${progresoNivelPareja}%` }]} /></View><Text style={styles.parejaExpCompacta}>{progresoNivelPareja}/100</Text></View>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => navigation?.navigate('perfil', { uid: parejaData.id })} style={styles.parejaChevron} activeOpacity={0.75}><MaterialIcons name="chevron-right" size={22} color="#80512e" /></TouchableOpacity>
           </View>
@@ -326,12 +324,12 @@ export default memo(function Pareja({ navigation, isPaused, onTutorialSolicitud,
             </Svg>
           </View>
           <TouchableOpacity 
-            style={[styles.enviarSolicitudBtn, (solicitudEnviada || tutorialSolicitudEnviada || tutorialSolicitudGuardada) && styles.enviarSolicitudBtnEnviado]}
+            style={[styles.enviarSolicitudBtn, solicitudEnviada && styles.enviarSolicitudBtnEnviado]}
             onPress={enviarSolicitudGeneral}
-            disabled={solicitudEnviada || tutorialSolicitudEnviada || tutorialSolicitudGuardada}
+            disabled={solicitudEnviada}
           >
-            <Text style={[styles.enviarSolicitudText, (solicitudEnviada || tutorialSolicitudEnviada || tutorialSolicitudGuardada) && styles.enviarSolicitudTextEnviado]}>
-              {solicitudEnviada || tutorialSolicitudEnviada || tutorialSolicitudGuardada ? 'Enviado' : 'Enviar solicitud'}
+            <Text style={[styles.enviarSolicitudText, solicitudEnviada && styles.enviarSolicitudTextEnviado]}>
+              {solicitudEnviada ? 'Enviado' : 'Enviar solicitud'}
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -417,6 +415,8 @@ const styles = StyleSheet.create({
   onlineText: { fontSize: 6.5, color: '#4CAF50', fontFamily: 'Globo', fontWeight: '500' },
   onlineTextOffline: { color: '#aaa49a' },
   parejaProgresoCompacto: { flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 3 },
+  parejaRachaCompacta: { minWidth: 18, height: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: 2, borderRadius: 5, backgroundColor: 'rgba(255,238,205,0.72)' },
+  parejaRachaNumero: { color: '#8f4b40', fontSize: 6.2, fontFamily: 'Globo', fontWeight: '700' },
   parejaNivelCompacto: { color: '#6a3d18', fontSize: 6.3, fontFamily: 'Globo', fontWeight: '700' },
   parejaBarraCompacta: { flex: 1, height: 8, overflow: 'hidden', borderRadius: 5, backgroundColor: '#dfd0b6', borderWidth: 1, borderColor: '#c6ad8c' },
   parejaBarraFillCompacta: { height: '100%', borderRadius: 4, backgroundColor: '#df477e' },

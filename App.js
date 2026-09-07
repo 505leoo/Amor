@@ -4,7 +4,7 @@ import { Asset } from 'expo-asset';
 import * as Updates from 'expo-updates';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth, db } from './firebaseConfig';
-import { doc, getDoc, getDocFromServer, collection, getDocs, query, limit, updateDoc, setDoc, serverTimestamp, increment } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, collection, getDocs, query, limit, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import NetInfo from '@react-native-community/netinfo';
 import * as NavigationBar from 'expo-navigation-bar';
 import * as ImagePicker from 'expo-image-picker';
@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import NotificationSystem from './utils/NotificationSystem';
 import { TrofeosProvider } from './TrofeosContext';
 import { MusicProvider } from './MusicContext';
-import { MisionesProvider } from './MisionesContext';
+import { RachaProvider, useRacha } from './RachaContext';
 import Intro from './Intro';
 import Login from './pantallas/Login';
 import Register from './pantallas/Register';
@@ -46,7 +46,6 @@ import Comerciante from './Comerciante';
 import Anuncios from './components/Anuncios';
 import Noticias, { NOTICIAS_ID, NOTICIAS_IDS } from './components/Noticias';
 import Lotes from './Lotes';
-import Tutorial from './components/Tutorial';
 import { ReporteSemanal } from './components/ReporteSemanal';
 import { reporteId, semanaActual } from './components/ReporteSemanal';
 import { temporadaParaUsuario } from './hooks/useTemporadaActual';
@@ -54,6 +53,7 @@ import AppErrorBoundary from './components/AppErrorBoundary';
 import UpdateModal from './components/UpdateModal';
 import SystemUpdateGate from './components/SystemUpdateGate';
 import GlobalClickEffect from './components/GlobalClickEffect';
+import { RachaCompletionRitual, RachaGlobalToast } from './components/RachaVisual';
 
 const APP_VERSION = require('./app.json').expo?.extra?.updateVersion
   || require('./app.json').expo?.version
@@ -82,6 +82,15 @@ const KNOWN_SCREENS = new Set([
   'comerciante', 'lotes', 'rutas', 'adminCodigos', 'iconos', 'pase', 'juegos', 'conexiones', 'dulces',
 ]);
 
+const RachaDailyLogin = () => {
+  const { registrarObjetivo, loading, day } = useRacha();
+  useEffect(() => {
+    if (loading || !auth.currentUser) return;
+    registrarObjetivo('inicio').catch(() => {});
+  }, [day?.fecha, loading, registrarObjetivo]);
+  return null;
+};
+
 export default function App() {
   const [loading, setLoading]           = useState(true);
   const [authChecked, setAuthChecked]   = useState(false);
@@ -92,7 +101,6 @@ export default function App() {
   const [temporadaInicio, setTemporadaInicio] = useState('t1');
   const [tipoAnuncio, setTipoAnuncio] = useState('lotes');
   const [eventosAnuncio, setEventosAnuncio] = useState(['lotes']);
-  const [tutorialActivo, setTutorialActivo] = useState(false);
   const [estadoActualizacion, setEstadoActualizacion] = useState('checking');
   const [versionActualizacion, setVersionActualizacion] = useState(null);
   const [descripcionActualizacion, setDescripcionActualizacion] = useState(null);
@@ -403,13 +411,6 @@ export default function App() {
         getDocFromServer(currentUserDocRef).then(snap => {
           if (snap.exists()) {
             const data = snap.data();
-            setTutorialActivo(data.tutorial === 'no');
-            if (data.tutorial === 'no' && Number(data.tutorialPaso || 0) < 2 && data.animalito) {
-              updateDoc(doc(db, 'usuarios', currentUser.uid), { animalito: null }).catch(() => {});
-            }
-            if (data.tutorial === 'si' && Number(data.tutorialPaso || 0) !== 0) {
-              updateDoc(doc(db, 'usuarios', currentUser.uid), { tutorialPaso: 0 }).catch(() => {});
-            }
             if (data.pareja) {
               getDoc(doc(db, 'usuarios', data.pareja)).then(partnerSnap => {
                 if (partnerSnap.exists()) AsyncStorage.setItem(`pareja_cache_${currentUser.uid}`, JSON.stringify({ id: partnerSnap.id, ...partnerSnap.data() })).catch(() => {});
@@ -452,7 +453,6 @@ export default function App() {
       } else {
         userRef.current = null;
         navigationHistoryRef.current = [];
-        setTutorialActivo(false);
         currentScreenRef.current = 'login';
         screenParamsRef.current = {};
         setScreenParams({});
@@ -517,7 +517,8 @@ export default function App() {
         showScreen(auth.currentUser ? 'main' : 'login');
       }}>
       <TrofeosProvider>
-        <MisionesProvider>
+        <RachaProvider>
+        <RachaDailyLogin />
         <MusicProvider onVisualClick={(x, y) => globalClickEffectRef.current?.show(x, y)}>
           <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
 
@@ -535,13 +536,6 @@ export default function App() {
                 (async () => {
                   const usuarioSnap = await getDoc(doc(db, 'usuarios', userRef.current.uid));
                   const usuarioData = usuarioSnap.data() || {};
-                  const tutorialActual = usuarioData.tutorial === 'no';
-                  setTutorialActivo(tutorialActual);
-                  if (tutorialActual) {
-                    currentScreenRef.current = 'main';
-                    setCurrentScreen('main');
-                    return;
-                  }
                   const parejaUid = usuarioSnap.data()?.pareja;
                   let completo = false;
                   if (parejaUid) {
@@ -597,18 +591,7 @@ export default function App() {
 
           {currentScreen === 'login'    && <Login    navigation={navigation} temporada={temporadaInicio} />}
           {currentScreen === 'register' && <Register navigation={navigation} temporada={temporadaInicio} />}
-          {currentScreen === 'main'     && <Inicio   navigation={navigation} tutorialActivo={tutorialActivo} openReporteSemanal={screenParams?.openReporteSemanal} onReady={() => setInicioReady(true)} />}
-          {currentScreen === 'main' && tutorialActivo && <Tutorial visible onFinish={async () => {
-            const uid = auth.currentUser?.uid;
-            if (uid) await updateDoc(doc(db, 'usuarios', uid), {
-              tutorial: 'si',
-              tutorialPaso: 0,
-              chicles: increment(2),
-            }).catch(() => {});
-            setTutorialActivo(false);
-            currentScreenRef.current = 'intro';
-            setCurrentScreen('intro');
-          }} />}
+          {currentScreen === 'main'     && <Inicio   navigation={navigation} openReporteSemanal={screenParams?.openReporteSemanal} onReady={() => setInicioReady(true)} />}
           {currentScreen === 'reporteSemanal' && <ReporteSemanal onTerminado={() => { currentScreenRef.current = 'main'; setCurrentScreen('main'); }} />}
           {currentScreen === 'coleccion'       && <Coleccion        navigation={navigation} />}
           {currentScreen === 'tienda'          && <Tienda           navigation={navigation} />}
@@ -648,7 +631,9 @@ export default function App() {
             <SystemUpdateGate />
           )}
         </MusicProvider>
-        </MisionesProvider>
+        <RachaGlobalToast />
+        {currentScreen === 'main' && <RachaCompletionRitual />}
+        </RachaProvider>
       </TrofeosProvider>
       </AppErrorBoundary>
       <GlobalClickEffect ref={globalClickEffectRef} />

@@ -24,6 +24,360 @@ const FIRESTORE_NOTIFICATION_TEMPLATES = [
   },
 ];
 
+// La racha y el cuidado del Animalito se resuelven con el mismo huso horario
+// para que el cambio de día no dependa de la configuración del teléfono.
+const RACHA_TIME_ZONE = "America/Argentina/Buenos_Aires";
+const RACHA_OFFSET_HORAS = 4;
+// Es el umbral visual para entrar en AVANZA, no un tope diario. El puntaje
+// de conducta puede seguir creciendo y también puede bajar por descuidos.
+const META_RACHA_DIARIA = 10;
+const PUNTOS_POR_DIA_RACHA = 10;
+const BONUS_DIA_RACHA = 5;
+const PENALIZACION_DIA_SIN_AVANCE = 3;
+const PENALIZACION_AVANCE_ESTANCADO = 5;
+const MAX_CONDUCTA_EVENTOS = 24;
+const BITACORA_INTERVALO_MS = 10 * 60 * 1000;
+const OBJETIVOS_RACHA = {
+  inicio: {puntos: 2},
+  nivel: {puntos: 0, meta: 12, hitos: {7: 1, 12: 2}},
+  alimentar: {puntos: 0, meta: 2, hitos: {2: 1}},
+  comerciante: {puntos: 0, meta: 3, hitos: {1: 1, 2: 1, 3: 2}},
+};
+
+const conductaEvent = (id, delta, texto, tipo = delta < 0 ? "negativa" : "positiva") => ({
+  id,
+  delta,
+  texto,
+  tipo,
+  creadoEnMs: Date.now(),
+});
+
+const appendConductaEvent = (events, event) => [
+  ...(Array.isArray(events) ? events : []),
+  event,
+].slice(-MAX_CONDUCTA_EVENTOS);
+
+const toMillis = (value) => {
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  if (Number.isFinite(Number(value))) return Number(value);
+  if (Number.isFinite(Number(value && value.seconds))) return Number(value.seconds) * 1000;
+  return 0;
+};
+
+const lastConductaMs = (events) => (Array.isArray(events) ? events : [])
+    .reduce((last, event) => Math.max(last, toMillis(event && (event.creadoEnMs || event.creadoEn))), 0);
+
+// La bitácora puede ser rica sin convertirse en un registro de cada toque.
+// Los puntos se aplican siempre; solo la entrada visible se limita a una cada
+// diez minutos, incluso si llegan varias llamadas casi al mismo tiempo.
+const appendConductaEventThrottled = (events, event, ultimaBitacoraEnMs = 0, now = Date.now()) => {
+  const last = Math.max(Number(ultimaBitacoraEnMs) || 0, lastConductaMs(events));
+  if (last && now - last < BITACORA_INTERVALO_MS) {
+    return {events: Array.isArray(events) ? events : [], ultimaBitacoraEnMs: last, registrada: false};
+  }
+  return {events: appendConductaEvent(events, event), ultimaBitacoraEnMs: now, registrada: true};
+};
+
+const hitosObjetivo = (objetivo = {}) => Object.entries(objetivo.hitos || {})
+    .map(([cantidad, puntos]) => [Number(cantidad), Number(puntos)])
+    .filter(([cantidad, puntos]) => cantidad > 0 && puntos > 0)
+    .sort(([a], [b]) => a - b);
+
+const detalleHito = (uid, dayKey, objectiveId, cantidad, puntos) => {
+  const opciones = objectiveId === "nivel" ? [
+    `+${puntos} punto${puntos === 1 ? "" : "s"} por completar ${cantidad} niveles`,
+    `La constancia rindió: +${puntos} punto${puntos === 1 ? "" : "s"} al llegar a ${cantidad} niveles`,
+    `Hito de niveles alcanzado (${cantidad}): +${puntos}`,
+  ] : objectiveId === "alimentar" ? [
+    `+${puntos} punto${puntos === 1 ? "" : "s"} por alimentar al Animalito ${cantidad} veces`,
+    `El cuidado se notó: +${puntos} punto${puntos === 1 ? "" : "s"} por ${cantidad} comidas`,
+    `Hito de alimentación alcanzado (${cantidad} comidas): +${puntos}`,
+  ] : [
+    `+${puntos} punto${puntos === 1 ? "" : "s"} por comprar ${cantidad} vez${cantidad === 1 ? "" : "ces"} en Comerciante`,
+    `Compra ${cantidad} registrada: +${puntos} punto${puntos === 1 ? "" : "s"} para tu racha`,
+    `Hito de Comerciante alcanzado (${cantidad} compras): +${puntos}`,
+  ];
+  return recompensaVariable(uid, dayKey, `${objectiveId}-hito-${cantidad}`, opciones);
+};
+
+const recompensaVariable = (uid, dayKey, conducta, opciones) => {
+  const hash = crypto.createHash("sha256").update(`${uid}|${dayKey}|${conducta}`).digest("hex");
+  const indice = parseInt(hash.slice(0, 8), 16) % opciones.length;
+  return opciones[indice];
+};
+
+const puntosConductaSeguro = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const dayKeyInRachaZone = (date = new Date()) => {
+  // El día de racha cierra a las 20:00 de Argentina; las cuatro horas
+  // restantes quedan libres para que la persona vea el Ritual.
+  const rachaDate = new Date(date.getTime() + RACHA_OFFSET_HORAS * 60 * 60 * 1000);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: RACHA_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(rachaDate).reduce((result, part) => {
+    if (part.type !== "literal") result[part.type] = part.value;
+    return result;
+  }, {});
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+
+const previousRachaDay = (dayKey) => {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+};
+
+const nextRachaDay = (dayKey) => {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+};
+
+const previousRachaDays = (dayKey, amount) => {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day - amount)).toISOString().slice(0, 10);
+};
+
+const rachaDayRange = (from, to, limit = 31) => {
+  const dates = [];
+  let cursor = from;
+  while (cursor && cursor <= to && dates.length < limit) {
+    dates.push(cursor);
+    cursor = nextRachaDay(cursor);
+  }
+  return dates;
+};
+
+const timestampToMillis = (value) => {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return Number(value.toMillis()) || 0;
+  if (value instanceof Date) return value.getTime();
+  if (Number.isFinite(Number(value.seconds))) return Number(value.seconds) * 1000;
+  if (Number.isFinite(Number(value._seconds))) return Number(value._seconds) * 1000;
+  return Number(value) || 0;
+};
+
+const currentSatiety = (careData = {}, nowMs = Date.now()) => {
+  const baseValue = Number(careData.saciedad);
+  const base = Number.isFinite(baseValue) ? baseValue : 100;
+  const updatedAt = timestampToMillis(careData.actualizadaEnMs) || timestampToMillis(careData.actualizadaEn) || nowMs;
+  const elapsedHours = Math.max(0, nowMs - updatedAt) / 3600000;
+  return Math.max(0, Math.min(100, base - elapsedHours * 25));
+};
+
+const hungerBand = (satiety) => {
+  if (satiety <= 5) return "critica";
+  if (satiety <= 20) return "baja";
+  return null;
+};
+
+// La conducta es más exigente que el aviso push: bajar de 60% ya cuenta como
+// una señal de descuido, aunque la notificación todavía no sea urgente.
+const conductaHambreBand = (satiety) => {
+  if (satiety <= 5) return "critica";
+  if (satiety < 60) return "baja";
+  return null;
+};
+
+const careOwnerUid = (careData = {}) => {
+  const participants = Array.isArray(careData.participantes) ? careData.participantes.filter(Boolean).map(String) : [];
+  const explicitOwner = [careData.animalitoUid, careData.propietarioUid, careData.ownerUid]
+      .map((value) => String(value || "").trim())
+      .find((value) => value && participants.includes(value));
+  if (explicitOwner) return explicitOwner;
+  const lastCaretaker = String(careData.ultimaAlimentacionPor || "").trim();
+  if (lastCaretaker && participants.includes(lastCaretaker)) return lastCaretaker;
+  return participants[0] || null;
+};
+
+// Cierra los días anteriores una sola vez. La conducta se arrastra entre
+// jornadas: un día sin crecimiento resta puntos, y si ya estaba en AVANZA la
+// penalización es mayor. El total de la racha nunca cae por debajo de cero.
+const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInRachaZone())) => {
+  const db = admin.firestore();
+  const userRef = db.collection("usuarios").doc(uid);
+  return db.runTransaction(async (tx) => {
+    const userSnap = await tx.get(userRef);
+    if (!userSnap.exists) return {ajuste: null, diasConsecutivos: 0};
+    const user = userSnap.data() || {};
+    const racha = user.rachaDiaria || {};
+    const streakBefore = Math.max(0, Number(racha.diasConsecutivos) || 0);
+    let puntosTotales = Math.max(0, Number(racha.puntosTotales) || streakBefore * PUNTOS_POR_DIA_RACHA);
+    const puntosTotalesAntesProceso = puntosTotales;
+    const diasConsecutivosAntesProceso = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+    const ultimaCompleta = String(racha.ultimaFechaCompleta || "");
+    const ultimaEvaluada = String(racha.ultimaFechaEvaluada || "");
+    const tieneHistorial = Boolean(ultimaCompleta || ultimaEvaluada || racha.puntosTotales !== undefined || racha.puntosConducta !== undefined || streakBefore > 0);
+    let inicio = ultimaEvaluada ? nextRachaDay(ultimaEvaluada) : (ultimaCompleta && ultimaCompleta < hastaDia ? nextRachaDay(ultimaCompleta) : hastaDia);
+    // No reconstruimos años enteros de historial al migrar una cuenta vieja.
+    if (inicio < previousRachaDays(hastaDia, 30)) {
+      inicio = previousRachaDays(hastaDia, 30);
+    }
+    const dias = rachaDayRange(inicio, hastaDia);
+    if (!dias.length) return {ajuste: null, cierre: null, puntosTotales, diasConsecutivos: Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA)};
+    const referencias = dias.map((dia) => userRef.collection("racha_diaria").doc(dia));
+    const snapshots = await Promise.all(referencias.map((referencia) => tx.get(referencia)));
+    let puntosConducta = puntosConductaSeguro(racha.puntosConducta);
+    let diasConsecutivos = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+    const ajustes = [];
+    let ultimoDiaCerrado = null;
+    let huboDiaCompletado = false;
+    snapshots.forEach((snapshot, index) => {
+      const datos = snapshot.exists ? snapshot.data() || {} : {};
+      if (snapshot.exists || tieneHistorial || puntosConducta !== 0) {
+        ultimoDiaCerrado = dias[index];
+        huboDiaCompletado = huboDiaCompletado || Boolean(datos.completado || dias[index] === ultimaCompleta);
+      }
+      const tienePuntosGuardados = datos.puntosDia !== undefined || datos.puntos !== undefined;
+      const puntos = tienePuntosGuardados ?
+        puntosConductaSeguro(datos.puntosDia !== undefined ? datos.puntosDia : datos.puntos) : puntosConducta;
+      const inicioDia = datos.puntosDiaInicio !== undefined ?
+        puntosConductaSeguro(datos.puntosDiaInicio) : puntos;
+      const incremento = puntos - inicioDia;
+      const tuvoDescuidado = Boolean(datos.penalizacionesHambre && Object.keys(datos.penalizacionesHambre).length);
+      const debePenalizar = incremento <= 0 && !tuvoDescuidado;
+      const penalizacionNominal = puntos >= META_RACHA_DIARIA ? PENALIZACION_AVANCE_ESTANCADO : PENALIZACION_DIA_SIN_AVANCE;
+      const penalizacion = debePenalizar ? penalizacionNominal : 0;
+      puntosConducta = puntos - penalizacion;
+      if (!penalizacion) return;
+      const puntosTotalesAntes = puntosTotales;
+      const anterior = diasConsecutivos;
+      puntosTotales = Math.max(0, puntosTotales - penalizacion);
+      diasConsecutivos = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+      const evento = conductaEvent(
+          `cierre-${dias[index]}`,
+          -penalizacion,
+          `-${penalizacion} puntos por cerrar el día sin avanzar`,
+          "negativa",
+      );
+      const bitacora = appendConductaEventThrottled(
+          datos.eventos,
+          evento,
+          datos.ultimaBitacoraEnMs,
+      );
+      tx.set(referencias[index], {
+        fecha: dias[index],
+        puntos: puntosConducta,
+        puntosDia: puntosConducta,
+        puntosDiaInicio: inicioDia,
+        puntosTotales,
+        eventos: bitacora.events,
+        ultimaBitacoraEnMs: bitacora.ultimaBitacoraEnMs,
+        penalizacionCierre: penalizacion,
+        actualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
+      }, {merge: true});
+      ajustes.push({fecha: dias[index], puntos, puntosDia: puntosConducta, penalizacion, puntosTotalesAntes, puntosTotales, anterior, nuevo: diasConsecutivos});
+    });
+    const ultimoAjuste = ajustes.length ? ajustes[ajustes.length - 1] : null;
+    tx.set(userRef, {
+      rachaDiaria: {
+        ...racha,
+        puntosTotales,
+        diasConsecutivos,
+        puntosConducta,
+        ultimaFechaEvaluada: hastaDia,
+        ...(ultimoAjuste ? {
+          ultimoAjuste: {
+            ...ultimoAjuste,
+            aplicadoEn: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        } : {}),
+      },
+    }, {merge: true});
+    const bajo = diasConsecutivos < diasConsecutivosAntesProceso;
+    const subio = diasConsecutivos > diasConsecutivosAntesProceso || (!bajo && huboDiaCompletado && ultimoDiaCerrado === ultimaCompleta);
+    const cierre = ultimoDiaCerrado ? {
+      dayKey: ultimoDiaCerrado,
+      fromPoints: puntosTotalesAntesProceso,
+      toPoints: puntosTotales,
+      previousStreakDays: diasConsecutivosAntesProceso,
+      streakDays: diasConsecutivos,
+      outcome: bajo ? "bajo" : subio ? "subio" : "igual",
+      dayCompleted: huboDiaCompletado,
+    } : null;
+    return {ajuste: ultimoAjuste, cierre, puntosTotales, diasConsecutivos};
+  });
+};
+
+// Registra una consecuencia de la conducta del día. Cada banda de hambre se
+// descuenta una sola vez por jornada, aunque el scheduler vuelva a encontrar
+// al mismo Animalito en la misma banda.
+const registrarPenalizacionHambre = async (uid, banda, saciedad) => {
+  const db = admin.firestore();
+  const dayKey = dayKeyInRachaZone();
+  const userRef = db.collection("usuarios").doc(uid);
+  const dayRef = userRef.collection("racha_diaria").doc(dayKey);
+  const nominal = banda === "critica" ? 10 : 2;
+  return db.runTransaction(async (tx) => {
+    const [userSnap, daySnap] = await Promise.all([tx.get(userRef), tx.get(dayRef)]);
+    if (!userSnap.exists) return null;
+    const user = userSnap.data() || {};
+    const racha = user.rachaDiaria || {};
+    const rawDay = daySnap.exists ? daySnap.data() || {} : {};
+    const puntosTotalesAntes = Math.max(0,
+        Number(racha.puntosTotales) || Number(rawDay.puntosTotales) ||
+        ((Number(racha.diasConsecutivos) || 0) * PUNTOS_POR_DIA_RACHA));
+    const puntosDiaAntes = rawDay.puntosDia !== undefined ?
+      puntosConductaSeguro(rawDay.puntosDia) : puntosConductaSeguro(racha.puntosConducta);
+    const puntosDiaInicio = rawDay.puntosDiaInicio !== undefined ?
+      puntosConductaSeguro(rawDay.puntosDiaInicio) : puntosDiaAntes;
+    const penalizaciones = {...(rawDay.penalizacionesHambre || {})};
+    if (penalizaciones[banda]) return null;
+    const descuento = Math.min(nominal, puntosTotalesAntes);
+    const puntosDia = puntosDiaAntes - nominal;
+    const puntosTotales = Math.max(0, puntosTotalesAntes - descuento);
+    const texto = descuento > 0 ?
+      `-${nominal} puntos de conducta por dejar ${banda === "critica" ? "sin comida" : "con un poco de hambre"} a tu Animalito (${Math.max(0, Math.round(saciedad))}/100)` :
+      `-${nominal} puntos de conducta por hambre ${banda === "critica" ? "crítica" : "leve"}; el total acumulado ya estaba en cero`;
+    const bitacora = appendConductaEventThrottled(
+        rawDay.eventos,
+        conductaEvent(`hambre-${banda}-${dayKey}`, -descuento, texto, "negativa"),
+        rawDay.ultimaBitacoraEnMs,
+    );
+    penalizaciones[banda] = {
+      aplicadaEnMs: Date.now(),
+      saciedad: Math.max(0, Math.round(saciedad)),
+      descuento,
+    };
+    const diasConsecutivos = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+    tx.set(dayRef, {
+      fecha: dayKey,
+      meta: META_RACHA_DIARIA,
+      puntos: puntosDia,
+      puntosDia,
+      puntosDiaInicio: puntosDiaInicio,
+      completado: puntosDia >= META_RACHA_DIARIA,
+      bonoDiaAplicado: Boolean(rawDay.bonoDiaAplicado || (rawDay.completado && rawDay.bonoDiaAplicado === undefined)),
+      puntosTotales,
+      eventos: bitacora.events,
+      ultimaBitacoraEnMs: bitacora.ultimaBitacoraEnMs,
+      penalizacionesHambre: penalizaciones,
+      conductaActualizadaEnMs: Date.now(),
+    }, {merge: true});
+    tx.set(userRef, {
+      rachaDiaria: {
+        ...racha,
+        puntosTotales,
+        puntosConducta: puntosDia,
+        diasConsecutivos,
+        ultimoAjuste: {
+          tipo: "hambre",
+          banda,
+          descuento,
+          puntosTotalesAntes,
+          puntosTotales,
+          aplicadoEn: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      },
+    }, {merge: true});
+    return {fromPoints: puntosTotalesAntes, toPoints: puntosTotales, fromDailyPoints: puntosDiaAntes, toDailyPoints: puntosDia, descuento, banda, dayKey};
+  });
+};
+
 const ensureFirestoreNotificationTemplates = async (db) => {
   const creadas = [];
   for (const template of FIRESTORE_NOTIFICATION_TEMPLATES) {
@@ -183,7 +537,6 @@ const sendFcmToTokens = async ({
       ...(normalizedCollapseKey ? {collapseKey: normalizedCollapseKey} : {}),
       notification: {
         channelId: "amor-notifications",
-        sound: "default",
         ...(vibrate ? {defaultVibrateTimings: true} : {}),
       },
     },
@@ -277,6 +630,226 @@ exports.unregisterFcmToken = onCall(async (request) => {
   if ((snap.data() || {}).fcmToken === token) update.fcmToken = admin.firestore.FieldValue.delete();
   await userRef.set(update, {merge: true});
   return {success: true};
+});
+
+// Registra un objetivo de racha en una transacción del servidor. El cliente
+// solo informa qué acción terminó; los puntos, los hitos, el límite diario y
+// el aumento de la racha se calculan aquí. Niveles y alimentaciones cuentan
+// de forma acumulativa; los objetivos de una sola acción siguen siendo únicos.
+exports.registrarObjetivoRacha = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Inicia sesión.");
+  const objectiveId = String(request.data && request.data.objectiveId || "").trim();
+  const objective = OBJETIVOS_RACHA[objectiveId];
+  if (!objective) throw new HttpsError("invalid-argument", "Objetivo de racha inválido.");
+
+  const db = admin.firestore();
+  const uid = request.auth.uid;
+  const dayKey = dayKeyInRachaZone();
+  const userRef = db.collection("usuarios").doc(uid);
+  const dayRef = userRef.collection("racha_diaria").doc(dayKey);
+  const ajustePendiente = await liquidarRachaPendiente(uid, previousRachaDay(dayKey));
+  const result = await db.runTransaction(async (tx) => {
+    const [userSnap, daySnap] = await Promise.all([tx.get(userRef), tx.get(dayRef)]);
+    const user = userSnap.data() || {};
+    const rachaAnterior = user.rachaDiaria || {};
+    const puntosConductaInicial = puntosConductaSeguro(rachaAnterior.puntosConducta);
+    const persistedDay = daySnap.data() || {};
+    const currentDayRaw = {
+      fecha: dayKey,
+      meta: META_RACHA_DIARIA,
+      puntos: puntosConductaInicial,
+      puntosDia: puntosConductaInicial,
+      puntosDiaInicio: puntosConductaInicial,
+      puntosTotales: 0,
+      objetivos: {},
+      eventos: [],
+      ultimaBitacoraEnMs: 0,
+      bonoDiaAplicado: false,
+      completado: false,
+      ...persistedDay,
+    };
+    if (currentDayRaw.puntosDiaInicio === undefined &&
+      currentDayRaw.puntosDia === 0 && puntosConductaInicial !== 0 &&
+      !Object.keys(currentDayRaw.objetivos || {}).length) {
+      currentDayRaw.puntos = puntosConductaInicial;
+      currentDayRaw.puntosDia = puntosConductaInicial;
+      currentDayRaw.puntosDiaInicio = puntosConductaInicial;
+    }
+    if (persistedDay.bonoDiaAplicado === undefined) {
+      currentDayRaw.bonoDiaAplicado = Boolean(currentDayRaw.completado && currentDayRaw.puntosDiaInicio === undefined);
+    }
+    const puntosDiaAntes = puntosConductaSeguro(currentDayRaw.puntosDia !== undefined ? currentDayRaw.puntosDia : puntosConductaInicial);
+    const puntosDiaInicio = currentDayRaw.puntosDiaInicio !== undefined ?
+      puntosConductaSeguro(currentDayRaw.puntosDiaInicio) : puntosDiaAntes;
+    const currentDay = {
+      ...currentDayRaw,
+      puntosDia: puntosDiaAntes,
+      puntos: puntosDiaAntes,
+      puntosDiaInicio,
+      puntosTotales: Math.max(0, Number(currentDayRaw.puntosTotales) || 0),
+      bonoDiaAplicado: Boolean(currentDayRaw.bonoDiaAplicado),
+      completado: Boolean(currentDayRaw.completado || puntosDiaAntes >= META_RACHA_DIARIA),
+    };
+    const objetivos = {...(currentDay.objetivos || {})};
+    const puntosTotalesAntes = Math.max(0, Number(rachaAnterior.puntosTotales) || Number(currentDay.puntosTotales) || (Math.max(0, Number(rachaAnterior.diasConsecutivos) || 0) * PUNTOS_POR_DIA_RACHA));
+    const objetivoRepetible = objectiveId === "nivel" || objectiveId === "alimentar" || objectiveId === "comerciante";
+    if (!objetivoRepetible && objetivos[objectiveId] && objetivos[objectiveId].completado) {
+      if (puntosDiaAntes !== Number(currentDayRaw.puntosDia !== undefined ? currentDayRaw.puntosDia : currentDayRaw.puntos) || puntosTotalesAntes !== Number(currentDayRaw.puntosTotales) || !currentDayRaw.completado && currentDay.completado) {
+        tx.set(dayRef, {
+          meta: META_RACHA_DIARIA,
+          puntos: puntosDiaAntes,
+          puntosDia: puntosDiaAntes,
+          puntosTotales: puntosTotalesAntes,
+          completado: currentDay.completado,
+          actualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      return {
+        aplicado: false,
+        dayKey,
+        puntos: puntosDiaAntes,
+        puntosDia: puntosDiaAntes,
+        puntosTotales: puntosTotalesAntes,
+        streakDays: Math.max(0, Number(user.rachaDiaria && user.rachaDiaria.diasConsecutivos) || 0),
+      };
+    }
+
+    const registroAnterior = objetivos[objectiveId] || {};
+    const objetivoCuentaAcciones = objectiveId === "nivel" || objectiveId === "alimentar" || objectiveId === "comerciante";
+    const cantidadAnterior = objetivoCuentaAcciones ? Math.max(
+        0,
+        Number(registroAnterior.cantidad) || (registroAnterior.completado ? 1 : 0),
+    ) : 0;
+    const cantidadNueva = objetivoCuentaAcciones ? cantidadAnterior + 1 : 1;
+    const hitos = hitosObjetivo(objective);
+    const hitosAplicados = {...(registroAnterior.hitosAplicados || {})};
+    // En cuentas antiguas no existe el mapa de hitos. Tomamos lo ya contado
+    // como histórico para no regalar puntos retroactivos ni duplicarlos.
+    if (!registroAnterior.hitosAplicados && cantidadAnterior > 0) {
+      hitos.forEach(([cantidad]) => {
+        if (cantidad <= cantidadAnterior) hitosAplicados[cantidad] = true;
+      });
+    }
+    const hitosGanados = hitos.filter(([cantidad]) => cantidadNueva >= cantidad && !hitosAplicados[cantidad]);
+    hitosGanados.forEach(([cantidad]) => {
+      hitosAplicados[cantidad] = true;
+    });
+    const puntosConducta = objectiveId === "inicio" ? 2 :
+      hitosGanados.reduce((total, [, puntos]) => total + puntos, 0);
+    const puntosDia = puntosDiaAntes + puntosConducta;
+    let puntosTotales = puntosTotalesAntes + puntosConducta;
+    const completado = puntosDia >= META_RACHA_DIARIA;
+    const puntosAplicados = Math.max(0, puntosConducta);
+    const objetivoCompletado = objetivoCuentaAcciones ? cantidadNueva >= objective.meta : true;
+    objetivos[objectiveId] = {
+      completado: objetivoCompletado,
+      ...(objetivoCuentaAcciones ? {cantidad: cantidadNueva, meta: objective.meta, hitosAplicados} : {}),
+      puntos: puntosConducta,
+      completadoEn: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    const diasAntes = Math.max(Math.max(0, Number(rachaAnterior.diasConsecutivos) || 0), Math.floor(puntosTotalesAntes / PUNTOS_POR_DIA_RACHA));
+    const nuevoDiaCompletado = completado && !currentDay.bonoDiaAplicado;
+    if (nuevoDiaCompletado) puntosTotales += BONUS_DIA_RACHA;
+    const diasConsecutivos = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+    let ultimaFechaCompleta = rachaAnterior.ultimaFechaCompleta || null;
+    if (nuevoDiaCompletado) ultimaFechaCompleta = dayKey;
+    const conductaTexto = objectiveId === "inicio" ?
+      "por volver a Amor hoy" : objectiveId === "alimentar" ?
+      "por alimentar al Animalito" : objectiveId === "nivel" ?
+        `por completar niveles (${cantidadNueva}/${objective.meta})` : `por comprar en Comerciante (${cantidadNueva}/${objective.meta})`;
+    let detalleBitacora;
+    if (puntosAplicados > 0 && hitosGanados.length) {
+      detalleBitacora = hitosGanados
+          .map(([cantidad, puntos]) => detalleHito(uid, dayKey, objectiveId, cantidad, puntos))
+          .join(" · ");
+    } else if (puntosAplicados > 0) {
+      detalleBitacora = `+${puntosAplicados} puntos ${conductaTexto}`;
+    } else if (objectiveId === "nivel") {
+      const siguienteHito = hitos.find(([cantidad]) => cantidad > cantidadNueva);
+      detalleBitacora = recompensaVariable(uid, dayKey, `nivel-seguimiento-${cantidadNueva}`, [
+        `Completaste ${cantidadNueva} niveles; la bitácora sigue observando tu constancia`,
+        `Nivel ${cantidadNueva} registrado. El próximo hito espera en ${siguienteHito ? siguienteHito[0] : "más niveles"}`,
+        `Tu progreso de niveles quedó guardado (${cantidadNueva}/${objective.meta})`,
+      ]);
+    } else if (objectiveId === "alimentar") {
+      detalleBitacora = recompensaVariable(uid, dayKey, `alimentar-seguimiento-${cantidadNueva}`, [
+        `Alimentaste al Animalito (${cantidadNueva}/${objective.meta}); seguí cuidándolo`,
+        `Comida registrada. Dos cuidados en el día forman el próximo hito`,
+        `El cuidado quedó anotado (${cantidadNueva}/${objective.meta} comidas)`,
+      ]);
+    } else if (objectiveId === "comerciante") {
+      detalleBitacora = recompensaVariable(uid, dayKey, `comerciante-seguimiento-${cantidadNueva}`, [
+        `Compra registrada (${cantidadNueva}/${objective.meta}); todavía quedan hitos del Comerciante`,
+        `Pasaste por Comerciante ${cantidadNueva} vez${cantidadNueva === 1 ? "" : "ces"} hoy`,
+        `Tu recorrido de compras quedó guardado (${cantidadNueva}/${objective.meta})`,
+      ]);
+    } else {
+      detalleBitacora = "Conducta registrada; la bitácora sigue observando tu constancia";
+    }
+    const deltaBitacora = puntosAplicados + (nuevoDiaCompletado ? BONUS_DIA_RACHA : 0);
+    if (nuevoDiaCompletado) {
+      detalleBitacora += ` · +${BONUS_DIA_RACHA} puntos por completar la conducta del día`;
+    }
+    const bitacora = appendConductaEventThrottled(
+        currentDay.eventos,
+        conductaEvent(
+            `objetivo-${objectiveId}-${dayKey}-${cantidadNueva}`,
+            deltaBitacora,
+            detalleBitacora,
+            deltaBitacora < 0 ? "negativa" : puntosAplicados > 0 || nuevoDiaCompletado ? "positiva" : "neutral",
+        ),
+        currentDay.ultimaBitacoraEnMs,
+    );
+
+    tx.set(dayRef, {
+      ...currentDay,
+      fecha: dayKey,
+      meta: META_RACHA_DIARIA,
+      puntos: puntosDia,
+      puntosDia,
+      puntosDiaInicio,
+      puntosTotales,
+      bonoDiaAplicado: currentDay.bonoDiaAplicado || nuevoDiaCompletado,
+      objetivos,
+      eventos: bitacora.events,
+      ultimaBitacoraEnMs: bitacora.ultimaBitacoraEnMs,
+      completado,
+      actualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
+      ...(nuevoDiaCompletado ? {completadoEn: admin.firestore.FieldValue.serverTimestamp()} : {}),
+    }, {merge: true});
+    tx.set(userRef, {
+      rachaDiaria: {
+        ...rachaAnterior,
+        puntosTotales,
+        diasConsecutivos,
+        puntosConducta: puntosDia,
+        ultimaFechaCompleta,
+        ultimoDia: dayKey,
+      },
+    }, {merge: true});
+    return {
+      aplicado: true,
+      dayKey,
+      fromPoints: puntosTotalesAntes,
+      toPoints: puntosTotales,
+      fromDailyPoints: puntosDiaAntes,
+      toDailyPoints: puntosDia,
+      streakDays: diasConsecutivos,
+      nuevoDiaCompletado,
+      nuevaRacha: diasConsecutivos > diasAntes,
+      hitosGanados: hitosGanados.map(([cantidad, puntos]) => ({cantidad, puntos})),
+      bitacoraRegistrada: bitacora.registrada,
+    };
+  });
+  return {...result, ajuste: ajustePendiente.ajuste || null};
+});
+
+exports.resolverRachaDiaria = onCall(async (request) => {
+  if (!request.auth) throw new HttpsError("unauthenticated", "Inicia sesión.");
+  const today = dayKeyInRachaZone();
+  const result = await liquidarRachaPendiente(request.auth.uid, previousRachaDay(today));
+  return {ok: true, hastaDia: previousRachaDay(today), ajuste: result.ajuste || null, cierre: result.cierre || null, puntosTotales: result.puntosTotales, streakDays: result.diasConsecutivos};
 });
 
 exports.sendFcmNotification = onCall(async (request) => {
@@ -703,6 +1276,158 @@ exports.enviarNotificacionDesdeFirestore = onDocumentWritten({
     await broadcastStateRef.set({firestoreSendingUntil: 0}, {merge: true}).catch(() => {});
     return null;
   }
+});
+
+// El cierre automático se ejecuta cuatro horas antes de medianoche y también se repite
+// cuando una persona vuelve a abrir la app después de varios días. Así una
+// cuenta inactiva puede perder uno o varios días, pero conserva el resto.
+exports.procesarRachasDiarias = onSchedule({
+  schedule: "5 20 * * *",
+  timeZone: RACHA_TIME_ZONE,
+}, async () => {
+  const db = admin.firestore();
+  const hastaDia = previousRachaDay(dayKeyInRachaZone());
+  const usuarios = await db.collection("usuarios").get();
+  let ajustados = 0;
+  for (const usuario of usuarios.docs) {
+    const result = await liquidarRachaPendiente(usuario.id, hastaDia);
+    if (result.ajuste) ajustados += 1;
+  }
+  logger.info("[Racha] Cierre diario completado", {usuarios: usuarios.size, ajustados, hastaDia});
+  return null;
+});
+
+// Revisa cada quince minutos la saciedad calculada de cada Animalito. La
+// saciedad baja con el tiempo aunque nadie abra la app, por eso este aviso no
+// puede depender de un useEffect en el teléfono. Se avisa una vez al entrar
+// en cada nivel (baja/crítica) y luego como máximo cada ocho horas.
+exports.notificarHambreAnimalito = onSchedule({
+  schedule: "every 15 minutes",
+  timeZone: RACHA_TIME_ZONE,
+}, async () => {
+  const db = admin.firestore();
+  const ahora = Date.now();
+  const cuidados = await db.collection("cuidado_parejas").get();
+  let revisados = 0;
+  let enviados = 0;
+  let sinToken = 0;
+
+  for (const cuidadoDoc of cuidados.docs) {
+    revisados += 1;
+    const cuidado = cuidadoDoc.data() || {};
+    const saciedad = currentSatiety(cuidado, ahora);
+    const banda = hungerBand(saciedad);
+    const bandaConducta = conductaHambreBand(saciedad);
+    if (!banda && !bandaConducta) continue;
+
+    const ownerUid = careOwnerUid(cuidado);
+    if (!ownerUid) continue;
+    const usuarioRef = db.collection("usuarios").doc(ownerUid);
+    const usuarioSnap = await usuarioRef.get();
+    if (!usuarioSnap.exists) continue;
+    const usuario = usuarioSnap.data() || {};
+    if (!usuario.animalito) continue;
+    const ajusteConducta = bandaConducta ? await registrarPenalizacionHambre(ownerUid, bandaConducta, saciedad).catch((error) => {
+      logger.warn("[Racha] No se pudo registrar conducta de hambre", {uid: ownerUid, cuidadoId: cuidadoDoc.id, error});
+      return null;
+    }) : null;
+    if (ajusteConducta) {
+      logger.info("[Racha] Penalización por hambre aplicada", {
+        uid: ownerUid,
+        cuidadoId: cuidadoDoc.id,
+        banda,
+        descuento: ajusteConducta.descuento,
+      });
+    }
+    if (!banda) continue;
+    // Respeta el interruptor de notificaciones si una versión futura lo
+    // sincroniza en el documento del usuario. La preferencia local actual
+    // sigue funcionando al quitar el token FCM.
+    if (usuario.notificaciones === false || usuario.notificacionesHambre === false) continue;
+    const recipients = collectFcmRecipients([usuarioSnap]);
+    if (!recipients.tokens.length) {
+      sinToken += 1;
+      continue;
+    }
+
+    const pudoReclamarAviso = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(cuidadoDoc.ref);
+      const actual = snap.data() || {};
+      const saciedadActual = currentSatiety(actual, Date.now());
+      const bandaActual = hungerBand(saciedadActual);
+      if (!bandaActual) return false;
+      const aviso = actual.avisoHambre || {};
+      const ultimoEnviadoMs = Number(aviso.ultimoEnviadoMs) || 0;
+      const mismaBanda = aviso.ultimaBanda === bandaActual;
+      const cooldown = aviso.ultimoEnvioExitoso === false ? 60 * 60 * 1000 : 8 * 60 * 60 * 1000;
+      if (mismaBanda && Date.now() - ultimoEnviadoMs < cooldown) return false;
+      tx.set(cuidadoDoc.ref, {
+        avisoHambre: {
+          ...aviso,
+          ultimaBanda: bandaActual,
+          ultimoEnviadoMs: ahora,
+          ultimoIntentoEn: admin.firestore.FieldValue.serverTimestamp(),
+          ultimaSaciedad: Math.round(saciedadActual),
+        },
+      }, {merge: true});
+      return {banda: bandaActual, saciedad: Math.round(saciedadActual)};
+    });
+    if (!pudoReclamarAviso) continue;
+
+    const esCritica = pudoReclamarAviso.banda === "critica";
+    const titulo = esCritica ? "🍽️ Tu Animalito necesita comida" : "🥣 Tu Animalito tiene hambre";
+    const cuerpo = esCritica ?
+      "Está casi sin saciedad. Entrá a Amor y dale algo rico para comer." :
+      "Su barra está bajando. Dale de comer para mantenerlo feliz.";
+    const dayKey = dayKeyInRachaZone();
+    const avisoRef = db.collection("buzon").doc(`hambre-${cuidadoDoc.id}-${dayKey}-${pudoReclamarAviso.banda}`);
+    await avisoRef.set({
+      para: ownerUid,
+      tipo: "animal_hambre",
+      cuidadoId: cuidadoDoc.id,
+      banda: pudoReclamarAviso.banda,
+      saciedad: pudoReclamarAviso.saciedad,
+      creadoEn: admin.firestore.FieldValue.serverTimestamp(),
+      expiraEn: buzonExpiration(),
+      leido: false,
+      texto: cuerpo,
+    }, {merge: true});
+
+    try {
+      const resultado = await sendFcmToTokens({
+        ...recipients,
+        title: titulo,
+        body: cuerpo,
+        data: {
+          type: "animal_hungry",
+          cuidadoId: cuidadoDoc.id,
+          satiety: pudoReclamarAviso.saciedad,
+          band: pudoReclamarAviso.banda,
+        },
+        collapseKey: `animal-hungry-${cuidadoDoc.id}-${pudoReclamarAviso.banda}`,
+      });
+      enviados += resultado.successCount;
+      await cuidadoDoc.ref.set({
+        avisoHambre: {
+          ultimoResultadoEn: admin.firestore.FieldValue.serverTimestamp(),
+          ultimoEnvioExitoso: resultado.successCount > 0,
+          ultimoEnvioFallido: resultado.failureCount > 0,
+        },
+      }, {merge: true});
+    } catch (error) {
+      logger.error("[Hambre] No se pudo enviar el aviso", {cuidadoId: cuidadoDoc.id, error});
+      await cuidadoDoc.ref.set({
+        avisoHambre: {
+          ultimoResultadoEn: admin.firestore.FieldValue.serverTimestamp(),
+          ultimoEnvioExitoso: false,
+          ultimoError: String(error.message || error).slice(0, 180),
+        },
+      }, {merge: true}).catch(() => {});
+    }
+  }
+
+  logger.info("[Hambre] Revisión completada", {revisados, enviados, sinToken});
+  return null;
 });
 
 // Actividad breve para que la pareja pueda ver los momentos importantes sin

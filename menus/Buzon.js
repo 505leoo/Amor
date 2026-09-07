@@ -51,15 +51,6 @@ export const BuzonModal = ({ visible, onClose }) => {
     return onSnapshot(query(collection(db, 'buzon'), where('para', '==', uid)), snap => {
       const nuevosMensajes = snap.docs.map(item => ({ id: item.id, ...item.data() }));
       setMensajes(nuevosMensajes);
-      // La misión pertenece al usuario que recibe la notificación. Se marca
-      // desde su propio buzón para no depender de permisos sobre otra cuenta.
-      if (nuevosMensajes.some(mensaje => mensaje.tipo === 'pareja_conectada')) {
-        const ahora = new Date();
-        const diaKey = `${ahora.getFullYear()}-${ahora.getMonth() + 1}-${ahora.getDate()}`;
-        setDoc(doc(db, 'usuarios', uid, 'misiones', diaKey), {
-          progreso: { pareja_entro_hoy: 1 },
-        }, { merge: true }).catch(() => {});
-      }
     }, () => setMensajes([]));
   }, [visible]);
 

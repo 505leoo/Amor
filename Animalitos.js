@@ -3,14 +3,13 @@ import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Image as RNImage, 
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
-import { collection, doc, getDoc, getDocs, onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
+import { collection, doc, getDocs, onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import RoomBackground from './components/RoomBackground';
 import TabButtons from './components/TabButtons';
 import Loading from './components/Loading';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { contenidoDisponible, useTemporadaActual } from './hooks/useTemporadaActual';
-import { actualizarPasoTutorial } from './components/Tutorial';
 import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
@@ -226,7 +225,6 @@ const Animalitos = ({ navigation, mode }) => {
         const skinDelAnimal = nuevo ? (skinsEquipadas?.[nuevo] || 'default') : 'default';
         setEquipadaSkin(skinDelAnimal);
         await setDoc(doc(db, 'usuarios', uid), { animalito: nuevo, skin: skinDelAnimal }, { merge: true });
-        if (nuevo) actualizarPasoTutorial(uid, 2).catch(() => {});
       }
     } catch (e) {
       console.error('Error al equipar animalito:', e);
@@ -304,13 +302,6 @@ const Animalitos = ({ navigation, mode }) => {
         }, { merge: true });
       });
       setMejoraPendiente(null);
-      const usuarioActual = await (async () => {
-        try {
-          const snap = await getDoc(doc(db, 'usuarios', uid));
-          return snap.data() || {};
-        } catch { return {}; }
-      })();
-      if (usuarioActual.tutorial === 'no') actualizarPasoTutorial(uid, 6).catch(() => {});
       global.showToast?.({ text1: `${ANIMALITOS.find(a => a.id === id)?.nombre || 'Animalito'} mejorado a nivel ${estado.nivel + 1}`, text2: `+${EXP_POR_MEJORA(estado.nivel)} EXP`, type: 'success' });
     } catch (error) {
       setMejoraPendiente(null);

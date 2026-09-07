@@ -203,18 +203,6 @@ class NotificationSystem {
         texto: `${userName || 'Tu pareja'} acaba de conectarse, que pesad@...`,
       });
 
-      const hoy = (() => {
-        const date = new Date();
-        return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-      })();
-      const flagKey = `pareja_entro_hoy_${partnerId}_${hoy}`;
-      if (!global[flagKey]) {
-        global[flagKey] = true;
-        setDoc(doc(db, 'usuarios', partnerId, 'misiones', hoy), {
-          progreso: { pareja_entro_hoy: 1 },
-        }, { merge: true }).catch(() => {});
-      }
-
       const pairKey = [String(userId), String(partnerId)].sort().join('_');
       await this.sendFcmToPartner(
         '💕 Tu amor está aquí',

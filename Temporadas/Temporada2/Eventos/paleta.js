@@ -36,9 +36,6 @@ const calcularProbabilidadesRelativas = () => {
   }));
 };
 
-// ── Misiones del evento Paleta ────────────────────────────────────────────────
-// Usa el contexto global — misiones externas al juego que dan globos como recompensa.
-
 // ── Probabilidades de recompensas por explosión ────────────────────────────
 // Básica: siempre cae, rango 25-50 mon/exp
 // Extra temprano: 3% por explosión (garantizado en 50)

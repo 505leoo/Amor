@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState, memo } from 'react';
 import { Animated, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
+import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, LinearGradient, Stop, G, Text as SvgText, Ellipse } from 'react-native-svg';
 import { auth } from '../firebaseConfig';
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 import { ProfileFrame } from '../menus/Perfil';
 import { resolverAvatarUsuario } from '../data/iconosLocales';
+import { useRacha } from '../RachaContext';
 
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
 const resolverAvatar = data => resolverAvatarUsuario(data, ICONO_DEFAULT);
@@ -15,6 +17,7 @@ const numeroSeguro = value => {
 };
 
 export default memo(function PanelPerfil({ navigation }) {
+  const { streakDays } = useRacha();
   const datosIniciales = getCachedUserData(auth.currentUser?.uid);
   const nombreInicial = datosIniciales?.datosCompletos?.nombre || datosIniciales?.nombre || auth.currentUser?.displayName || 'amigo';
   const avatarInicial = resolverAvatar(datosIniciales);
@@ -82,6 +85,10 @@ export default memo(function PanelPerfil({ navigation }) {
               <View style={styles.profileLevelTrack}><View style={[styles.profileLevelFill, { width: `${Math.round((exp % 100) / 100 * 100)}%` }]} /></View>
         </View>
       </Animated.View>
+      <View style={styles.streakMini}>
+        <MaterialIcons name="local-fire-department" size={13} color="#b6534c" />
+        <Text style={styles.streakMiniNumber}>{streakDays}</Text>
+      </View>
       <Text style={styles.profileArrow}>›</Text>
     </TouchableOpacity>
   );
@@ -93,7 +100,7 @@ const styles = StyleSheet.create({
     top: 0, left: 0,
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#f1e1bd',
-    width: 200, height: 42,
+    width: 210, height: 42,
     borderBottomRightRadius: 15,
     paddingLeft: 12, paddingRight: 12, paddingTop: 3, paddingBottom: 1,
     borderWidth: 1.5,
@@ -120,5 +127,7 @@ const styles = StyleSheet.create({
   profileHeartWrap: { width: 20, height: 18, alignItems: 'center', justifyContent: 'center', marginRight: 0, zIndex: 2, elevation: 2 },
   profileLevelTrack: { width: 63, height: 6, marginLeft: -8, borderRadius: 3, overflow: 'hidden', backgroundColor: '#dcd0bb', borderWidth: 0.8, borderColor: '#c9b8a0', transform: [{ translateY: 1 }] },
   profileLevelFill: { height: '100%', borderRadius: 4, backgroundColor: '#df477e' },
+  streakMini: { minWidth: 24, height: 28, marginLeft: 2, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: 'rgba(255,244,213,0.7)', borderWidth: 1, borderColor: 'rgba(184,103,72,0.36)' },
+  streakMiniNumber: { marginTop: -2, color: '#8f4b40', fontFamily: 'Delius', fontSize: 7.5, lineHeight: 9, fontWeight: '900' },
   profileArrow: { color: '#795a37', fontFamily: 'Delius', fontSize: 21, lineHeight: 23, fontWeight: '700', marginLeft: 2, marginTop: -1 },
 });

@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, Ellipse, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
 import { db, auth } from '../firebaseConfig';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 const ChicleSvg = () => (
   <Svg width={16} height={16}>
@@ -63,18 +63,6 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
   }, [showResources]);
 
   const moneyFinal = userMoney !== undefined ? userMoney : dineroInterno;
-
-  useEffect(() => {
-    const uid = auth.currentUser?.uid;
-    const seccion = global.currentScreen;
-    if (!uid || !seccion) return undefined;
-    const ahora = new Date();
-    const diaKey = `${ahora.getFullYear()}-${ahora.getMonth() + 1}-${ahora.getDate()}`;
-    setDoc(doc(db, 'usuarios', uid, 'misiones', diaKey), {
-      progreso: { secciones_hoy: { [seccion]: true } },
-    }, { merge: true }).catch(() => {});
-    return undefined;
-  }, []);
 
   return (
     <View style={styles.container}>

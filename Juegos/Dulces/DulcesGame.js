@@ -8,7 +8,7 @@ import { auth, db } from '../../firebaseConfig';
 import { doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import RoomBackground from '../../components/RoomBackground';
 import TabButtons from '../../components/TabButtons';
-import { useMisiones } from '../../MisionesContext';
+import { useRacha } from '../../RachaContext';
 
 const { width: W } = Dimensions.get('window');
 const MAX_LEVEL = 200;
@@ -61,7 +61,7 @@ const HeartMark = () => (
 );
 
 const DulcesGame = memo(({ navigation }) => {
-  const { registrarProgreso } = useMisiones();
+  const { registrarObjetivo } = useRacha();
   const [status, setStatus] = useState('lobby');
   const [unlockedLevel, setUnlockedLevel] = useState(1);
   const [level, setLevel] = useState(1);
@@ -258,8 +258,10 @@ const DulcesGame = memo(({ navigation }) => {
           const efficiency = nextMoves / config.pairs;
           const stars = timeLeft > config.time * 0.35 && efficiency <= 2.4 ? 3 : efficiency <= 3.4 ? 2 : 1;
           setEarnedStars(stars);
-          registrarProgreso('partidas_hoy');
-          saveProgress(levelRef.current, stars, nextMoves).then(setRewardData).catch(() => {});
+          saveProgress(levelRef.current, stars, nextMoves).then(async reward => {
+            await registrarObjetivo('nivel').catch(() => null);
+            setRewardData(reward);
+          }).catch(() => {});
           finish('won');
         }
       }, 420);
@@ -271,7 +273,7 @@ const DulcesGame = memo(({ navigation }) => {
         setLocked(false);
       }, 780);
     }
-  }, [config.pairs, config.time, deck, finish, locked, matched, previewing, registrarProgreso, saveProgress, selected, timeLeft]);
+  }, [config.pairs, config.time, deck, finish, locked, matched, previewing, registrarObjetivo, saveProgress, selected, timeLeft]);
 
   const leaveToGames = useCallback(() => {
     activeRef.current = false;

@@ -27,10 +27,6 @@ export default function LibroTemp1({ navigation, route }) {
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
-    // Registrar visita para misión explorar_t1 (una sola escritura por día)
-    const hoy = (() => { const h = new Date(); return `${h.getFullYear()}-${h.getMonth()+1}-${h.getDate()}`; })();
-    const visitaKey = `explorar_t1_librotemp1_${hoy}`;
-    if (!global[visitaKey]) { global[visitaKey] = true; setDoc(doc(db, 'misiones_diarias', hoy), { [uid]: { progreso: { explorar_t1_librotemp1: true } } }, { merge: true }).catch(() => {}); }
     const ref = doc(db, 'Historias', uid);
     const unsub = onSnapshot(ref, snap => {
       if (snap.exists()) setDesbloqueadas(snap.data().temporada1 || {});

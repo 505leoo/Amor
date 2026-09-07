@@ -21,11 +21,10 @@ import { AvisosModal, hayAvisosPendientes } from './Avisos';
 import { RecompensasModal } from './Recompensas';
 import { ConfiguracionModal } from './Configuracion';
 import Eventos from './Eventos';
-import { actualizarPasoTutorial } from '../components/Tutorial';
-import MisionesDiarias from '../components/MisionesDiarias';
 import { InventarioModal } from './Inventario';
-import { useMisiones } from '../MisionesContext';
 import RoomBackground from '../components/RoomBackground';
+import { RachaVisualModal } from '../components/RachaVisual';
+import { useRacha } from '../RachaContext';
 import { ALIMENTOS, calcularSaciedad, estadoSaciedad } from '../data/alimentos';
 import * as Haptics from 'expo-haptics';
 
@@ -295,10 +294,7 @@ const CajasRecompensa = memo(({ onOverlayChange, overlayActive, compactModal = f
       <ContadorReinicio overlayActive={overlayActive} />
       <RecompensaOverlay
         visible={showRecompensaOverlay}
-        onClose={() => {
-          setShowRecompensaOverlay(false);
-          actualizarPasoTutorial(auth.currentUser?.uid, 1).catch(() => {});
-        }}
+        onClose={() => setShowRecompensaOverlay(false)}
       >
         <View style={overlayStyles.overlayContent}>
           {recompensaDeHoy.tipo === 'halcon' ? (
@@ -332,43 +328,6 @@ const CajasRecompensa = memo(({ onOverlayChange, overlayActive, compactModal = f
     </View>
   );
 });
-
-const TutorialInicio = ({ navigation }) => {
-  const { data } = useUserDocument(value => ({ tutorialPaso: value?.tutorialPaso }));
-  const [misionesAbiertas, setMisionesAbiertas] = useState(false);
-  const [inventarioAbierto, setInventarioAbierto] = useState(false);
-  const paso = Number(data?.tutorialPaso || 0);
-  return <View style={styles.container}>
-    <RoomBackground />
-    <RegaloDaily overlayActive={false} />
-    <CajasRecompensa onOverlayChange={NOOP} overlayActive={false} />
-    {paso >= 1 && <TouchableOpacity style={[styles.changeButton, styles.tutorialChangeButton, paso >= 2 && paso !== 5 && styles.tutorialDisabledButton]} onPress={() => (paso === 1 || paso === 5) && navigation?.navigate('animalitos')} disabled={paso >= 2 && paso !== 5} activeOpacity={0.78}>
-      <MaterialIcons name="swap-horiz" size={20} color={paso >= 2 && paso !== 5 ? '#aaa49a' : '#c58b2d'} />
-      <Text style={[styles.changeButtonText, paso >= 2 && paso !== 5 && styles.tutorialDisabledText]}>Cambiar</Text>
-    </TouchableOpacity>}
-    {paso >= 2 && <>
-      <TouchableOpacity style={[styles.accesoInicioBtn, styles.tutorialMissionButton, paso >= 3 && styles.tutorialDisabledButton]} onPress={() => paso === 2 && setMisionesAbiertas(true)} disabled={paso >= 3} activeOpacity={0.75}>
-        <MaterialIcons name="assignment" size={22} color={paso >= 3 ? '#aaa49a' : '#c46d83'} />
-        <Text style={[styles.accesoInicioText, paso >= 3 && styles.tutorialDisabledText]}>Misiones</Text>
-      </TouchableOpacity>
-      <MisionesDiarias externo abierto={misionesAbiertas} onCerrar={() => setMisionesAbiertas(false)} />
-    </>}
-    {paso >= 3 && <View style={styles.tutorialMerchantWrap}>
-      <TouchableOpacity style={[styles.comercianteQuickBtn, paso >= 4 && styles.tutorialDisabledButton]} onPress={() => paso === 3 && navigation?.navigate('comerciante')} disabled={paso >= 4} activeOpacity={0.78}>
-        <View style={[styles.comercianteQuickIcon, paso >= 4 && styles.tutorialDisabledIcon]}><MaterialIcons name="storefront" size={19} color={paso >= 4 ? '#aaa49a' : '#f4fff0'} /></View>
-        <View style={styles.comercianteInfo}><Text style={[styles.comercianteTitle, paso >= 4 && styles.tutorialDisabledText]}>COMERCIANTE</Text><Text style={[styles.comercianteSub, paso >= 4 && styles.tutorialDisabledText]}>Intercambia objetos</Text></View>
-        <MaterialIcons name="chevron-right" size={21} color={paso >= 4 ? '#aaa49a' : '#466a50'} />
-      </TouchableOpacity>
-    </View>}
-    {paso >= 4 && <>
-      <TouchableOpacity style={[styles.accesoInicioBtn, styles.tutorialInventoryButton, paso !== 4 && styles.tutorialDisabledButton]} onPress={() => paso === 4 && setInventarioAbierto(true)} disabled={paso !== 4} activeOpacity={0.75}>
-        <MaterialIcons name="inventory-2" size={22} color={paso !== 4 ? '#aaa49a' : '#b87945'} />
-        <Text style={[styles.accesoInicioText, paso !== 4 && styles.tutorialDisabledText]}>Inventario</Text>
-      </TouchableOpacity>
-      <InventarioModal visible={inventarioAbierto} onClose={() => { setInventarioAbierto(false); actualizarPasoTutorial(auth.currentUser?.uid, 5).catch(() => {}); }} />
-    </>}
-  </View>;
-};
 
 const s = StyleSheet.create({
   overlayContent: {
@@ -753,8 +712,14 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   useEffect(() => {
     if (!cuidadoRef) return undefined;
     return onSnapshot(cuidadoRef, snap => {
-      if (snap.exists()) setCuidado(snap.data() || {});
-      else setDoc(cuidadoRef, { participantes, saciedad: 100, actualizadaEnMs: Date.now(), creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() }, { merge: true }).catch(() => {});
+      if (snap.exists()) {
+        const datos = snap.data() || {};
+        setCuidado(datos);
+        // Los documentos antiguos no tenían propietario explícito. Se
+        // completa una sola vez para que el aviso de hambre llegue a una
+        // única persona y no a los dos miembros de la pareja.
+        if (!datos.animalitoUid && uid) setDoc(cuidadoRef, { animalitoUid: uid }, { merge: true }).catch(() => {});
+      } else setDoc(cuidadoRef, { participantes, animalitoUid: uid, saciedad: 100, actualizadaEnMs: Date.now(), creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() }, { merge: true }).catch(() => {});
     }, () => {});
   }, [cuidadoRef, participantes]);
 
@@ -823,7 +788,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
           ultimoAlimento: alimentoSeguro.id,
           ultimaAlimentacionEn: serverTimestamp(),
         }, { merge: true });
-        return Math.round(nueva - actual);
+        return { recuperado: Math.round(nueva - actual), nuevaSaciedad: Math.round(nueva) };
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       onFed?.(alimentoSeguro, resultado);
@@ -946,7 +911,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   </>;
 });
 
-const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, tutorialActivo = false }) => {
+const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false }) => {
   const [nivelJuego, setNivelJuego] = useState(1);
   const [nivelMemoriaSabores, setNivelMemoriaSabores] = useState(1);
   const [partidasCompletadas, setPartidasCompletadas] = useState(0);
@@ -969,6 +934,8 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   const [zonaAlimentar, setZonaAlimentar] = useState(false);
   const [arrastreActivo, setArrastreActivo] = useState(false);
   const [avisoSeleccion, setAvisoSeleccion] = useState(null);
+  const [rachaAbierta, setRachaAbierta] = useState(false);
+  const { registrarObjetivo } = useRacha();
   const avisoSeleccionTimer = useRef(null);
   const { data: userAlimentos } = useUserDocument(data => data?.alimentos || {});
 
@@ -1067,11 +1034,13 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   }, [arrastreActivo, petIdleRotate, petIdleScale, petIdleSquash, petIdleX, petIdleY]);
 
   const reaccionarAlComer = useCallback((alimento, recuperado) => {
+    const recuperadoValor = typeof recuperado === 'object' ? Number(recuperado?.recuperado) || 0 : Number(recuperado) || 0;
+    const nuevaSaciedad = typeof recuperado === 'object' ? Number(recuperado?.nuevaSaciedad) || 0 : 100;
     petFeedScale.stopAnimation();
     petFeedY.stopAnimation();
     petFeedScale.setValue(1);
     petFeedY.setValue(0);
-    setFoodFeedback({ emoji: alimento.emoji, recuperado, key: Date.now() });
+    setFoodFeedback({ emoji: alimento.emoji, recuperado: recuperadoValor, key: Date.now() });
     Animated.sequence([
       Animated.parallel([
         Animated.timing(petFeedY, { toValue: 2, duration: 140, easing: Easing.in(Easing.quad), useNativeDriver: true }),
@@ -1097,7 +1066,8 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
     });
     if (foodFeedbackTimer.current) clearTimeout(foodFeedbackTimer.current);
     foodFeedbackTimer.current = setTimeout(() => setFoodFeedback(null), 1300);
-  }, [petFeedScale, petFeedY]);
+    if (nuevaSaciedad >= 60) registrarObjetivo('alimentar').catch(() => {});
+  }, [petFeedScale, petFeedY, registrarObjetivo]);
 
   useEffect(() => () => {
     if (foodFeedbackTimer.current) clearTimeout(foodFeedbackTimer.current);
@@ -1105,15 +1075,12 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
   const [overlayActive, setOverlayActive] = useState(false);
   const { puedeReclamar: regaloDisponible } = useRecompensaDiaria({ paused: overlayActive });
   const [comercianteNuevo, setComercianteNuevo] = useState(false);
-  const [misionesAbiertas, setMisionesAbiertas] = useState(false);
-  const [misionesNuevas, setMisionesNuevas] = useState(false);
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
   const [regalosAbiertos, setRegalosAbiertos] = useState(false);
   const [ruletaAbierta, setRuletaAbierta] = useState(false);
   const [preguntonasAbiertas, setPreguntonasAbiertas] = useState(false);
   const [reporteSemanalAbierto, setReporteSemanalAbierto] = useState(Boolean(openReporteSemanal));
   const puedeAbrirColeccion = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
-  const { pendientesReclamar } = useMisiones();
   const { data: estadoInicio } = useUserDocument(
     selectEstadoInicio,
     undefined,
@@ -1174,20 +1141,6 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
       setActividadPareja(snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() });
     }, () => setActividadPareja(null));
   }, [estadoInicio?.pareja]);
-
-  useEffect(() => {
-    setMisionesNuevas(pendientesReclamar > 0);
-  }, [pendientesReclamar]);
-
-  useEffect(() => {
-    const ahora = new Date();
-    const diaKey = `${ahora.getFullYear()}-${ahora.getMonth() + 1}-${ahora.getDate()}`;
-    const vistoKey = `misiones_dia_visto_${auth.currentUser?.uid}`;
-    AsyncStorage.getItem(vistoKey).then(visto => {
-      if (visto !== diaKey) setMisionesNuevas(true);
-      AsyncStorage.setItem(vistoKey, diaKey).catch(() => {});
-    }).catch(() => setMisionesNuevas(true));
-  }, []);
 
   // Indicador del comerciante: dot si la rotación actual no fue visitada
   useEffect(() => {
@@ -1263,13 +1216,6 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
       const mensajeActividad = mensajesActividad[actividad.tipo];
       if (mensajeActividad) return { ...mensajeActividad, accion: () => navigation?.navigate('perfil', { uid: estadoInicio?.pareja }) };
     }
-    if (misionesNuevas || pendientesReclamar > 0) return {
-          icono: pendientesReclamar > 0 ? 'redeem' : 'assignment',
-          titulo: pendientesReclamar > 0 ? `${pendientesReclamar} recompensa${pendientesReclamar === 1 ? '' : 's'} lista${pendientesReclamar === 1 ? '' : 's'}` : 'Revisa tus misiones',
-          detalle: pendientesReclamar > 0 ? 'Tu premio ya está preparado.' : 'Completa objetivos y gana premios.',
-          insignia: pendientesReclamar > 0 ? 'RECLAMAR' : 'VER',
-          accion: () => setMisionesAbiertas(true),
-        };
     if (parejaInicio) {
       const nivelPareja = 1 + Math.floor(parejaInicio.exp / 100);
       return {
@@ -1286,9 +1232,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
             icono: 'extension', titulo: mensajeJuego.titulo, detalle: mensajeJuego.detalle, insignia: faltanParaBonus === 1 ? '1 MÁS' : '+5 EXP',
             accion: () => navigation?.navigate('conexiones'),
           };
-  }, [abrirComerciante, actividadPareja, comercianteNuevo, estadoInicio?.animalito, estadoInicio?.pareja, faltanParaBonus, misionesNuevas, navigation, nivelJuego, parejaInicio, partidasCompletadas, pendientesReclamar, relojActividad]);
-
-  if (tutorialActivo) return <TutorialInicio navigation={navigation} />;
+  }, [abrirComerciante, actividadPareja, comercianteNuevo, estadoInicio?.animalito, estadoInicio?.pareja, faltanParaBonus, navigation, nivelJuego, parejaInicio, partidasCompletadas, relojActividad]);
 
   return (
     <OverlayContext.Provider value={overlayActive}>
@@ -1359,22 +1303,21 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false, t
           </TouchableOpacity>
         </View>
         <View style={styles.accesosInicioWrap}>
-          <TouchableOpacity style={[styles.accesoInicioBtn, styles.accesoInicioFirst]} onPress={() => { setInventarioAbierto(true); actualizarPasoTutorial(auth.currentUser?.uid, 5).catch(() => {}); }} activeOpacity={0.75}>
+          <TouchableOpacity style={[styles.accesoInicioBtn, styles.accesoInicioFirst]} onPress={() => setInventarioAbierto(true)} activeOpacity={0.75}>
             <MaterialIcons name="inventory-2" size={19} color="#b87945" />
             <Text style={styles.accesoInicioText}>Inventario</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.accesoInicioBtn} onPress={() => setMisionesAbiertas(true)} activeOpacity={0.75}>
-            <MaterialIcons name="assignment" size={19} color="#c46d83" />
-            <Text style={styles.accesoInicioText}>Misiones</Text>
-            {misionesNuevas && <View style={styles.accesoInicioDot} />}
+          <TouchableOpacity style={styles.accesoInicioBtn} onPress={() => { setRachaAbierta(true); setOverlayActive(true); }} activeOpacity={0.75}>
+            <MaterialIcons name="local-fire-department" size={19} color="#c46d83" />
+            <Text style={styles.accesoInicioText}>Racha</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.accesoInicioBtn, styles.accesoInicioLast, !puedeAbrirColeccion && styles.accesoInicioDisabled]} onPress={() => puedeAbrirColeccion && navigation?.navigate('coleccion')} disabled={!puedeAbrirColeccion} activeOpacity={0.75}>
             <MaterialIcons name="collections-bookmark" size={19} color={puedeAbrirColeccion ? '#6d91a8' : '#aaa49a'} />
             <Text style={[styles.accesoInicioText, !puedeAbrirColeccion && styles.accesoInicioTextDisabled]}>Colección</Text>
           </TouchableOpacity>
         </View>
-        {misionesAbiertas && <MisionesDiarias externo abierto onCerrar={() => setMisionesAbiertas(false)} />}
         {inventarioAbierto && <InventarioModal visible onClose={() => setInventarioAbierto(false)} />}
+        <RachaVisualModal visible={rachaAbierta} onClose={() => { setRachaAbierta(false); setOverlayActive(false); }} />
         <Eventos navigation={navigation} />
         <View style={styles.temporadasQuickWrap}>
           <TouchableOpacity style={[styles.temporadasQuickBtn, !puedeAbrirColeccion && styles.temporadasQuickDisabled]} hitSlop={6} activeOpacity={0.75} onPress={() => puedeAbrirColeccion && navigation?.navigate('temporadas')} disabled={!puedeAbrirColeccion}>
@@ -1478,14 +1421,6 @@ const styles = StyleSheet.create({
   accesoInicioLast: { borderTopRightRadius: 8, borderBottomRightRadius: 8 },
   accesoInicioDisabled: { backgroundColor: '#e3ded3', borderColor: '#c9c2b5', opacity: 0.8 },
   accesoInicioTextDisabled: { color: '#999287' },
-  tutorialChangeButton: { left: '35%', bottom: 78 },
-  tutorialMissionButton: { position: 'absolute', left: '50%', bottom: 6, transform: [{ translateX: -30 }], width: 60, height: 48, borderRadius: 8 },
-  tutorialMerchantWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: 4 }], zIndex: 200, elevation: 200 },
-  tutorialInventoryButton: { position: 'absolute', left: '50%', bottom: 6, transform: [{ translateX: -92 }], width: 60, height: 48, borderRadius: 8 },
-  tutorialDisabledIcon: { backgroundColor: '#c8c1b5', borderColor: '#b2aa9d' },
-  tutorialDisabledButton: { backgroundColor: '#e3ded3', borderColor: '#c9c2b5', opacity: 0.8 },
-  tutorialDisabledText: { color: '#999287' },
-  accesoInicioDot: { position: 'absolute', top: 3, right: 4, width: 7, height: 7, borderRadius: 4, backgroundColor: '#d94b4b', borderWidth: 1, borderColor: '#f1e1bd' },
   temporadasQuickDisabled: { backgroundColor: '#e3ded3', borderColor: '#c9c2b5', opacity: 0.8 },
   temporadasQuickIconDisabled: { backgroundColor: '#c8c1b5', borderColor: '#b2aa9d' },
   temporadasQuickTextDisabled: { color: '#999287' },
