@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Image as RNImage, ScrollView, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Pressable, Image as RNImage, ScrollView, FlatList, Modal, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -92,6 +92,13 @@ const RECOMPENSAS_NIVEL = {
     { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
     { nivel: 100, tipo: 'skin', skinId: 'erizot1', icono: '🫐', titulo: 'Cupcake de Arándanos' },
   ],
+  loro: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1400, icono: '🪙', titulo: '1.400 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 50, icono: '◆', titulo: '50 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'loro_icon', icono: '✦', titulo: 'Icono de Loro', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 30, icono: '▣', titulo: '30 cartas universales' },
+    { nivel: 100, tipo: 'skin', skinId: 'lorot1', icono: '🎊', titulo: 'Piñata Tropical' },
+  ],
 };
 
 const Animalitos = ({ navigation, mode }) => {
@@ -120,10 +127,26 @@ const Animalitos = ({ navigation, mode }) => {
   const [llamadaMejoraActiva, setLlamadaMejoraActiva] = useState(false);
 
   const loadingRef = useRef(null);
+  const opacidadLista = useRef(new Animated.Value(0)).current;
+  const salidaListaRef = useRef(false);
   const limpiezaArdillaRef = useRef(false);
   const mejoraEnCursoRef = useRef(false);
   const llamadaMejora = useRef(new Animated.Value(0)).current;
   const transicion = (fn) => loadingRef.current?.fadeIn(() => { fn(); setTimeout(() => loadingRef.current?.fadeOut(), 80); });
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      Animated.timing(opacidadLista, { toValue: 1, duration: 60, useNativeDriver: true }).start();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [opacidadLista]);
+
+  const salirDeAnimalitos = () => {
+    if (seleccionado) { setSeleccionado(null); return; }
+    if (salidaListaRef.current) return;
+    salidaListaRef.current = true;
+    Animated.timing(opacidadLista, { toValue: 0, duration: 60, useNativeDriver: true }).start(() => navigation?.navigate?.('main'));
+  };
 
   const irAMejorarAhora = animal => {
     setSeleccionado(animalitosFiltrados.find(item => item.id === animal.id) || animal);
@@ -219,7 +242,7 @@ const Animalitos = ({ navigation, mode }) => {
   }, []);
 
   const animalitosFiltrados = (mode === 'skins' ? SKINS : ANIMALITOS).filter(a => {
-    if (mode !== 'skins') return desbloqueados.includes(a.id) && contenidoDisponible(a.temporada || 't1', temporadaActual);
+    if (mode !== 'skins') return contenidoDisponible(a.temporada || 't1', temporadaActual);
     if (!equipado || a.animalId !== equipado || !desbloqueados.includes(a.animalId) || !contenidoDisponible(a.temporada || 't1', temporadaActual)) return false;
     return a.storageId === 'default' || skinsEquipadas?.[a.animalId] === a.storageId || Boolean(skinsDesbloqueadas?.[a.animalId]?.[a.storageId]);
   });
@@ -227,6 +250,10 @@ const Animalitos = ({ navigation, mode }) => {
   const handleEquipar = async (id) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
+    if (mode !== 'skins' && !desbloqueados.includes(id)) {
+      global.showToast?.({ text1: 'Animalito bloqueado', text2: 'Entrá a Detalles para ver cómo conseguirlo.', type: 'info' });
+      return;
+    }
     try {
       if (mode === 'skins') {
         const skin = SKINS.find(item => item.id === id);
@@ -335,6 +362,7 @@ const Animalitos = ({ navigation, mode }) => {
     const objetivo = seleccionado || animalitosFiltrados[0];
     if (!objetivo) return;
     const id = objetivo.id;
+    if (!desbloqueados.includes(id)) return;
     const nivel = estadoAnimal(id).nivel;
     if (nivel < recompensa.nivel || recompensasReclamadas?.[id]?.[recompensa.nivel]) return;
     const uid = auth.currentUser?.uid;
@@ -374,10 +402,13 @@ const Animalitos = ({ navigation, mode }) => {
   const estadoMostrado = estadoAnimal(animalMostradoId);
   const cartasNecesarias = COPIAS_POR_NIVEL(estadoMostrado.nivel);
   const costoMejora = COSTO_MEJORA(estadoMostrado.nivel);
-  const puedeMejorar = estadoMostrado.totalCartas >= cartasNecesarias && dinero >= costoMejora;
+  const animalDesbloqueado = desbloqueados.includes(animalMostradoId);
+  const puedeMejorar = animalDesbloqueado && estadoMostrado.totalCartas >= cartasNecesarias && dinero >= costoMejora;
   const progresoCartas = Math.min(100, (estadoMostrado.totalCartas / Math.max(1, cartasNecesarias)) * 100);
   const recompensasMostradas = RECOMPENSAS_NIVEL[animalMostradoId] || [];
-  const animalitosOrdenados = [...animalitosFiltrados].sort((a, b) => {
+  const animalitosOrdenados = [...animalitosFiltrados]
+    .filter(animal => desbloqueados.includes(animal.id))
+    .sort((a, b) => {
     if (ordenCatalogo === 'nivel') return estadoAnimal(b.id).nivel - estadoAnimal(a.id).nivel;
     return ANIMALITOS.findIndex(animal => animal.id === a.id) - ANIMALITOS.findIndex(animal => animal.id === b.id);
   });
@@ -389,6 +420,10 @@ const Animalitos = ({ navigation, mode }) => {
     .map(skin => animalitosFiltrados.some(desbloqueado => desbloqueado.id === skin.id) ? skin : { ...skin, bloqueado: true });
   const elementosCatalogo = mode === 'skins' && !soloDesbloqueados ? skinsCatalogo : (soloDesbloqueados ? animalitosOrdenados : animalitosCatalogo);
   const catalogoSlots = soloDesbloqueados ? animalitosOrdenados : Array.from({ length: 8 }, (_, index) => elementosCatalogo[index] || null);
+  const cantidadDisponibles = mode === 'skins' ? animalitosFiltrados.length : animalitosFiltrados.length;
+  const cantidadDesbloqueados = mode === 'skins'
+    ? animalitosFiltrados.filter(item => !item.bloqueado).length
+    : animalitosFiltrados.filter(item => desbloqueados.includes(item.id)).length;
   const slotsTrajes = Array.from({ length: 12 }, (_, index) => skinsCatalogo[index] || null);
   const columnasTrajes = Array.from({ length: 6 }, (_, columna) => slotsTrajes.slice(columna * 2, (columna * 2) + 2));
 
@@ -402,19 +437,31 @@ const Animalitos = ({ navigation, mode }) => {
       <View style={s.nuevaPantalla}>
         <StatusBar hidden />
         <RoomBackground />
-        <TabButtons onExit={() => navigation?.navigate?.('main')} customAddButton={<View />} chicles={cartasAnimalitos} chicleIcono={<CartaUniversalIcon />} />
+        <Pressable onPress={salirDeAnimalitos} style={s.animalitosExit} accessibilityLabel={seleccionado ? 'Volver a la colección' : 'Salir de Animalitos'} hitSlop={7}>
+          <View style={s.animalitosExitInner}><MaterialIcons name={seleccionado ? 'arrow-back' : 'close'} size={seleccionado ? 17 : 15} color="#76502d" /></View>
+        </Pressable>
         <View style={s.animalitosSimple}>
           <View style={s.animalitosSimpleBody}>
-            {!seleccionado && <ScrollView style={s.animalitosSimpleList} contentContainerStyle={s.animalitosSimpleListContent} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-              {listaSimple.map((item, index) => {
-                const bloqueado = Boolean(item?.bloqueado || item?.proximo);
+            {!seleccionado && <Animated.View style={s.animalitosListFade}><FlatList
+              data={listaSimple}
+              keyExtractor={(item, index) => item?.id || `animal-simple-${index}`}
+              numColumns={4}
+              style={s.animalitosSimpleList}
+              contentContainerStyle={s.animalitosSimpleListContent}
+              columnWrapperStyle={s.animalitosSimpleRow}
+              showsVerticalScrollIndicator={false}
+              overScrollMode="never"
+              bounces={false}
+              renderItem={({ item, index }) => {
+              const bloqueado = Boolean(item?.bloqueado);
+              const esEjemplo = Boolean(item?.proximo);
                 const activo = item?.id === seleccionado?.id;
                 const tema = PALETA_RAREZA[item?.rareza] || PALETA_RAREZA.Común;
                 const estadoItem = item && !bloqueado ? estadoAnimal(item.id) : null;
                 const requeridasItem = estadoItem ? COPIAS_POR_NIVEL(estadoItem.nivel) : 0;
                 const faltantesItem = estadoItem ? Math.max(0, requeridasItem - estadoItem.totalCartas) : 0;
-                return <TouchableOpacity key={item?.id || `animal-simple-${index}`} disabled={!item || bloqueado} onPress={() => setSeleccionado(item)} style={[s.animalitoSimpleSquare, { backgroundColor: tema.fondo }, activo && s.animalitoSimpleSquareActive, bloqueado && !item?.proximo && s.animalitoSimpleSquareLocked, item?.proximo && s.animalitoSimpleSquareExample]} activeOpacity={0.82}>
-                  {item && !bloqueado ? <>
+                return <TouchableOpacity key={item?.id || `animal-simple-${index}`} disabled={!item || esEjemplo} onPress={() => setSeleccionado(item)} style={[s.animalitoSimpleSquare, { backgroundColor: tema.fondo }, activo && s.animalitoSimpleSquareActive, bloqueado && s.animalitoSimpleSquareLocked, esEjemplo && s.animalitoSimpleSquareExample]} activeOpacity={1}>
+                  {item && !bloqueado && !esEjemplo ? <>
                     <LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleCardGlow} pointerEvents="none" />
                     <View style={s.catalogCardProgress} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: requeridasItem, now: Math.min(estadoItem.totalCartas, requeridasItem) }} accessibilityLabel={`${estadoItem.totalCartas} de ${requeridasItem} cartas para subir de nivel`}>
                       <LinearGradient colors={faltantesItem ? [tema.acento, tema.texto] : ['#9dce65', '#589044']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.catalogCardProgressFill, { width: `${Math.min(100, estadoItem.totalCartas / requeridasItem * 100)}%` }]} />
@@ -427,15 +474,15 @@ const Animalitos = ({ navigation, mode }) => {
                       <Text style={s.catalogCardMissing} numberOfLines={1}>{faltantesItem ? `Faltan ${faltantesItem} cartas` : 'Cartas completas'}</Text>
                     </LinearGradient>
                     <View style={[s.catalogCardLevel, { backgroundColor: tema.acento, borderColor: tema.brillo }]} accessibilityLabel={`Nivel ${estadoItem.nivel}`}><Text style={s.catalogCardLevelLabel}>NV.</Text><Text style={s.catalogCardLevelNumber}>{estadoItem.nivel}</Text></View>
-                  </> : item?.proximo ? <><LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleExampleGlow} pointerEvents="none" /><View style={[s.animalitoSimpleExampleIcon, { backgroundColor: tema.acento }]}><Text style={s.animalitoSimpleExampleEmoji}>{item.icono}</Text></View><Text style={[s.animalitoSimpleExampleName, { color: tema.texto }]} numberOfLines={1}>{item.nombre}</Text><Text style={s.animalitoSimpleComingSoon}>PRÓXIMAMENTE</Text></> : <Text style={s.animalitoSimpleLock}>🔒</Text>}
+                  </> : item && bloqueado ? <><LinearGradient colors={['#d9d8d4', '#b9b7b3']} style={s.animalitoSimpleCardGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>BLOQ.</Text></View><Image source={item.imagen} style={s.animalitoSimpleImageLocked} contentFit="contain" cachePolicy="memory" /><Text style={s.catalogCardName} numberOfLines={1}>{item.nombre.toUpperCase()}</Text><LinearGradient colors={['#777773', '#555552']} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>VER DETALLES</Text></LinearGradient><View style={[s.catalogCardLevel, s.catalogCardLevelLocked]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : item?.proximo ? <><LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleExampleGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>PRÓX.</Text></View><View style={[s.animalitoSimpleExampleIcon, { backgroundColor: tema.acento }]}><Text style={s.animalitoSimpleExampleEmoji}>{item.icono}</Text></View><Text style={[s.animalitoSimpleExampleName, { color: tema.texto }]} numberOfLines={1}>{item.nombre.toUpperCase()}</Text><LinearGradient colors={[tema.acento, tema.texto]} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>PRÓXIMAMENTE</Text></LinearGradient><View style={[s.catalogCardLevel, { backgroundColor: tema.acento, borderColor: tema.brillo }]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : <Text style={s.animalitoSimpleLock}>🔒</Text>}
                 </TouchableOpacity>;
-              })}
-            </ScrollView>}
+              }}
+            /></Animated.View>}
 
             {seleccionado && <AnimalitoShowcase
               key={animalMostrado.id}
               animal={fichaAnimalMostrado}
-              skins={SKINS.filter(skin => skin.animalId === animalMostrado.id && contenidoDisponible(skin.temporada || 't1', temporadaActual)).map(skin => ({ ...skin, bloqueado: skin.storageId !== 'default' && skinsEquipadas?.[skin.animalId] !== skin.storageId && !skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId] }))}
+              skins={SKINS.filter(skin => skin.animalId === animalMostrado.id && contenidoDisponible(skin.temporada || 't1', temporadaActual)).map(skin => ({ ...skin, bloqueado: !animalDesbloqueado || (skin.storageId !== 'default' && skinsEquipadas?.[skin.animalId] !== skin.storageId && !skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId]) }))}
               tema={PALETA_RAREZA[fichaAnimalMostrado.rareza] || PALETA_RAREZA.Común}
               estado={estadoMostrado} necesarias={cartasNecesarias} costo={costoMejora}
               puedeMejorar={puedeMejorar} mejorando={Boolean(mejoraEnCurso)}
@@ -443,7 +490,6 @@ const Animalitos = ({ navigation, mode }) => {
               equipado={equipado === animalMostrado.id}
               skinEquipada={skinsEquipadas?.[animalMostrado.id] || 'default'}
               equipando={equipandoShowcase}
-              onBack={() => { setSeleccionado(null); setMejoraPendiente(null); }}
               onCartas={() => navigation?.navigate?.('comerciante')}
               onMejorar={() => manejarMejora(animalMostrado.id)}
               onEquipar={async skin => {
@@ -494,7 +540,7 @@ const Animalitos = ({ navigation, mode }) => {
       <View style={s.nuevaPantalla}>
         <StatusBar hidden />
         <RoomBackground />
-        <TabButtons onExit={() => navigation?.navigate?.('main')} customAddButton={<View />} chicles={cartasAnimalitos} chicleIcono={<CartaUniversalIcon />} />
+        <TabButtons onExit={() => navigation?.navigate?.('main')} customAddButton={<View />} chicles={cartasAnimalitos} chicleIcono={<CartaUniversalIcon />} showResources={false} compact />
 
         <View style={s.animalitosIntegrados}>
           <View style={s.animalitosIntegradosHeader}>
@@ -502,7 +548,7 @@ const Animalitos = ({ navigation, mode }) => {
               <Text style={s.animalitosIntegradosTitle}>MIS ANIMALITOS</Text>
               <Text style={s.animalitosIntegradosSubtitle}>Elegí uno para conocer su historia y hacerlo crecer</Text>
             </View>
-            <View style={s.animalitosIntegradosCount}><Text style={s.animalitosIntegradosCountText}>{animalitosFiltrados.length}/8</Text><Text style={s.animalitosIntegradosCountLabel}>DESCUBIERTOS</Text></View>
+            <View style={s.animalitosIntegradosCount}><Text style={s.animalitosIntegradosCountText}>{cantidadDesbloqueados}/{cantidadDisponibles}</Text><Text style={s.animalitosIntegradosCountLabel}>DESCUBIERTOS</Text></View>
           </View>
 
           <View style={s.animalitosIntegradosBody}>
@@ -516,12 +562,12 @@ const Animalitos = ({ navigation, mode }) => {
                   const cartasNecesariasItem = estadoItem ? COPIAS_POR_NIVEL(estadoItem.nivel) : 1;
                   const progresoItem = estadoItem ? Math.min(100, (estadoItem.totalCartas / cartasNecesariasItem) * 100) : 0;
                   const activo = item?.id === animalMostrado.id;
-                  return <TouchableOpacity key={item?.id || `animal-integrado-${index}`} disabled={!item || bloqueado} onPress={() => setSeleccionado(item)} style={[s.animalIntegradoItem, activo && s.animalIntegradoItemActivo, bloqueado && s.animalIntegradoItemBloqueado]} activeOpacity={0.82}>
+                  return <TouchableOpacity key={item?.id || `animal-integrado-${index}`} disabled={!item} onPress={() => setSeleccionado(item)} style={[s.animalIntegradoItem, activo && s.animalIntegradoItemActivo, bloqueado && s.animalIntegradoItemBloqueado]} activeOpacity={0.82}>
                     {item && !bloqueado ? <>
                       <Image source={item.imagen} style={s.animalIntegradoImagen} contentFit="contain" cachePolicy="memory" />
                       <View style={s.animalIntegradoCopy}><Text style={s.animalIntegradoName} numberOfLines={1}>{item.nombre}</Text><Text style={s.animalIntegradoMeta}>{item.rareza || 'Común'} · Nivel {estadoItem.nivel}</Text><View style={s.animalIntegradoTrack}><View style={[s.animalIntegradoFill, { width: `${progresoItem}%` }]} /><Text style={s.animalIntegradoTrackText}>{estadoItem.totalCartas}/{cartasNecesariasItem}</Text></View></View>
                       {activo && <MaterialIcons name="chevron-right" size={18} color="#6f9e55" />}
-                    </> : <><Text style={s.animalIntegradoLock}>🔒</Text><View style={s.animalIntegradoCopy}><Text style={s.animalIntegradoName}>Animal misterioso</Text><Text style={s.animalIntegradoMeta}>{item?.pistaBloqueada || 'Aún no descubierto'}</Text></View></>}
+                    </> : <><Image source={item?.imagen} style={s.animalIntegradoImagenBloqueada} contentFit="contain" cachePolicy="memory" /><View style={s.animalIntegradoCopy}><Text style={s.animalIntegradoName}>{item?.nombre || 'Animal misterioso'}</Text><Text style={s.animalIntegradoMeta}>Bloqueado · Entrá para ver Detalles</Text></View><MaterialIcons name="lock-outline" size={14} color="#8f8b83" /></>}
                   </TouchableOpacity>;
                 })}
               </ScrollView>
@@ -533,7 +579,7 @@ const Animalitos = ({ navigation, mode }) => {
               <View style={s.animalitoIntegradoHero}><Image source={animalMostrado.imagen} style={s.animalitoIntegradoImage} contentFit="contain" cachePolicy="memory" /><View style={s.animalitoIntegradoHeroCopy}><View style={s.animalitoIntegradoRarity}><Text style={s.animalitoIntegradoRarityText}>{fichaAnimalMostrado.rareza}</Text></View><Text style={s.animalitoIntegradoDescription}>{fichaAnimalMostrado.habilidadTexto || 'Un compañero especial que crece con tus cuidados.'}</Text><View style={s.animalitoIntegradoProgress}><View style={[s.animalitoIntegradoProgressFill, { width: `${progresoCartas}%` }]} /><Text style={s.animalitoIntegradoProgressText}>{estadoMostrado.totalCartas} / {cartasNecesarias} cartas</Text></View></View></View>
               <View style={s.animalitoIntegradoInfoRow}><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>HABILIDAD</Text><Text style={s.animalitoIntegradoInfoValue}>{fichaAnimalMostrado.habilidad || 'Compañía'}</Text></View><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>CARTAS PROPIAS</Text><Text style={s.animalitoIntegradoInfoValue}>{estadoMostrado.cartasPropias}</Text></View><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>UNIVERSALES</Text><Text style={s.animalitoIntegradoInfoValue}>{estadoMostrado.cartasUniversales}</Text></View></View>
               <View style={s.animalitoIntegradoRewards}><Text style={s.animalitoIntegradoSectionTitle}>PRÓXIMAS RECOMPENSAS</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.animalitoIntegradoRewardsContent}>{recompensasMostradas.map(recompensa => { const disponible = estadoMostrado.nivel >= recompensa.nivel; const reclamada = Boolean(recompensasReclamadas?.[animalMostradoId]?.[recompensa.nivel]); return <TouchableOpacity key={recompensa.nivel} style={[s.integratedReward, disponible && s.integratedRewardReady]} onPress={() => disponible && !reclamada ? reclamarRecompensaNivel(recompensa) : setPreviewRecompensa(recompensa)} activeOpacity={0.8}><Text style={s.integratedRewardLevel}>NV. {recompensa.nivel}</Text><Text style={s.integratedRewardIcon}>{recompensa.icono}</Text><Text style={s.integratedRewardName} numberOfLines={2}>{reclamada ? '✓ Reclamado' : recompensa.titulo}</Text></TouchableOpacity>; })}</ScrollView></View>
-              <View style={s.animalitoIntegradoActions}><TouchableOpacity style={s.integratedCardsButton} onPress={() => navigation?.navigate?.('comerciante')} activeOpacity={0.82}><MaterialIcons name="style" size={13} color="#fff8df" /><Text style={s.integratedActionText}>CONSEGUIR CARTAS</Text></TouchableOpacity><TouchableOpacity style={[s.integratedUseButton, equipado === animalMostrado.id && s.integratedUseButtonActive]} onPress={() => handleEquipar(animalMostrado.id)} activeOpacity={0.82}><MaterialIcons name={equipado === animalMostrado.id ? 'check' : 'pets'} size={13} color="#fff8df" /><Text style={s.integratedActionText}>{equipado === animalMostrado.id ? 'USANDO' : 'USAR'}</Text></TouchableOpacity><TouchableOpacity style={[s.integratedUpgradeButton, !puedeMejorar && s.integratedUpgradeDisabled]} onPress={() => manejarMejora(animalMostrado.id)} disabled={!puedeMejorar || Boolean(mejoraEnCurso)} activeOpacity={puedeMejorar ? 0.82 : 1}><MaterialIcons name="arrow-upward" size={13} color="#fff8df" /><Text style={s.integratedActionText}>{mejoraEnCurso === animalMostrado.id ? 'MEJORANDO…' : 'SUBIR NIVEL'}</Text></TouchableOpacity></View>
+              <View style={s.animalitoIntegradoActions}><TouchableOpacity style={[s.integratedCardsButton, !animalDesbloqueado && s.integratedActionDisabled]} onPress={() => navigation?.navigate?.('comerciante')} disabled={!animalDesbloqueado} activeOpacity={0.82}><MaterialIcons name="style" size={13} color="#fff8df" /><Text style={s.integratedActionText}>{animalDesbloqueado ? 'CONSEGUIR CARTAS' : 'BLOQUEADO'}</Text></TouchableOpacity><TouchableOpacity style={[s.integratedUseButton, equipado === animalMostrado.id && s.integratedUseButtonActive, !animalDesbloqueado && s.integratedActionDisabled]} onPress={() => handleEquipar(animalMostrado.id)} disabled={!animalDesbloqueado} activeOpacity={0.82}><MaterialIcons name={equipado === animalMostrado.id ? 'check' : 'pets'} size={13} color="#fff8df" /><Text style={s.integratedActionText}>{equipado === animalMostrado.id ? 'USANDO' : 'USAR'}</Text></TouchableOpacity><TouchableOpacity style={[s.integratedUpgradeButton, !puedeMejorar && s.integratedUpgradeDisabled]} onPress={() => manejarMejora(animalMostrado.id)} disabled={!puedeMejorar || Boolean(mejoraEnCurso)} activeOpacity={puedeMejorar ? 0.82 : 1}><MaterialIcons name="arrow-upward" size={13} color="#fff8df" /><Text style={s.integratedActionText}>{mejoraEnCurso === animalMostrado.id ? 'MEJORANDO…' : 'SUBIR NIVEL'}</Text></TouchableOpacity></View>
             </View>
           </View>
         </View>
@@ -547,7 +593,7 @@ const Animalitos = ({ navigation, mode }) => {
     <View style={s.nuevaPantalla}>
       <StatusBar hidden />
       <RoomBackground />
-      <TabButtons onExit={() => navigation?.navigate?.('main')} customAddButton={<View />} chicles={cartasAnimalitos} chicleIcono={<CartaUniversalIcon />} />
+      <TabButtons onExit={() => navigation?.navigate?.('main')} customAddButton={<View />} chicles={cartasAnimalitos} chicleIcono={<CartaUniversalIcon />} showResources={false} compact />
 
       <View style={s.nuevoContenido}>
         {mode === 'skins' ? <View style={s.vestidor}>
@@ -565,7 +611,7 @@ const Animalitos = ({ navigation, mode }) => {
         </View> : <>
         <View style={s.paginaIzquierda}>
           <View style={s.tituloMadera}><Text style={s.tituloMaderaTexto}>🐾 {mode === 'skins' ? 'MIS TRAJES' : 'MIS ANIMALITOS'} 🐾</Text></View>
-          <Text style={s.coleccionTexto}>Colección: {animalitosFiltrados.length} / 8</Text>
+          <Text style={s.coleccionTexto}>Colección: {cantidadDesbloqueados} / {cantidadDisponibles}</Text>
           <ScrollView style={s.nuevaListaScroll} contentContainerStyle={s.nuevaLista} showsVerticalScrollIndicator={false} nestedScrollEnabled>
             {catalogoSlots.map((item, index) => {
               const activo = item?.id === animalMostrado.id;
@@ -573,7 +619,7 @@ const Animalitos = ({ navigation, mode }) => {
               const cartasItemNecesarias = estadoItem ? COPIAS_POR_NIVEL(estadoItem.nivel) : 1;
               const progresoItem = estadoItem ? Math.min(100, (estadoItem.totalCartas / cartasItemNecesarias) * 100) : 0;
               return (
-                <TouchableOpacity key={item?.id || `slot-${index}`} style={[s.nuevaTarjeta, activo && s.nuevaTarjetaActiva, (!item || item.bloqueado) && s.nuevaTarjetaVacia]} disabled={!item || item.bloqueado} onPress={() => setSeleccionado(item)} activeOpacity={0.82}>
+                <TouchableOpacity key={item?.id || `slot-${index}`} style={[s.nuevaTarjeta, activo && s.nuevaTarjetaActiva, (!item || item.bloqueado) && s.nuevaTarjetaVacia]} disabled={!item} onPress={() => setSeleccionado(item)} activeOpacity={0.82}>
                   {item && !item.bloqueado ? <>
                     <View style={s.tipoBurbuja}><Text style={s.tipoBurbujaTexto}>{mode === 'skins' ? '✦' : '🍃'}</Text></View>
                     <Text style={s.tarjetaNombre}>{item.nombre || (item.id === 'default' ? 'Original' : 'Traje')}</Text>
@@ -583,13 +629,13 @@ const Animalitos = ({ navigation, mode }) => {
                     <View style={s.tarjetaProgreso}><View style={[s.tarjetaProgresoFill, { width: `${progresoItem}%` }]} /><Text style={s.tarjetaProgresoTexto}>{estadoItem.totalCartas} / {cartasItemNecesarias}</Text></View>
                     <View style={s.nivelEstrella}><Text style={s.nivelEstrellaTexto}>{estadoItem.nivel}</Text></View>
                   </> : item?.bloqueado ? <>
-                    <RNImage source={item.imagen} style={s.animalBloqueadoImagen} resizeMode="contain" blurRadius={18} />
+                    <RNImage source={item.imagen} style={s.animalBloqueadoImagenNormal} resizeMode="contain" />
                     <View style={s.animalBloqueadoVelo} />
                     <View style={s.animalBloqueadoInfo}>
                       <Text style={s.bloqueadoIcono}>🔒</Text>
-                      <Text style={s.animalBloqueadoTitulo}>Animal misterioso</Text>
+                      <Text style={s.animalBloqueadoTitulo}>{item.nombre}</Text>
                       <Text style={s.animalBloqueadoPista}>{(item.temporada || 't1').toUpperCase()} · {item.rareza || 'Desconocido'}</Text>
-                      <Text style={s.animalBloqueadoPista}>{item.pistaBloqueada || 'Aún no descubierto'}</Text>
+                      <Text style={s.animalBloqueadoPista}>Entrá para ver Detalles</Text>
                     </View>
                   </> : <><Text style={s.bloqueadoIcono}>🔒</Text><Text style={s.bloqueadoTexto}>Próximamente</Text></>}
                 </TouchableOpacity>
@@ -631,7 +677,7 @@ const Animalitos = ({ navigation, mode }) => {
 
           <View style={s.botonesFinales}>
             <TouchableOpacity style={s.cartasBtn} onPress={() => navigation?.navigate?.('comerciante')} activeOpacity={0.82}><Text style={s.botonFinalTexto}>▣ CONSEGUIR CARTAS</Text></TouchableOpacity>
-            <TouchableOpacity style={[s.usarBtn, (mode === 'skins' ? equipadaSkin : equipado) === animalMostrado.id && s.usarBtnActivo]} onPress={() => handleEquipar(animalMostrado.id)} activeOpacity={0.82}><Text style={s.botonFinalTexto}>{(mode === 'skins' ? equipadaSkin : equipado) === animalMostrado.id ? '✓ USANDO' : 'USAR'}</Text></TouchableOpacity>
+            <TouchableOpacity style={[s.usarBtn, (mode === 'skins' ? equipadaSkin : equipado) === animalMostrado.id && s.usarBtnActivo, !animalDesbloqueado && s.usarBtnBloqueado]} onPress={() => handleEquipar(animalMostrado.id)} disabled={!animalDesbloqueado} activeOpacity={animalDesbloqueado ? 0.82 : 1}><Text style={s.botonFinalTexto}>{!animalDesbloqueado ? 'BLOQUEADO' : (mode === 'skins' ? equipadaSkin : equipado) === animalMostrado.id ? '✓ USANDO' : 'USAR'}</Text></TouchableOpacity>
             <AnimatedTouchableOpacity style={[s.subirBtn, (!puedeMejorar || mejoraEnCurso) && s.subirBtnBloqueado, mejoraPendiente === animalMostrado.id && s.subirBtnConfirmar, llamadaMejoraActiva && { backgroundColor: llamadaMejora.interpolate({ inputRange: [0, 1], outputRange: ['#4384bd', '#f3a8c3'] }), borderColor: llamadaMejora.interpolate({ inputRange: [0, 1], outputRange: ['#286190', '#d86f9d'] }), transform: [{ scale: llamadaMejora.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] }) }] }]} onPress={() => manejarMejora(animalMostrado.id)} disabled={!puedeMejorar || Boolean(mejoraEnCurso)} activeOpacity={puedeMejorar ? 0.82 : 1}><Text style={s.botonFinalTexto}>{mejoraEnCurso === animalMostrado.id ? 'MEJORANDO…' : mejoraPendiente === animalMostrado.id ? `CONFIRMAR -${costoMejora}` : `⬆ SUBIR NIVEL · ${costoMejora}`}</Text></AnimatedTouchableOpacity>
           </View>
         </View>
@@ -683,6 +729,8 @@ const Animalitos = ({ navigation, mode }) => {
         customAddButton={<View />}
         chicles={cartasAnimalitos}
         chicleIcono={<CartaUniversalIcon />}
+        showResources={false}
+        compact
       />
 
       <View style={s.libroWrap}>
@@ -804,14 +852,20 @@ const s = StyleSheet.create({
   nuevaPantalla: { flex: 1, overflow: 'hidden' },
   nuevoContenido: { position: 'absolute', left: '14%', top: '9%', width: '78%', height: '86%', flexDirection: 'row', padding: 13, borderRadius: 24, backgroundColor: '#fff4d6', borderWidth: 4, borderColor: '#9b6a35', shadowColor: '#171008', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.48, shadowRadius: 16, elevation: 22 },
   animalitosIntegrados: { position: 'absolute', left: '7%', top: '8%', width: '86%', height: '84%', padding: 12, borderRadius: 18, backgroundColor: 'rgba(255,248,226,0.9)', borderWidth: 2, borderColor: '#a8753c', shadowColor: '#3d2818', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 14 },
-  animalitosSimple: { position: 'absolute', left: '4%', top: '8%', width: '92%', height: '86%', padding: 5 },
+  // La franja de recursos está oculta en esta pantalla: el contenido puede
+  // ocupar el espacio superior, dejando únicamente aire para el botón de salir.
+  animalitosSimple: { position: 'absolute', left: '4%', right: '4%', top: 0, bottom: 0, paddingHorizontal: 5 },
+  animalitosExit: { position: 'absolute', top: 29, left: 40, width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,248,226,0.96)', borderWidth: 1.25, borderColor: '#c79d62', shadowColor: '#674523', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 5, elevation: 40, zIndex: 999 },
+  animalitosExitInner: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(238,215,174,0.42)', borderWidth: 1, borderColor: 'rgba(176,126,69,0.42)' },
   animalitosSimpleHeader: { height: 31, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   animalitosSimpleTitle: { color: '#62401f', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', letterSpacing: 0.4 },
   animalitosSimpleHint: { color: '#9b754b', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '800' },
-  animalitosSimpleBody: { flex: 1, width: '100%', alignItems: 'center', paddingTop: 6 },
-  animalitosSimpleList: { width: '86%', maxWidth: 540, alignSelf: 'center' },
-  animalitosSimpleListContent: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', alignContent: 'flex-start', rowGap: 10, paddingTop: 4, paddingBottom: 4 },
-  animalitoSimpleSquare: { width: '23%', marginHorizontal: '1%', aspectRatio: 1, position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderRadius: 2, backgroundColor: 'rgba(255,252,237,0.82)', borderWidth: 1.5, borderColor: '#493d49', shadowColor: '#302631', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 2, elevation: 3 },
+  animalitosSimpleBody: { flex: 1, width: '100%', alignItems: 'center' },
+  animalitosListFade: { flex: 1, width: '100%', alignItems: 'center' },
+  animalitosSimpleList: { width: '86%', maxWidth: 540, maxHeight: '100%', alignSelf: 'center', flexGrow: 0, flexShrink: 1 },
+  animalitosSimpleListContent: { paddingTop: 6, paddingBottom: 7 },
+  animalitosSimpleRow: { justifyContent: 'center' },
+  animalitoSimpleSquare: { width: '21.5%', marginHorizontal: '1.15%', marginBottom: 6, aspectRatio: 1.05, position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderRadius: 2, backgroundColor: 'rgba(255,252,237,0.82)', borderWidth: 1.5, borderColor: '#493d49', shadowColor: '#302631', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 2, elevation: 3 },
   animalitoSimpleSquareActive: { borderWidth: 0, backgroundColor: '#e9f2cf', shadowColor: '#5b873f', shadowOpacity: 0.42, shadowRadius: 8, elevation: 7, transform: [{ scale: 1.015 }] },
   animalitoSimpleSquareLocked: { opacity: 0.58, backgroundColor: '#e8e1d8', shadowColor: '#8b8177', shadowOpacity: 0.08, shadowRadius: 2, elevation: 1 },
   animalitoSimpleSquareExample: { opacity: 0.92, shadowOpacity: 0.16, elevation: 3 },
@@ -823,6 +877,7 @@ const s = StyleSheet.create({
   animalitoSimpleRarityBadge: { position: 'absolute', top: 3, left: 3, maxWidth: '68%', paddingHorizontal: 4, paddingVertical: 2, zIndex: 2 },
   animalitoSimpleRarityBadgeText: { color: '#fffdf5', fontFamily: 'Delius', fontSize: 4.3, fontWeight: '900', letterSpacing: 0.2 },
   animalitoSimpleImage: { position: 'absolute', left: '-37%', top: '-16%', width: '143%', height: '132%', zIndex: 1 },
+  animalitoSimpleImageLocked: { position: 'absolute', left: '-37%', top: '-16%', width: '143%', height: '132%', zIndex: 1, opacity: 0.42 },
   catalogCardProgress: { position: 'absolute', top: 0, left: 0, right: 0, height: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: '#393340', overflow: 'hidden', zIndex: 4 },
   catalogCardProgressFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   catalogCardProgressText: { color: '#fff0bc', fontSize: 7, fontWeight: '900', fontVariant: ['tabular-nums'] },
@@ -831,6 +886,7 @@ const s = StyleSheet.create({
   catalogCardRarityText: { color: '#fff9e9', fontSize: 6.2, fontWeight: '900', fontFamily: 'Delius' },
   catalogCardMissing: { color: 'rgba(255,249,233,0.85)', fontSize: 5, marginTop: 1, fontWeight: '700' },
   catalogCardLevel: { position: 'absolute', bottom: 2, left: 2, width: 27, height: 30, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center', zIndex: 5 },
+  catalogCardLevelLocked: { backgroundColor: '#777773', borderColor: '#b8b6b0' },
   catalogCardLevelLabel: { color: '#fff6dc', fontSize: 4, lineHeight: 5, fontWeight: '900' },
   catalogCardLevelNumber: { color: '#fff', fontSize: 13, lineHeight: 15, fontWeight: '900', textShadowColor: '#493447', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
   animalitoSimpleCardSide: { position: 'absolute', top: 0, right: 0, bottom: '29%', width: 10, alignItems: 'center', justifyContent: 'space-around', zIndex: 2 },
@@ -892,6 +948,7 @@ const s = StyleSheet.create({
   animalIntegradoItemActivo: { backgroundColor: '#e9f3ce', borderColor: '#75a052', shadowColor: '#64883f', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3, elevation: 3 },
   animalIntegradoItemBloqueado: { opacity: 0.65, borderStyle: 'dashed' },
   animalIntegradoImagen: { width: 46, height: 46, marginRight: 4 },
+  animalIntegradoImagenBloqueada: { width: 46, height: 46, marginRight: 4, opacity: 0.42 },
   animalIntegradoLock: { width: 42, textAlign: 'center', fontSize: 17, opacity: 0.65 },
   animalIntegradoCopy: { flex: 1, minWidth: 0 },
   animalIntegradoName: { color: '#614329', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900' },
@@ -935,6 +992,7 @@ const s = StyleSheet.create({
   integratedCardsButton: { flex: 1.25, minHeight: 27, flexDirection: 'row', gap: 4, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderRadius: 7, backgroundColor: '#679b55', borderWidth: 1, borderColor: '#457b3a' },
   integratedUseButton: { flex: 0.8, minHeight: 27, flexDirection: 'row', gap: 3, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderRadius: 7, backgroundColor: '#bd9144', borderWidth: 1, borderColor: '#8d662d' },
   integratedUseButtonActive: { backgroundColor: '#78a65a', borderColor: '#4d7b3e' },
+  integratedActionDisabled: { backgroundColor: '#8b8982', borderColor: '#6f6d67', opacity: 0.62 },
   integratedUpgradeButton: { flex: 1.05, minHeight: 27, flexDirection: 'row', gap: 3, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderRadius: 7, backgroundColor: '#4c83b4', borderWidth: 1, borderColor: '#2f628e' },
   integratedUpgradeDisabled: { backgroundColor: '#8b9697', borderColor: '#6f7a7b', opacity: 0.65 },
   integratedActionText: { color: '#fff8df', fontFamily: 'Delius', fontSize: 5.6, fontWeight: '900', textAlign: 'center' },
@@ -949,7 +1007,7 @@ const s = StyleSheet.create({
   trajeImagen: { width: 84, height: 70, marginTop: -1 }, trajeImagenBloqueada: { opacity: 0.3 }, trajeImagenBloqueadaBlur: { position: 'absolute', top: 23, width: 84, height: 55, opacity: 0.48, tintColor: '#554d45' }, trajeNombre: { position: 'absolute', bottom: 3, color: '#5d4128', fontFamily: 'Delius', fontSize: 7.3, fontWeight: '900', textAlign: 'center' },
   trajeBloqueadoVelo: { position: 'absolute', top: 23, left: 4, right: 4, height: 55, borderRadius: 8, backgroundColor: 'rgba(65,56,48,0.35)', zIndex: 3 }, trajeCandadoInsignia: { position: 'absolute', top: 17, alignSelf: 'center', zIndex: 7, width: 25, height: 25, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f7e7c8', borderWidth: 2, borderColor: '#9d7446', shadowColor: '#3d2d20', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.38, shadowRadius: 3, elevation: 7 }, trajeCandadoIcono: { fontSize: 12, lineHeight: 15, textAlign: 'center' }, trajeSecretoPlaca: { position: 'absolute', left: 5, right: 5, bottom: 4, zIndex: 8, alignItems: 'center', paddingVertical: 3, borderRadius: 7, backgroundColor: 'rgba(82,61,43,0.92)', borderWidth: 1, borderColor: '#d7b887' }, trajeCandadoTitulo: { color: '#fff7e6', fontFamily: 'Delius', fontSize: 6.6, lineHeight: 8, fontWeight: '900', textAlign: 'center' }, trajeCandadoTexto: { marginTop: 1, color: '#e9d4b2', fontFamily: 'Delius', fontSize: 5.3, lineHeight: 7, fontWeight: '800', textAlign: 'center' },
   trajeEquipado: { position: 'absolute', bottom: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 7, backgroundColor: '#6f9e55' }, trajeEquipadoTexto: { color: '#fff', fontFamily: 'Delius', fontSize: 6, fontWeight: '900' }, trajeFuturoIcono: { marginTop: 28, color: '#b2a18a', fontSize: 25 }, trajeFuturoTexto: { marginTop: 5, color: '#9b8c78', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
-  animalBloqueadoImagen: { position: 'absolute', width: '92%', height: '92%', opacity: 0.48, tintColor: '#4b433b' }, animalBloqueadoVelo: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(68,58,48,0.44)' }, animalBloqueadoInfo: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }, animalBloqueadoTitulo: { marginTop: 2, color: '#fff8e8', fontFamily: 'Delius', fontSize: 8.3, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.72)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }, animalBloqueadoPista: { marginTop: 3, color: '#f2dfbf', fontFamily: 'Delius', fontSize: 6.3, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.58)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  animalBloqueadoImagen: { position: 'absolute', width: '92%', height: '92%', opacity: 0.48, tintColor: '#4b433b' }, animalBloqueadoImagenNormal: { position: 'absolute', width: '92%', height: '92%', opacity: 0.46 }, animalBloqueadoVelo: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(68,58,48,0.44)' }, animalBloqueadoInfo: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 }, animalBloqueadoTitulo: { marginTop: 2, color: '#fff8e8', fontFamily: 'Delius', fontSize: 8.3, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.72)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }, animalBloqueadoPista: { marginTop: 3, color: '#f2dfbf', fontFamily: 'Delius', fontSize: 6.3, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(0,0,0,0.58)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   vestidorAcciones: { height: 49, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 25, marginTop: 3, paddingHorizontal: 18, borderRadius: 12, backgroundColor: 'rgba(239,215,171,0.62)', borderWidth: 1, borderColor: 'rgba(184,139,80,0.32)' }, vestidorSeleccionado: { color: '#5c4026', fontFamily: 'Delius', fontSize: 10, fontWeight: '900' }, vestidorRarezaTexto: { fontFamily: 'Delius', fontSize: 7, fontWeight: '900', marginTop: 1 }, vestidorUsarBtn: { minWidth: 126, alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 9, backgroundColor: '#b8863f', borderWidth: 1, borderColor: '#815b28', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.24, shadowRadius: 3, elevation: 4 }, vestidorUsarTexto: { color: '#fffbe8', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
   tituloMadera: { alignSelf: 'center', minWidth: 205, paddingHorizontal: 18, paddingVertical: 6, borderRadius: 7, backgroundColor: '#e9b85f', borderWidth: 2, borderColor: '#a96b25', shadowColor: '#684218', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 3, elevation: 4 },
   tituloMaderaTexto: { color: '#6a3d18', fontFamily: 'Delius', fontSize: 12, fontWeight: '900', textAlign: 'center', letterSpacing: 0.4 },
@@ -978,7 +1036,7 @@ const s = StyleSheet.create({
   barraNivel: { flex: 1, height: 13, marginLeft: -3, borderRadius: 7, backgroundColor: '#b89b73', overflow: 'hidden', justifyContent: 'center' }, barraNivelFill: { ...StyleSheet.absoluteFillObject, right: undefined, backgroundColor: '#83b74a' }, barraNivelTexto: { color: '#fff', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', textAlign: 'center' }, faltanTexto: { color: '#69492b', fontFamily: 'Delius', fontSize: 7, lineHeight: 10, fontWeight: '800', textAlign: 'center', marginTop: 4 }, faltanNumero: { color: '#5d9a46', fontWeight: '900' },
   infoDoble: { height: '18%', flexDirection: 'row', gap: 8 }, habilidadCaja: { flex: 0.72, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, transform: [{ translateY: -4 }], backgroundColor: 'rgba(224,235,175,0.58)', borderWidth: 1, borderColor: 'rgba(157,170,87,0.25)' }, estadisticasCaja: { flex: 1.35, borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, justifyContent: 'center', transform: [{ translateY: -5 }], backgroundColor: 'rgba(255,248,226,0.68)', borderWidth: 1, borderColor: 'rgba(184,139,80,0.3)' }, cajaMiniTitulo: { color: '#866035', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', textAlign: 'center', marginBottom: 1 }, habilidadNombre: { color: '#58442a', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900' }, habilidadTexto: { color: '#6f5a37', fontFamily: 'Delius', fontSize: 6.5, lineHeight: 9, fontWeight: '800', marginTop: 1 }, progresoResumenFila: { flexDirection: 'row', alignItems: 'center', minHeight: 19, borderTopWidth: 1, borderTopColor: 'rgba(174,130,75,0.16)' }, progresoResumenIcono: { width: 22, color: '#a37a36', fontSize: 12, textAlign: 'center' }, progresoResumenLabel: { color: '#8a6a43', fontFamily: 'Delius', fontSize: 5.8, fontWeight: '800' }, progresoResumenValor: { color: '#5d452c', fontFamily: 'Delius', fontSize: 6.8, fontWeight: '900' },
   recompensasCaja: { height: '27%', marginTop: 5, paddingTop: 12, borderRadius: 8, backgroundColor: 'rgba(255,248,226,0.48)', borderWidth: 1, borderColor: 'rgba(184,139,80,0.25)' }, recompensasTitulo: { position: 'absolute', top: -7, alignSelf: 'center', minWidth: 150, paddingVertical: 3, paddingHorizontal: 14, borderRadius: 8, backgroundColor: '#b77932' }, recompensasTituloTexto: { color: '#fff9e5', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', textAlign: 'center' }, recompensasFila: { flex: 1, flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 5 }, premioTarjeta: { width: '18%', height: '82%', borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,249,229,0.6)', borderWidth: 1, borderColor: '#d9bd8c', opacity: 0.72 }, premioDisponible: { borderColor: '#91b657', backgroundColor: 'rgba(241,252,205,0.82)', opacity: 1 }, premioNivel: { position: 'absolute', top: -7, width: 20, height: 20, borderRadius: 10, backgroundColor: '#8c6a3b', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f0ddb7' }, premioNivelTexto: { color: '#fff', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900' }, premioIcono: { fontSize: 17 }, premioNombre: { color: '#6a4a2c', fontFamily: 'Delius', fontSize: 5.5, lineHeight: 7, fontWeight: '900', textAlign: 'center', marginTop: 2 },
-  botonesFinales: { height: '11%', flexDirection: 'row', gap: 6, alignItems: 'flex-end', justifyContent: 'center' }, cartasBtn: { minWidth: 105, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 7, backgroundColor: '#6da85a', borderWidth: 1, borderColor: '#437b39' }, usarBtn: { minWidth: 62, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 7, backgroundColor: '#c19043', borderWidth: 1, borderColor: '#8a632c' }, usarBtnActivo: { backgroundColor: '#79a75b', borderColor: '#4e7b3d' }, subirBtn: { minWidth: 103, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 7, backgroundColor: '#4384bd', borderWidth: 1, borderColor: '#286190' }, subirBtnBloqueado: { opacity: 0.62, backgroundColor: '#7d8d96' }, subirBtnConfirmar: { backgroundColor: '#d08b37', borderColor: '#925c20' }, botonFinalTexto: { color: '#fff', fontFamily: 'Delius', fontSize: 7.2, fontWeight: '900', textAlign: 'center' },
+  botonesFinales: { height: '11%', flexDirection: 'row', gap: 6, alignItems: 'flex-end', justifyContent: 'center' }, cartasBtn: { minWidth: 105, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 7, backgroundColor: '#6da85a', borderWidth: 1, borderColor: '#437b39' }, usarBtn: { minWidth: 62, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 7, backgroundColor: '#c19043', borderWidth: 1, borderColor: '#8a632c' }, usarBtnActivo: { backgroundColor: '#79a75b', borderColor: '#4e7b3d' }, usarBtnBloqueado: { backgroundColor: '#85837d', borderColor: '#696761', opacity: 0.68 }, subirBtn: { minWidth: 103, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 7, backgroundColor: '#4384bd', borderWidth: 1, borderColor: '#286190' }, subirBtnBloqueado: { opacity: 0.62, backgroundColor: '#7d8d96' }, subirBtnConfirmar: { backgroundColor: '#d08b37', borderColor: '#925c20' }, botonFinalTexto: { color: '#fff', fontFamily: 'Delius', fontSize: 7.2, fontWeight: '900', textAlign: 'center' },
   container: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   fondoColeccion: { ...StyleSheet.absoluteFillObject, width: '94%', height: '94%', transform: [{ translateX: 35 }, { translateY: 180 }] },
   hiddenLegacyList: { display: 'none' },

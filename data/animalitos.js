@@ -54,6 +54,20 @@ export const ANIMALITOS = [
     comercio: { color: '#6f4d93', fondo: '#eee5f7', borde: '#a886c3' },
     imagen: require('../assets/temporadas/libro/Temporada2/Animales/Erizo/erizo1.png'),
   },
+  {
+    id: 'loro',
+    temporada: 't2',
+    nombre: 'Loro',
+    rareza: 'Legendario',
+    colorRareza: '#d48a2c',
+    pistaBloqueada: 'Una voz de colores se esconde entre dulces y plumas',
+    icono: '🦜',
+    habilidad: 'Eco Festivo',
+    habilidadTexto: '+10% de cartas universales obtenidas en juegos.',
+    legacyUnlockField: 'loroDesbloqueado',
+    comercio: { color: '#c96a55', fondo: '#fae2cf', borde: '#dc9972' },
+    imagen: require('../assets/temporadas/libro/Temporada2/Animales/Loro/loro1.png'),
+  },
 ];
 
 export const SKINS = [
@@ -69,6 +83,9 @@ export const SKINS = [
   { id: 'erizo_default', storageId: 'default', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Original', temporada: 't2', rareza: 'Raro', colorRareza: '#7655a4', fondoRareza: '#eee5f7', imagen: require('../assets/temporadas/libro/Temporada2/Animales/Erizo/erizo1.png') },
   { id: 'erizot1', storageId: 'erizot1', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Cupcake de Arándanos', temporada: 't2', rareza: 'Épico', colorRareza: '#8f62bd', fondoRareza: '#efe3fa', imagen: require('../assets/temporadas/libro/Temporada2/Animales/Erizo/skins/erizot1.png') },
   { id: 'erizot2', storageId: 'erizot2', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Maestro Chocolatero', temporada: 't2', rareza: 'Legendario', colorRareza: '#c4862e', fondoRareza: '#f6e2c5', imagen: require('../assets/temporadas/libro/Temporada2/Animales/Erizo/skins/erizot2.png') },
+  { id: 'loro_default', storageId: 'default', animalId: 'loro', animalNombre: 'Loro', nombre: 'Original', temporada: 't2', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae7bd', imagen: require('../assets/temporadas/libro/Temporada2/Animales/Loro/loro1.png') },
+  { id: 'lorot1', storageId: 'lorot1', animalId: 'loro', animalNombre: 'Loro', nombre: 'Piñata Tropical', temporada: 't2', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('../assets/temporadas/libro/Temporada2/Animales/Loro/skins/lorot1.png') },
+  { id: 'lorot2', storageId: 'lorot2', animalId: 'loro', animalNombre: 'Loro', nombre: 'Capitán Piruleta', temporada: 't2', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae3c2', comercioPrecio: 3200, imagen: require('../assets/temporadas/libro/Temporada2/Animales/Loro/skins/lorot2.png') },
 ];
 
 export const ANIMALITOS_POR_ID = Object.fromEntries(ANIMALITOS.map(animal => [animal.id, animal]));

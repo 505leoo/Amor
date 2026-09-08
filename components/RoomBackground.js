@@ -56,7 +56,9 @@ const FloatingHeart = memo(({ config, index }) => {
   </Animated.View>;
 });
 
-const RoomBackground = memo(() => (
+const RoomBackground = memo(({ heartDensity = 'full' }) => {
+  const hearts = heartDensity === 'none' ? [] : heartDensity === 'low' ? CORAZONES.filter((_, index) => index % 2 === 0) : CORAZONES;
+  return (
   <View pointerEvents="none" style={styles.container}>
     <Svg width="100%" height="100%" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice">
       <Defs>
@@ -79,11 +81,12 @@ const RoomBackground = memo(() => (
       <Path d="M0 800C330 735 530 865 840 795s480-60 760 12" fill="none" stroke="#fff" strokeWidth="4" opacity="0.13" />
     </Svg>
     <View style={styles.hearts}>
-      {CORAZONES.map((config, index) => <FloatingHeart key={index} config={config} index={index} />)}
+      {hearts.map((config, index) => <FloatingHeart key={config.left} config={config} index={index} />)}
     </View>
     <View style={styles.finish} />
   </View>
-));
+  );
+});
 
 const styles = StyleSheet.create({
   container: { ...StyleSheet.absoluteFillObject, overflow: 'hidden', backgroundColor: '#eadbde' },

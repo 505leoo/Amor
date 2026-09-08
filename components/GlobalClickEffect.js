@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
-import { Animated, Modal, StyleSheet, View } from 'react-native';
+import { Animated, StyleSheet, View } from 'react-native';
 
 const LINES = [
   { key: 'tl', x: -3.5, y: -3.5, rotate: '45deg' }, { key: 'tr', x: 3.5, y: -3.5, rotate: '-45deg' },
@@ -26,23 +26,15 @@ const GlobalClickEffect = forwardRef(function GlobalClickEffect(_, ref) {
     const id = ++nextId.current;
     setTargets([{ id, x, y }]);
   } }), []);
-  return <Modal
-    visible={targets.length > 0}
-    transparent
-    animationType="none"
-    statusBarTranslucent
-    navigationBarTranslucent
-    hardwareAccelerated
-    onRequestClose={() => {}}
-  >
-    <View pointerEvents="none" style={styles.layer} collapsable={false}>
-      {targets.map(target => <Target key={target.id} x={target.x} y={target.y} onFinish={() => setTargets(current => current.filter(item => item.id !== target.id))} />)}
-    </View>
-  </Modal>;
+  // Un Modal transparente en Android aplica un dim nativo durante un frame.
+  // Esta capa vive sobre el árbol de la app sin alterar la composición visual.
+  return <View pointerEvents="none" style={styles.layer} collapsable={false}>
+    {targets.map(target => <Target key={target.id} x={target.x} y={target.y} onFinish={() => setTargets(current => current.filter(item => item.id !== target.id))} />)}
+  </View>;
 });
 
 const styles = StyleSheet.create({
-  layer: { flex: 1, backgroundColor: 'transparent' },
+  layer: { ...StyleSheet.absoluteFillObject, backgroundColor: 'transparent', zIndex: 9998, elevation: 9998 },
   target: { position: 'absolute', width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   line: { position: 'absolute', width: 6, height: 1.8, borderRadius: 2, backgroundColor: '#000000' },
 });

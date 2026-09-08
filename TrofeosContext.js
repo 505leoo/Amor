@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useMemo, useState, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
@@ -17,7 +17,7 @@ export const useTrofeos = () => {
 export const TrofeosProvider = ({ children }) => {
   const [hasUnclaimed, setHasUnclaimed] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const uid = auth.currentUser?.uid;
       if (!uid) {
@@ -37,7 +37,7 @@ export const TrofeosProvider = ({ children }) => {
       console.error('TrofeosContext load:', error);
       setHasUnclaimed(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -45,10 +45,12 @@ export const TrofeosProvider = ({ children }) => {
       else load();
     });
     return () => unsubscribe();
-  }, []);
+  }, [load]);
+
+  const value = useMemo(() => ({ hasUnclaimedTrofeos: hasUnclaimed, refreshTrofeos: load }), [hasUnclaimed, load]);
 
   return (
-    <TrofeosContext.Provider value={{ hasUnclaimedTrofeos: hasUnclaimed, refreshTrofeos: load }}>
+    <TrofeosContext.Provider value={value}>
       {children}
     </TrofeosContext.Provider>
   );

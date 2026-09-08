@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 
 // A scene on the room background, not a dialog: only the information has cards.
-export default function AnimalitoShowcase({ animal, skins, tema, estado, necesarias, costo, puedeMejorar, mejorando, confirmar, equipado, skinEquipada, equipando, onBack, onEquipar, onMejorar, onCartas, children }) {
+export default function AnimalitoShowcase({ animal, skins, tema, estado, necesarias, costo, puedeMejorar, mejorando, confirmar, equipado, skinEquipada, equipando, onEquipar, onMejorar, onCartas, children }) {
   const [skinId, setSkinId] = useState(skinEquipada);
   const [width, setWidth] = useState(700);
   const index = Math.max(0, skins.findIndex(skin => skin.storageId === skinId));
@@ -15,9 +15,6 @@ export default function AnimalitoShowcase({ animal, skins, tema, estado, necesar
   const compacto = width < 520;
   const progreso = Math.min(100, estado.totalCartas / necesarias * 100);
   return <ScrollView style={s.root} contentContainerStyle={s.content} showsVerticalScrollIndicator={false} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
-    <TouchableOpacity onPress={onBack} style={s.back} accessibilityLabel="Volver a la colección" hitSlop={8}>
-      <MaterialIcons name="arrow-back" size={17} color="#624e40" /><Text style={s.backText}>Colección</Text>
-    </TouchableOpacity>
     <View style={[s.scene, compacto && s.sceneCompact]}>
       <View style={[s.info, compacto && s.infoCompact]}>
         <Text style={[s.eyebrow, { color: tema.texto }]}>TU COMPAÑERO</Text>
@@ -63,7 +60,6 @@ export default function AnimalitoShowcase({ animal, skins, tema, estado, necesar
 
 const s = StyleSheet.create({
   root: { flex: 1, width: '100%' }, content: { paddingHorizontal: 8, paddingBottom: 12 },
-  back: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5, padding: 7 }, backText: { fontFamily: 'Delius', color: '#624e40', fontSize: 10 },
   scene: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 18 }, sceneCompact: { flexWrap: 'wrap', gap: 10 },
   info: { width: '23%', maxWidth: 200, padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,250,239,0.88)' }, infoCompact: { width: '46%', maxWidth: undefined },
   eyebrow: { color: '#93816e', fontSize: 7, fontWeight: '800', letterSpacing: 1 }, name: { fontFamily: 'Delius', fontSize: 24, color: '#493d35', marginTop: 5, fontWeight: '900' },

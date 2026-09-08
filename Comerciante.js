@@ -178,11 +178,11 @@ export default function Comerciante({ navigation, temporada }) {
       if (saliendoRef.current) return;
       setCatalogoIconos(snap.docs.map(icono => ({ id: icono.id, ...icono.data() })));
       // Fade in cuando cargue
-      Animated.timing(productosFadeAnim, {
+      requestAnimationFrame(() => Animated.timing(productosFadeAnim, {
         toValue: 1,
-        duration: 350,
+        duration: 60,
         useNativeDriver: true,
-      }).start();
+      }).start());
     }).catch(() => {});
     const fallback = setTimeout(() => productosFadeAnim.setValue(1), 450);
     return () => clearTimeout(fallback);
@@ -312,7 +312,11 @@ export default function Comerciante({ navigation, temporada }) {
     if (saliendoRef.current) return;
     saliendoRef.current = true;
     productosFadeAnim.stopAnimation();
-    navigation?.navigate?.(temporada ? `temporada${temporada.slice(1)}` : 'main');
+    Animated.timing(productosFadeAnim, {
+      toValue: 0,
+      duration: 60,
+      useNativeDriver: true,
+    }).start(() => navigation?.navigate?.(temporada ? `temporada${temporada.slice(1)}` : 'main'));
   };
 
   const comprarProducto = async producto => {

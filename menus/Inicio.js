@@ -31,6 +31,10 @@ import * as Haptics from 'expo-haptics';
 const OverlayContext = createContext(false);
 export const useOverlayActive = () => useContext(OverlayContext);
 const NOOP = () => {};
+// Las animaciones ambientales se desactivan en Inicio para reservar el hilo
+// de JS/GPU a gestos, alimentación y navegación. Las animaciones de acción
+// (alimentar, arrastrar y feedback) siguen activas.
+const ANIMACIONES_AMBIENTALES = false;
 const HALCON_IMAGE = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
 
 const fechaDeActividad = valor => {
@@ -63,15 +67,6 @@ const equalEstadoInicio = (a, b) => a?.animalito === b?.animalito
   && a?.diamantes === b?.diamantes;
 
 const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
-  const pulso = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const animation = Animated.loop(Animated.sequence([
-      Animated.timing(pulso, { toValue: 1, duration: 900, useNativeDriver: true }),
-      Animated.timing(pulso, { toValue: 0, duration: 900, useNativeDriver: true }),
-    ]));
-    animation.start();
-    return () => animation.stop();
-  }, [pulso]);
   const activar = () => {
     Haptics.selectionAsync().catch(() => {});
     onPress?.();
@@ -79,13 +74,13 @@ const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
   return (
     <TouchableOpacity style={styles.siguientePaso} onPress={activar} activeOpacity={0.82} accessibilityRole="button" accessibilityLabel={`${titulo}. ${detalle}`}>
       <View style={[styles.siguienteLuz, styles.siguienteLuzUno]} /><View style={[styles.siguienteLuz, styles.siguienteLuzDos]} />
-      <Animated.View style={[styles.siguientePasoIcono, { transform: [{ scale: pulso.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] }]}><MaterialIcons name={icono} size={15} color="#fff8dc" /></Animated.View>
+      <View style={styles.siguientePasoIcono}><MaterialIcons name={icono} size={15} color="#fff8dc" /></View>
       <View style={styles.siguientePasoInfo}>
         <Text style={styles.siguientePasoEtiqueta}>SIGUIENTE JUGADA</Text>
         <Text style={styles.siguientePasoTitulo} numberOfLines={1}>{titulo}</Text>
         <Text style={styles.siguientePasoDetalle} numberOfLines={1}>{detalle}</Text>
       </View>
-      <Animated.View style={[styles.siguientePasoInsignia, { opacity: pulso.interpolate({ inputRange: [0, 1], outputRange: [0.78, 1] }) }]}><Text style={styles.siguientePasoInsigniaTexto}>{insignia}</Text></Animated.View>
+      <View style={styles.siguientePasoInsignia}><Text style={styles.siguientePasoInsigniaTexto}>{insignia}</Text></View>
     </TouchableOpacity>
   );
 });
@@ -504,7 +499,8 @@ const QuickMenu = memo(() => {
     const actualizarBuzon = () => {
       if (!activo || vistoBuzonRef.current === null) return;
       const ultimo = Math.max(ultimoBuzonRef.current, ultimaInvitacionRef.current);
-      setBuzonNuevo(ultimo > vistoBuzonRef.current);
+      const siguiente = ultimo > vistoBuzonRef.current;
+      setBuzonNuevo(actual => actual === siguiente ? actual : siguiente);
     };
     AsyncStorage.getItem(buzonKey).then(valor => {
       if (!activo) return;
@@ -512,13 +508,17 @@ const QuickMenu = memo(() => {
       actualizarBuzon();
     });
     AsyncStorage.getItem(avisosKey).then(valor => {
-      if (activo) setAvisosNuevos(hayAvisosPendientes(valor));
+      if (activo) {
+        const siguiente = hayAvisosPendientes(valor);
+        setAvisosNuevos(actual => actual === siguiente ? actual : siguiente);
+      }
     });
     AsyncStorage.getItem(`indicador_recompensas_${uid}`).then(valor => {
       if (activo) {
         const visto = Number(valor) || Date.now();
         global.ultimoRecompensaVisto = { ...(global.ultimoRecompensaVisto || {}), [uid]: visto };
-        setRecompensasNuevas(ultimoRegaloRef.current > visto);
+        const siguiente = ultimoRegaloRef.current > visto;
+        setRecompensasNuevas(actual => actual === siguiente ? actual : siguiente);
       }
     });
     const obtenerMillis = valor => valor?.toMillis?.() || (valor?.seconds ? valor.seconds * 1000 : 0);
@@ -532,7 +532,8 @@ const QuickMenu = memo(() => {
     }, () => {});
     const unsubRegalos = onSnapshot(query(collection(db, 'regalos_pareja'), where('para', '==', uid), where('reclamado', '==', false)), snap => {
       ultimoRegaloRef.current = snap.docs.reduce((ultimo, item) => Math.max(ultimo, obtenerMillis(item.data().creadoEn)), 0);
-      setRecompensasNuevas(snap.docs.length > 0);
+      const siguiente = snap.docs.length > 0;
+      setRecompensasNuevas(actual => actual === siguiente ? actual : siguiente);
     }, () => {});
     return () => {
       activo = false;
@@ -724,7 +725,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   }, [cuidadoRef, participantes]);
 
   useEffect(() => {
-    const interval = setInterval(() => setAhora(Date.now()), 10000);
+    const interval = setInterval(() => setAhora(Date.now()), 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -736,6 +737,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   }, []);
 
   useEffect(() => {
+    if (!ANIMACIONES_AMBIENTALES) return undefined;
     const animation = Animated.loop(Animated.sequence([
       Animated.delay(4200),
       Animated.timing(burbuja, { toValue: 1.07, duration: 280, easing: Easing.out(Easing.quad), useNativeDriver: true }),
@@ -747,12 +749,6 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
 
   const saciedad = calcularSaciedad(cuidado, ahora);
   const estado = estadoSaciedad(saciedad);
-  const saciedadAnimada = useRef(new Animated.Value(saciedad)).current;
-
-  useEffect(() => {
-    Animated.timing(saciedadAnimada, { toValue: saciedad, duration: 180, easing: Easing.out(Easing.quad), useNativeDriver: false }).start();
-  }, [saciedad, saciedadAnimada]);
-
   const alimentar = useCallback(async alimento => {
     if (!uid || !cuidadoRef || alimentandoRef.current || disabled) return;
     const alimentoSeguro = ALIMENTOS.find(item => item.id === alimento?.id) || alimento;
@@ -903,7 +899,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
     </Animated.View>
     <View style={styles.satietyPanel}>
       <View style={styles.satietyTrack}>
-        <Animated.View style={[styles.satietyFill, { height: saciedadAnimada.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }), backgroundColor: saciedadAnimada.interpolate({ inputRange: [0, 15, 40, 70, 100], outputRange: ['#887aa4', '#c65f62', '#d8844f', '#d0a342', '#72a85f'] }) }]} />
+        <View style={[styles.satietyFill, { height: `${saciedad}%`, backgroundColor: estado.color }]} />
         <Text style={styles.satietyPercentage} pointerEvents="none" numberOfLines={1}>{Math.round(saciedad)}%</Text>
       </View>
       <View style={styles.satietyIconWrap}><IconoHambre /></View>
@@ -941,6 +937,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   const { data: userAlimentos } = useUserDocument(data => data?.alimentos || {});
 
   useEffect(() => {
+    if (!ANIMACIONES_AMBIENTALES) return undefined;
     if (arrastreActivo) {
       petBreathScale.stopAnimation();
       petBreathScale.setValue(1);
@@ -968,8 +965,10 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
     if (!uid) return undefined;
     return onSnapshot(doc(db, 'usuarios', uid, 'juegos', 'conexiones'), snap => {
       const datosJuego = snap.data() || {};
-      setNivelJuego(Number.isFinite(datosJuego.nivel) ? datosJuego.nivel : 1);
-      setPartidasCompletadas(Math.max(0, Number(datosJuego.partidasCompletadas) || 0));
+      const siguienteNivel = Number.isFinite(datosJuego.nivel) ? datosJuego.nivel : 1;
+      const siguientesPartidas = Math.max(0, Number(datosJuego.partidasCompletadas) || 0);
+      setNivelJuego(actual => actual === siguienteNivel ? actual : siguienteNivel);
+      setPartidasCompletadas(actual => actual === siguientesPartidas ? actual : siguientesPartidas);
     }, error => console.warn('[Inicio] No se pudo actualizar el progreso de Conexiones', error?.message || error));
   }, []);
 
@@ -978,11 +977,13 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
     if (!uid) return undefined;
     return onSnapshot(doc(db, 'usuarios', uid, 'juegos', 'memoriaSabores'), snap => {
       const nivel = Number(snap.data()?.nivel) || 1;
-      setNivelMemoriaSabores(Math.max(1, Math.min(200, nivel)));
+      const siguienteNivel = Math.max(1, Math.min(200, nivel));
+      setNivelMemoriaSabores(actual => actual === siguienteNivel ? actual : siguienteNivel);
     }, error => console.warn('[Inicio] No se pudo actualizar el progreso de Memoria de Sabores', error?.message || error));
   }, []);
 
   useEffect(() => {
+    if (!ANIMACIONES_AMBIENTALES) return undefined;
     if (arrastreActivo) {
       petIdleScale.stopAnimation();
       petIdleY.stopAnimation();
@@ -1123,14 +1124,15 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   const [relojActividad, setRelojActividad] = useState(Date.now());
 
   useEffect(() => {
-    const interval = setInterval(() => setRelojActividad(Date.now()), 45000);
+    if (!estadoInicio?.pareja || !actividadPareja) return undefined;
+    const interval = setInterval(() => setRelojActividad(Date.now()), 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [actividadPareja, estadoInicio?.pareja]);
 
   useEffect(() => {
     const uidPareja = estadoInicio?.pareja;
     if (!uidPareja) {
-      setActividadPareja(null);
+      setActividadPareja(actual => actual === null ? actual : null);
       return undefined;
     }
     const actividadRef = query(
@@ -1139,8 +1141,13 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
       limit(1),
     );
     return onSnapshot(actividadRef, snap => {
-      setActividadPareja(snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() });
-    }, () => setActividadPareja(null));
+      const siguiente = snap.empty ? null : { id: snap.docs[0].id, ...snap.docs[0].data() };
+      setActividadPareja(actual => {
+        if (!actual && !siguiente) return actual;
+        if (actual?.id === siguiente?.id && actual?.tipo === siguiente?.tipo && actual?.nivel === siguiente?.nivel && actual?.cantidad === siguiente?.cantidad && actual?.creadoEn === siguiente?.creadoEn) return actual;
+        return siguiente;
+      });
+    }, () => setActividadPareja(actual => actual === null ? actual : null));
   }, [estadoInicio?.pareja]);
 
   // Indicador del comerciante: dot si la rotación actual no fue visitada
@@ -1154,7 +1161,8 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
     inicio.setHours(ahora.getHours() < 12 ? 0 : 12);
     const rotacionKey = `${inicio.getFullYear()}-${String(inicio.getMonth() + 1).padStart(2, '0')}-${String(inicio.getDate()).padStart(2, '0')}-${inicio.getHours()}`;
     AsyncStorage.getItem(`indicador_comerciante_${uid}`).then(valor => {
-      setComercianteNuevo(valor !== rotacionKey);
+      const siguiente = valor !== rotacionKey;
+      setComercianteNuevo(actual => actual === siguiente ? actual : siguiente);
     }).catch(() => {});
     return undefined;
   }, []);
@@ -1238,7 +1246,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   return (
     <OverlayContext.Provider value={overlayActive}>
       <View style={[styles.container, style]}>
-        <RoomBackground />
+        <RoomBackground heartDensity="none" />
         <StatusBar hidden={true} />
         <Text style={styles.pruebaHola}>Hola</Text>
         <MoneyMenu />

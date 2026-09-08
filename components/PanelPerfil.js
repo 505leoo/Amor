@@ -44,13 +44,17 @@ export default memo(function PanelPerfil({ navigation }) {
   useEffect(() => {
     if (!loaded) return;
     const d = userData || {};
-    setNombre(d.nombre || auth.currentUser?.displayName || 'amigo');
-    setAvatarUri(d.avatarUri || ICONO_DEFAULT);
-    setFrameId(d.frameId || 'corazon');
+    const siguienteNombre = d.nombre || auth.currentUser?.displayName || 'amigo';
+    const siguienteAvatar = d.avatarUri || ICONO_DEFAULT;
+    const siguienteMarco = d.frameId || 'corazon';
     const currentExp = numeroSeguro(d.exp);
-    setExp(currentExp);
-    setNivel(1 + Math.floor(currentExp / 100));
-    setProfileLoaded(true);
+    const siguienteNivel = 1 + Math.floor(currentExp / 100);
+    setNombre(actual => actual === siguienteNombre ? actual : siguienteNombre);
+    setAvatarUri(actual => actual === siguienteAvatar ? actual : siguienteAvatar);
+    setFrameId(actual => actual === siguienteMarco ? actual : siguienteMarco);
+    setExp(actual => actual === currentExp ? actual : currentExp);
+    setNivel(actual => actual === siguienteNivel ? actual : siguienteNivel);
+    setProfileLoaded(actual => actual || true);
   }, [loaded, userData]);
 
   useEffect(() => {

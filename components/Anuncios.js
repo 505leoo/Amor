@@ -3,11 +3,13 @@ import { Animated, Image as RNImage, Modal, StatusBar, StyleSheet, Text, Touchab
 import { MaterialIcons } from '@expo/vector-icons';
 import { Asset } from 'expo-asset';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
+import { useMusicPlayer } from '../MusicContext';
 
 const EVENTOS_ANUNCIOS = {
   lotes: { titulo: 'Lotes', accesible: 'Ver lote de Ardilla' },
+  prevencion: { titulo: 'Prevención', accesible: 'Leer anuncio de prevención' },
 };
-const EVENTOS_ORDEN = ['lotes'];
+const EVENTOS_ORDEN = ['prevencion', 'lotes'];
 
 const ARDILLA_BASE = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png');
 const ARDILLA_TRAJE_1 = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png');
@@ -179,20 +181,99 @@ function FechaAurora() {
   );
 }
 
-export default function Anuncios({ visible, onClose, onOpen, renderContent, evento = 'lotes' }) {
+const PREVENCION_PARTES = [
+  { eyebrow: 'SEPTIEMBRE', title: 'Mes de la prevención contra el suicidio', body: 'Hablar, escuchar y acompañar también puede salvar vidas.', kind: 'intro' },
+  { eyebrow: 'CADA HISTORIA IMPORTA', title: '1,973\nmuertes por día', body: 'Detrás de cada cifra hay una vida, una historia y personas que la extrañan.', kind: 'stat' },
+  { eyebrow: 'CADA DÍA IMPORTA', title: '60,000\nmuertes por mes', body: 'La prevención empieza cuando dejamos de mirar hacia otro lado.', kind: 'stat' },
+  { eyebrow: 'CADA PERSONA IMPORTA', title: '720,000\nmuertes por año', body: 'Una conversación a tiempo puede abrir una puerta hacia la ayuda.', kind: 'stat' },
+  { eyebrow: 'UN MENSAJE PARA TODOS', title: 'Importas más de lo que crees.', body: 'No estás solo, ni sola...', kind: 'message' },
+  { eyebrow: 'SIGUE AQUÍ', title: 'Tienes que seguir luchando.', body: 'Aunque hoy sea difícil, no tienes que atravesarlo sin compañía.', kind: 'message' },
+  { eyebrow: 'BUSCA APOYO', title: 'Asegúrate de acudir a alguien.', body: 'Una persona de confianza, un profesional de la salud o un servicio de emergencias puede ayudarte.', kind: 'message' },
+  { eyebrow: 'TAMBIÉN PODEMOS CUIDAR', title: 'Estate pendiente de tus seres queridos.', body: 'Escucha sin juzgar, pregunta cómo están y acompáñalos a buscar ayuda.', kind: 'message' },
+  { eyebrow: 'GRACIAS POR ESCUCHAR', title: 'Gracias.', body: 'Cuidarnos también es una forma de esperanza.', kind: 'thanks' },
+];
+
+function Prevencion() {
+  const entradas = useRef(Array.from({ length: 10 }, () => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    const duraciones = [1500, 3000, 1500, 1500, 1500, 3500, 3500, 3500, 3500, 3500];
+    Animated.sequence(duraciones.map((duration, index) => Animated.timing(entradas[index], {
+      toValue: 1,
+      duration,
+      useNativeDriver: true,
+    }))).start();
+  }, [entradas]);
+
+  return (
+    <View pointerEvents="box-none" style={styles.prevencionPage}>
+      <Svg style={styles.prevencionBackdrop} width="100%" height="100%" viewBox="0 0 800 450" preserveAspectRatio="none">
+        <Defs>
+          <RadialGradient id="prevencionRadial" cx="50%" cy="43%" rx="70%" ry="85%">
+            <Stop offset="0" stopColor="#ffffff" />
+            <Stop offset="0.5" stopColor="#d9dce0" />
+            <Stop offset="1" stopColor="#70757c" />
+          </RadialGradient>
+        </Defs>
+        <Path d="M0 0H800V450H0Z" fill="url(#prevencionRadial)" />
+        <Path d="M400 193 L328 -45 H472 Z M400 193 L590 -30 H687 Z M400 193 L849 85 V160 Z M400 193 L850 310 V398 Z M400 193 L585 480 H493 Z M400 193 L216 480 H307 Z M400 193 L-48 311 V399 Z M400 193 L-49 85 V160 Z M400 193 L211 -30 H114 Z" fill="#fff" opacity="0.12" />
+        <Circle cx="400" cy="193" r="188" fill="none" stroke="#fff" strokeWidth="3" opacity="0.25" />
+        <Circle cx="400" cy="193" r="248" fill="none" stroke="#25282c" strokeWidth="2" opacity="0.14" />
+        <Circle cx="400" cy="193" r="300" fill="none" stroke="#fff" strokeWidth="7" opacity="0.12" />
+      </Svg>
+      <View style={styles.prevencionContent}>
+        <Animated.View style={[styles.prevencionHeader, { opacity: entradas[0] }]}>
+          <View style={styles.prevencionHeaderLine} />
+          <Text style={styles.prevencionEyebrow}>SEPTIEMBRE</Text>
+          <View style={styles.prevencionHeaderLine} />
+        </Animated.View>
+        <Animated.Text style={[styles.prevencionTitle, { opacity: entradas[1] }]}>Mes de la prevención{`\n`}contra el suicidio</Animated.Text>
+        <View style={styles.prevencionStatsRow}>
+          {PREVENCION_PARTES.slice(1, 4).map((item, index) => (
+            <Animated.View key={item.title} style={[styles.prevencionStatCard, styles[`prevencionStatCard${index + 1}`], { opacity: entradas[index + 2] }]}>
+              <Text style={styles.prevencionStatText}>{item.title}</Text>
+            </Animated.View>
+          ))}
+        </View>
+        <Animated.View style={[styles.prevencionMessages, { opacity: entradas[5] }]}>
+          <MaterialIcons name="star" size={14} color="#4a5056" />
+          <View style={styles.prevencionMessageCopy}>
+            {PREVENCION_PARTES.slice(4).map((item, index) => (
+              <Animated.View key={item.title} style={[styles.prevencionMessage, { opacity: entradas[index + 5] }]}>
+                <Text style={styles.prevencionMessageTitle}>{item.title}</Text>
+                <Text style={styles.prevencionMessageBody}>{item.body}</Text>
+              </Animated.View>
+            ))}
+          </View>
+          <MaterialIcons name="star" size={14} color="#4a5056" />
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+export default function Anuncios({ visible, onClose, onOpen, renderContent, evento = 'prevencion' }) {
   const opacity = useRef(new Animated.Value(0)).current;
   const closeOpacity = useRef(new Animated.Value(0.45)).current;
+  const { player: musicPlayer } = useMusicPlayer();
   // Este carrusel queda reservado únicamente para el anuncio de Lotes.
   const eventos = EVENTOS_ORDEN;
   const [pagina, setPagina] = useState(0);
   useEffect(() => {
     setPagina(0);
   }, [evento]);
-  const eventoActual = EVENTOS_ANUNCIOS.lotes;
-  const eventoKey = 'lotes';
+  const eventoKey = EVENTOS_ANUNCIOS[evento] ? evento : 'lotes';
+  const eventoActual = EVENTOS_ANUNCIOS[eventoKey];
   const cerrarAnuncio = () => {
     onClose?.();
   };
+
+  useEffect(() => {
+    const volumenNormal = musicPlayer.volume ?? 0.22;
+    if (visible && eventoKey === 'prevencion') musicPlayer.volume = volumenNormal * 0.03;
+    else musicPlayer.volume = volumenNormal;
+    return () => { musicPlayer.volume = volumenNormal; };
+  }, [visible, eventoKey, musicPlayer]);
 
   useEffect(() => {
     const recursos = eventoKey === 'lotes'
@@ -231,7 +312,8 @@ export default function Anuncios({ visible, onClose, onOpen, renderContent, even
         />}
         {eventoKey === 'lotes' && <LoteArdilla />}
         {eventoKey === 'fechas' && <FechaAurora />}
-        {!renderContent && <TouchableOpacity
+        {eventoKey === 'prevencion' && <Prevencion />}
+        {!renderContent && eventoKey === 'lotes' && <TouchableOpacity
           style={[styles.openButtonHit, eventoKey === 'lotes' && styles.openButtonHitLote]}
           activeOpacity={0.82}
           onPress={() => onOpen?.(eventoKey)}
@@ -287,6 +369,28 @@ const styles = StyleSheet.create({
   loteIconIncluded: { color: '#a47c50', fontSize: 6.5, lineHeight: 8, fontWeight: '600' },
   loteButton: { position: 'absolute', bottom: 30, zIndex: 9, minWidth: 128, height: 31, paddingHorizontal: 19, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: '#b97b35', borderWidth: 1.5, borderColor: '#8b5827', shadowColor: '#68401f', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 3, elevation: 9 },
   loteButtonText: { color: '#fffaf0', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  prevencionPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 7, elevation: 7, alignItems: 'center', overflow: 'hidden', backgroundColor: '#d9dce0' },
+  prevencionBackdrop: { ...StyleSheet.absoluteFillObject },
+  prevencionContent: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, alignItems: 'center', overflow: 'hidden' },
+  prevencionHeader: { position: 'absolute', top: '12%', flexDirection: 'row', alignItems: 'center', gap: 9 },
+  prevencionHeaderLine: { width: 34, height: 1, backgroundColor: '#3d4248', opacity: 0.72 },
+  prevencionEyebrow: { color: '#30343a', fontSize: 9, fontWeight: '900', letterSpacing: 2 },
+  prevencionTitle: { position: 'absolute', top: '17%', width: '92%', color: '#202328', fontSize: 31, lineHeight: 37, fontWeight: '900', letterSpacing: 0.4, textAlign: 'center', textShadowColor: 'rgba(255,255,255,0.8)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 2 },
+  prevencionStatTitle: { fontSize: 36, lineHeight: 42, letterSpacing: 1.2 },
+  prevencionMark: { position: 'absolute', top: '39%', width: 86, height: 86, borderRadius: 43, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(35,39,44,0.12)', borderWidth: 1, borderColor: 'rgba(35,39,44,0.3)' },
+  prevencionMarkText: { color: '#24282d', fontSize: 48, lineHeight: 54, fontWeight: '300' },
+  prevencionStatsRow: { position: 'absolute', top: '40%', width: '88%', height: 58, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'center', gap: 0 },
+  prevencionStatCard: { position: 'relative', flex: 1, minHeight: 46, paddingHorizontal: 4, paddingVertical: 5, borderRadius: 0, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.34)', borderWidth: 1, borderColor: 'rgba(35,39,44,0.2)' },
+  prevencionStatCard1: { left: 0, top: 0, borderTopLeftRadius: 11, borderBottomLeftRadius: 11 },
+  prevencionStatCard2: { left: 0, top: 0, marginLeft: -1 },
+  prevencionStatCard3: { right: 0, top: 0, borderTopRightRadius: 11, borderBottomRightRadius: 11, marginLeft: -1 },
+  prevencionStatText: { color: '#272b30', fontSize: 11, lineHeight: 14, fontWeight: '900', textAlign: 'center' },
+  prevencionMessages: { position: 'absolute', top: '64%', width: '92%', minHeight: 132, paddingHorizontal: 7, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderTopWidth: 1, borderBottomWidth: 1, borderColor: 'rgba(48,53,59,0.25)' },
+  prevencionMessageCopy: { flex: 1, flexDirection: 'row', alignItems: 'stretch', justifyContent: 'space-between', gap: 5 },
+  prevencionMessage: { flex: 1, minWidth: 0, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 3 },
+  prevencionMessageTitle: { color: '#24282d', fontSize: 10, lineHeight: 12, fontWeight: '900', textAlign: 'center' },
+  prevencionMessageBody: { marginTop: 2, color: '#4b5158', fontSize: 7.5, lineHeight: 10, fontWeight: '700', textAlign: 'center' },
+  prevencionBody: { marginTop: 23, maxWidth: 330, color: '#3f454c', fontSize: 14, lineHeight: 21, fontWeight: '700', textAlign: 'center' },
   fechaAuroraPage: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, zIndex: 7, elevation: 7, alignItems: 'center', overflow: 'hidden', backgroundColor: '#f8d6e5' },
   fechaAuroraBackdrop: { ...StyleSheet.absoluteFillObject },
   fechaAuroraHeader: { position: 'absolute', top: '5%', flexDirection: 'row', alignItems: 'center', gap: 9 },

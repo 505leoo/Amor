@@ -143,7 +143,27 @@ export default memo(function Pareja({ navigation, isPaused }) {
   const contenidoYaVisible = useRef(contenidoEnCache);
   // Una cadena vacía evita que el hook use por error el documento del usuario
   // actual mientras todavía no existe una pareja seleccionada.
-  const { data: parejaDocumento } = useUserDocument(data => data, pareja || '');
+  const { data: parejaDocumento } = useUserDocument(
+    data => data ? ({
+      nombre: data.nombre,
+      datosCompletos: data.datosCompletos,
+      avatarUri: data.avatarUri,
+      iconoPerfil: data.iconoPerfil,
+      marcoPerfil: data.marcoPerfil,
+      exp: data.exp,
+      ultimaActividad: data.ultimaActividad,
+      rachaDiaria: data.rachaDiaria,
+    }) : null,
+    pareja || '',
+    (a, b) => a?.nombre === b?.nombre
+      && a?.datosCompletos?.nombre === b?.datosCompletos?.nombre
+      && a?.avatarUri === b?.avatarUri
+      && a?.iconoPerfil === b?.iconoPerfil
+      && a?.marcoPerfil === b?.marcoPerfil
+      && a?.exp === b?.exp
+      && a?.ultimaActividad === b?.ultimaActividad
+      && a?.rachaDiaria?.diasConsecutivos === b?.rachaDiaria?.diasConsecutivos,
+  );
   const parejaDataActual = pareja && parejaDocumento ? { id: pareja, ...parejaDocumento } : null;
   // Firestore puede tardar un instante al reconectar el listener. Conservamos
   // el último perfil válido para que la tarjeta no quede vacía entre snapshots.
@@ -162,7 +182,7 @@ export default memo(function Pareja({ navigation, isPaused }) {
 
   useEffect(() => {
     if (isPaused || !uid || !userLoaded) return;
-    setPareja(parejaActual);
+    setPareja(actual => actual === parejaActual ? actual : parejaActual);
   }, [uid, isPaused, userLoaded, parejaActual]);
 
   const contentLoaded = pareja === null ? !loading : Boolean(parejaData);
@@ -181,9 +201,9 @@ export default memo(function Pareja({ navigation, isPaused }) {
       // Una persona que ya está en pareja no puede recibir nuevas
       // invitaciones ni aparecer como opción disponible.
       const disponibles = lista.filter(user => user.id !== uid && !user.pareja);
-      setUsuarios(disponibles);
-      setLoading(false);
-    }).catch(() => setLoading(false));
+      setUsuarios(actual => actual.length === disponibles.length && actual.every((user, index) => user.id === disponibles[index]?.id) ? actual : disponibles);
+      setLoading(actual => actual ? false : actual);
+    }).catch(() => setLoading(actual => actual ? false : actual));
   }, [pareja]);
 
   const [enviados, setEnviados] = useState({});

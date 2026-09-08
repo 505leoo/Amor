@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, Ellipse, Defs, LinearGradient as SvgLinearGradient, Stop } from 'react-native-svg';
@@ -41,7 +41,7 @@ const MoneyStrip = ({ userMoney, diamantes, cartasUniversales }) => (
   </View>
 );
 
-const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles, chicleIcono, showResources = true }) => {
+const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, customAddButton, chicles, chicleIcono, showResources = true, compact = false }) => {
   const isAdmin = auth.currentUser?.email?.toLowerCase() === 'admin@gmail.com';
   const [dineroInterno, setDineroInterno] = useState(null);
   const [diamantesInternos, setDiamantesInternos] = useState(0);
@@ -72,10 +72,9 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
         </View>
       )}
 
-      <TouchableOpacity
+      <Pressable
         onPress={() => { if (onStopMusic) onStopMusic(); onExit(); }}
-        activeOpacity={0.75}
-        style={[styles.touchable, styles.exitTouchable]}
+        style={[styles.touchable, styles.exitTouchable, compact && styles.exitTouchableCompact]}
         accessibilityLabel="Salir"
         hitSlop={7}
       >
@@ -83,7 +82,7 @@ const TabButtons = ({ onExit, userMoney, onAddSticker, onStopMusic, title, custo
           <View pointerEvents="none" style={styles.exitHighlight} />
           <View style={styles.exitInner}><MaterialIcons name="close" size={15} color="#76502d" /></View>
         </View>
-      </TouchableOpacity>
+      </Pressable>
       {showResources && <MoneyStrip userMoney={moneyFinal} diamantes={diamantesInternos} cartasUniversales={cartasInternas} />}
 
       {isAdmin && showResources && <View style={styles.rightButtons} pointerEvents="auto">
@@ -128,6 +127,7 @@ const styles = StyleSheet.create({
     elevation: 14,
   },
   exitTouchable: { position: 'absolute', top: 21, left: 25 },
+  exitTouchableCompact: { top: 5 },
   exitInner: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(238,215,174,0.42)', borderWidth: 1, borderColor: 'rgba(176,126,69,0.42)' },
   exitHighlight: { position: 'absolute', top: 3, left: 8, width: 11, height: 4, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.76)', transform: [{ rotate: '-16deg' }] },
   rightButtons: {

@@ -95,12 +95,12 @@ export default function App() {
   const [loading, setLoading]           = useState(true);
   const [authChecked, setAuthChecked]   = useState(false);
   const [currentScreen, setCurrentScreen] = useState('intro');
+  const [inicioMontado, setInicioMontado] = useState(false);
   const [screenParams, setScreenParams]   = useState({});
   const [isConnected, setIsConnected]   = useState(true);
-  const [inicioReady, setInicioReady]   = useState(false);
   const [temporadaInicio, setTemporadaInicio] = useState('t1');
-  const [tipoAnuncio, setTipoAnuncio] = useState('lotes');
-  const [eventosAnuncio, setEventosAnuncio] = useState(['lotes']);
+  const [tipoAnuncio, setTipoAnuncio] = useState('prevencion');
+  const [eventosAnuncio, setEventosAnuncio] = useState(['prevencion', 'lotes']);
   const [estadoActualizacion, setEstadoActualizacion] = useState('checking');
   const [versionActualizacion, setVersionActualizacion] = useState(null);
   const [descripcionActualizacion, setDescripcionActualizacion] = useState(null);
@@ -112,6 +112,8 @@ export default function App() {
   const lastUpdateCheckRef = useRef(0);
   const updateStatusRef = useRef('checking');
   const updateCandidateRef = useRef(null);
+  const mostrarClickGlobal = useCallback((x, y) => globalClickEffectRef.current?.show(x, y), []);
+  const marcarInicioListo = useCallback(() => {}, []);
 
   useEffect(() => {
     updateStatusRef.current = estadoActualizacion;
@@ -269,7 +271,14 @@ export default function App() {
     global.currentScreen = screenName;
     setCurrentScreen(screenName);
     setScreenParams(params);
+    if (screenName === 'main') setInicioMontado(true);
   }, []);
+
+  // Tras la primera visita, Inicio se conserva montado y oculto mientras se
+  // recorren otras secciones. Evita reconstruir su escena pesada al volver.
+  useEffect(() => {
+    if (currentScreen === 'main') setInicioMontado(true);
+  }, [currentScreen]);
 
   const abrirNoticiasOAnuncios = useCallback(async () => {
     const uid = userRef.current?.uid || 'invitado';
@@ -307,6 +316,10 @@ export default function App() {
     if (!previous) return false;
     showScreen(previous.screen, previous.params);
     return true;
+  }, [showScreen]);
+  const resetApp = useCallback(() => {
+    navigationHistoryRef.current = [];
+    showScreen(auth.currentUser ? 'main' : 'login');
   }, [showScreen]);
 
   const navigation = useRef({ navigate: navigateToScreen, goBack }).current;
@@ -400,7 +413,6 @@ export default function App() {
             if (auth.currentUser?.uid === currentUser.uid) {
               NotificationSystem.notifyPartnerUserEntered(currentUser.uid, currentUser.displayName).catch(() => {});
             }
-            NotificationSystem.setupNotificationListeners();
           }).catch(() => {});
         });
 
@@ -470,7 +482,10 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsub = NetInfo.addEventListener(state => setIsConnected(state.isConnected));
+    const unsub = NetInfo.addEventListener(state => {
+      const nextConnected = state.isConnected !== false;
+      setIsConnected(current => current === nextConnected ? current : nextConnected);
+    });
     return () => unsub();
   }, []);
 
@@ -512,14 +527,11 @@ export default function App() {
 
   return (
     <View style={styles.container}>
-      <AppErrorBoundary onReset={() => {
-        navigationHistoryRef.current = [];
-        showScreen(auth.currentUser ? 'main' : 'login');
-      }}>
+      <AppErrorBoundary onReset={resetApp}>
       <TrofeosProvider>
         <RachaProvider>
         <RachaDailyLogin />
-        <MusicProvider onVisualClick={(x, y) => globalClickEffectRef.current?.show(x, y)}>
+        <MusicProvider onVisualClick={mostrarClickGlobal}>
           <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
 
           {currentScreen === 'intro' && (
@@ -543,12 +555,12 @@ export default function App() {
                     const reportes = reporteSnap.data()?.reportes || {};
                     completo = Boolean(reportes[userRef.current.uid]);
                   }
-                  setTipoAnuncio('lotes');
-                  setEventosAnuncio(completo ? ['lotes', 'fechas'] : ['lotes', 'reporte', 'fechas']);
+                  setTipoAnuncio('prevencion');
+                  setEventosAnuncio(completo ? ['prevencion', 'lotes', 'fechas'] : ['prevencion', 'lotes', 'reporte', 'fechas']);
                   await abrirNoticiasOAnuncios();
                 })().catch(() => {
-                  setTipoAnuncio('lotes');
-                  setEventosAnuncio(['lotes', 'reporte', 'fechas']);
+                  setTipoAnuncio('prevencion');
+                  setEventosAnuncio(['prevencion', 'lotes', 'reporte', 'fechas']);
                   abrirNoticiasOAnuncios();
                 });
                 }}
@@ -582,6 +594,10 @@ export default function App() {
                 setCurrentScreen('reporteSemanal');
               }}
               onClose={() => {
+                if (tipoAnuncio === 'prevencion') {
+                  setTipoAnuncio('lotes');
+                  return;
+                }
                 currentScreenRef.current = 'main';
                 setScreenParams({});
                 setCurrentScreen('main');
@@ -591,7 +607,12 @@ export default function App() {
 
           {currentScreen === 'login'    && <Login    navigation={navigation} temporada={temporadaInicio} />}
           {currentScreen === 'register' && <Register navigation={navigation} temporada={temporadaInicio} />}
-          {currentScreen === 'main'     && <Inicio   navigation={navigation} openReporteSemanal={screenParams?.openReporteSemanal} onReady={() => setInicioReady(true)} />}
+          {(currentScreen === 'main' || inicioMontado) && <Inicio
+            navigation={navigation}
+            openReporteSemanal={currentScreen === 'main' ? screenParams?.openReporteSemanal : false}
+            onReady={marcarInicioListo}
+            style={currentScreen === 'main' ? undefined : styles.screenHidden}
+          />}
           {currentScreen === 'reporteSemanal' && <ReporteSemanal onTerminado={() => { currentScreenRef.current = 'main'; setCurrentScreen('main'); }} />}
           {currentScreen === 'coleccion'       && <Coleccion        navigation={navigation} />}
           {currentScreen === 'tienda'          && <Tienda           navigation={navigation} />}
@@ -644,6 +665,7 @@ export default function App() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  screenHidden: { display: 'none' },
   boot: { flex: 1, backgroundColor: '#8f9295' },
   bootOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#8f9295', zIndex: 9999, elevation: 9999 },
 });

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, View } from 'react-native';
 import { setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
@@ -15,15 +15,35 @@ export const useMusicPlayer = () => {
   return context;
 };
 
+// Los estados del reproductor se actualizan periódicamente. Mantenerlos en un
+// hijo aislado evita que cada pulso de audio vuelva a reconciliar toda la app.
+const PlaybackController = ({ player, enterPlayer, enabled, appActiva }) => {
+  const status = useAudioPlayerStatus(player);
+  const enterStatus = useAudioPlayerStatus(enterPlayer);
+  const entradaReproducida = useRef(false);
+
+  useEffect(() => {
+    if (!enterStatus.isLoaded || entradaReproducida.current) return;
+    entradaReproducida.current = true;
+    enterPlayer.seekTo(0).then(() => enterPlayer.play()).catch(() => {});
+  }, [enterPlayer, enterStatus.isLoaded]);
+
+  useEffect(() => {
+    if (!status.isLoaded) return;
+    if (enabled && appActiva.current) {
+      if (!status.playing) player.play();
+    } else if (status.playing) player.pause();
+  }, [enabled, player, status.isLoaded, status.playing, appActiva]);
+
+  return null;
+};
+
 export const MusicProvider = ({ children, onVisualClick }) => {
   const player = useAudioPlayer(UKELELE, { downloadFirst: true, updateInterval: 500 });
   const clickPlayer = useAudioPlayer(CLICK, { downloadFirst: true, updateInterval: 1000 });
   const enterPlayer = useAudioPlayer(ENTER, { downloadFirst: true, updateInterval: 1000 });
-  const status = useAudioPlayerStatus(player);
-  const enterStatus = useAudioPlayerStatus(enterPlayer);
   const [habilitada, setHabilitada] = useState(true);
   const appActiva = useRef(AppState.currentState === 'active');
-  const entradaReproducida = useRef(false);
   const toqueInicial = useRef(null);
   const ultimoClick = useRef(0);
 
@@ -45,19 +65,6 @@ export const MusicProvider = ({ children, onVisualClick }) => {
   }, [clickPlayer, enterPlayer, player]);
 
   useEffect(() => {
-    if (!enterStatus.isLoaded || entradaReproducida.current) return;
-    entradaReproducida.current = true;
-    enterPlayer.seekTo(0).then(() => enterPlayer.play()).catch(() => {});
-  }, [enterPlayer, enterStatus.isLoaded]);
-
-  useEffect(() => {
-    if (!status.isLoaded) return;
-    if (habilitada && appActiva.current) {
-      if (!status.playing) player.play();
-    } else if (status.playing) player.pause();
-  }, [habilitada, player, status.isLoaded, status.playing]);
-
-  useEffect(() => {
     const subscription = AppState.addEventListener('change', nextState => {
       appActiva.current = nextState === 'active';
       if (appActiva.current && habilitada) player.play();
@@ -66,21 +73,21 @@ export const MusicProvider = ({ children, onVisualClick }) => {
     return () => subscription.remove();
   }, [habilitada, player]);
 
-  const pausar = () => { setHabilitada(false); player.pause(); };
-  const reproducir = () => { setHabilitada(true); if (appActiva.current) player.play(); };
-  const alternar = () => habilitada ? pausar() : reproducir();
-  const reproducirClick = () => {
+  const pausar = useCallback(() => { setHabilitada(false); player.pause(); }, [player]);
+  const reproducir = useCallback(() => { setHabilitada(true); if (appActiva.current) player.play(); }, [player]);
+  const alternar = useCallback(() => habilitada ? pausar() : reproducir(), [habilitada, pausar, reproducir]);
+  const reproducirClick = useCallback(() => {
     const ahora = Date.now();
     if (ahora - ultimoClick.current < CLICK_COOLDOWN_MS) return;
     ultimoClick.current = ahora;
     clickPlayer.seekTo(0).then(() => clickPlayer.play()).catch(() => {});
-  };
+  }, [clickPlayer]);
 
-  const comenzarToque = event => {
+  const comenzarToque = useCallback(event => {
     const touch = event.nativeEvent;
     toqueInicial.current = { x: touch.pageX, y: touch.pageY, at: Date.now() };
-  };
-  const terminarToque = event => {
+  }, []);
+  const terminarToque = useCallback(event => {
     const inicio = toqueInicial.current;
     toqueInicial.current = null;
     if (!inicio) return;
@@ -90,13 +97,16 @@ export const MusicProvider = ({ children, onVisualClick }) => {
       onVisualClick?.(touch.pageX || inicio.x, touch.pageY || inicio.y);
       reproducirClick();
     }
-  };
+  }, [onVisualClick, reproducirClick]);
 
-  return <MusicContext.Provider value={{
-    player, status, isPlaying: Boolean(status.playing), enabled: habilitada,
+  const value = useMemo(() => ({
+    player, status: null, isPlaying: habilitada && appActiva.current, enabled: habilitada,
     currentMusicUrl: UKELELE, trackName: 'Ukelele',
     pause: pausar, play: reproducir, toggle: alternar, playClick: reproducirClick,
-  }}>
+  }), [alternar, habilitada, pausar, player, reproducir, reproducirClick]);
+
+  return <MusicContext.Provider value={value}>
+    <PlaybackController player={player} enterPlayer={enterPlayer} enabled={habilitada} appActiva={appActiva} />
     <View
       style={{ flex: 1 }}
       onTouchStart={comenzarToque}

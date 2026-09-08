@@ -10,6 +10,16 @@ export const META_RACHA_DIARIA = 10;
 export const META_RACHA_TOTAL = 100;
 export const PUNTOS_POR_DIA_RACHA = 10;
 export const BONUS_DIA_RACHA = 5;
+const shallowEqual = (a = {}, b = {}) => {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  return keysA.length === keysB.length && keysA.every(key => a[key] === b[key]);
+};
+const equalDay = (a = {}, b = {}) => {
+  const keysA = Object.keys(a).filter(key => key !== 'actualizadoEn' && key !== 'completadoEn');
+  const keysB = Object.keys(b).filter(key => key !== 'actualizadoEn' && key !== 'completadoEn');
+  return keysA.length === keysB.length && keysA.every(key => a[key] === b[key]);
+};
 export const PENALIZACION_DIA_SIN_AVANCE = 3;
 export const PENALIZACION_AVANCE_ESTANCADO = 5;
 export const MAX_CONDUCTA_EVENTOS = 24;
@@ -240,7 +250,7 @@ export function RachaProvider({ children }) {
       // como alias, pero el total de la racha vive en `puntosTotales`.
       const puntosDia = documentoTienePuntos ? puntosConductaSeguro(datos.puntosDia ?? datos.puntos) : puntosConductaRef.current;
       const puntosTotales = puntosAcumulados(datos.puntosTotales);
-      setDay({
+      const siguienteDia = {
         ...emptyDay(dayKey),
         ...datos,
         _documentoTienePuntos: documentoTienePuntos,
@@ -248,8 +258,9 @@ export function RachaProvider({ children }) {
         puntosDia,
         puntosTotales,
         completado: Boolean(datos.completado || puntosDia >= META_RACHA_DIARIA),
-      });
-      setLoading(false);
+      };
+      setDay(actual => equalDay(actual, siguienteDia) ? actual : siguienteDia);
+      setLoading(actual => actual ? false : actual);
     }, () => setLoading(false));
     const unsubscribeUser = onSnapshot(userRef, snapshot => {
       const nextRacha = snapshot.data()?.rachaDiaria || {};
@@ -263,8 +274,10 @@ export function RachaProvider({ children }) {
         puntosDia: puntosConducta,
         completado: puntosConducta >= META_RACHA_DIARIA,
       } : current);
-      setRacha({ ...nextRacha, puntosTotales, puntosConducta });
-      setStreakDays(Math.max(0, Number(nextRacha.diasConsecutivos) || diasDerivados));
+      const siguienteRacha = { ...nextRacha, puntosTotales, puntosConducta };
+      setRacha(actual => shallowEqual(actual, siguienteRacha) ? actual : siguienteRacha);
+      const siguientesDias = Math.max(0, Number(nextRacha.diasConsecutivos) || diasDerivados);
+      setStreakDays(actual => actual === siguientesDias ? actual : siguientesDias);
     }, () => { setRacha({ diasConsecutivos: 0 }); puntosConductaRef.current = 0; setStreakDays(0); });
     return () => { unsubscribeDay(); unsubscribeUser(); };
   }, [dayKey, uid]);
