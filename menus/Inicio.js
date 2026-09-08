@@ -1280,35 +1280,12 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
         </Animated.View>
         {estadoInicio?.animalito && <CuidadoAnimal parejaUid={estadoInicio?.pareja} targetRef={petDropZoneRef} disabled={overlayActive} onFed={reaccionarAlComer} dropRef={feedDropRef} hoverRef={feedHoverRef} onZoneChange={setZonaAlimentar} draggingRef={draggingRef} />}
         {foodFeedback && <Animated.View key={foodFeedback.key} style={styles.foodFeedback}><Text style={styles.foodFeedbackEmoji}>{foodFeedback.emoji}</Text><Text style={styles.foodFeedbackText}>+{foodFeedback.recuperado}</Text></Animated.View>}
-        <TouchableOpacity style={styles.changeButton} onPress={() => navigation?.navigate('animalitos')} activeOpacity={0.78}>
-          <MaterialIcons name="swap-horiz" size={20} color="#c58b2d" />
-          <Text style={styles.changeButtonText}>Cambiar</Text>
-        </TouchableOpacity>
-        <AlimentoArrastrable
-          alimento={selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex] : ALIMENTOS[0]}
-          cantidad={selectedFoodIndex >= 0 ? Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0) : 0}
-          disabled={overlayActive || !estadoInicio?.animalito || selectedFoodIndex < 0}
-          onDrop={(alimento, x, y) => feedDropRef.current?.(alimento, x, y)}
-          onDragMove={(x, y) => feedHoverRef.current?.(x, y)}
-          draggingRef={draggingRef}
-          onDragState={setArrastreActivo}
-          renderContent={({ ocultarIcono } = {}) => selectedFoodIndex < 0 ? <><Text style={[styles.foodSelectEmoji, ocultarIcono && styles.foodOriginalIconHidden]}>🍖</Text><Text style={styles.foodSelectLabel}>Alimentar</Text></> : <><Text style={[styles.foodSelectEmoji, ocultarIcono && styles.foodOriginalIconHidden]}>{ALIMENTOS[selectedFoodIndex]?.emoji}</Text><Text style={styles.foodSelectCount}>{Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0)}</Text></>}
-          style={styles.foodSelectButton}
-          dragPreview
-          onPress={seleccionarAlimento}
-        />
         {avisoSeleccion && <View style={[styles.feedNotice, styles.feedNoticeSelection]} pointerEvents="none"><Text style={styles.feedNoticeText}>{avisoSeleccion}</Text></View>}
-        <TouchableOpacity style={styles.skinButton} onPress={() => navigation?.navigate('animalitos', { mode: 'skins' })} activeOpacity={0.78}>
-          <MaterialIcons name="checkroom" size={21} color="#c58b2d" />
-          <Text style={styles.skinButtonText}>Skin</Text>
-        </TouchableOpacity>
         <Pareja navigation={navigation} isPaused={overlayActive} />
         <PanelPerfil navigation={navigation} />
         <View style={styles.canjearWrap}>
-          <TouchableOpacity style={styles.canjearBtn} hitSlop={6} activeOpacity={0.75} onPress={() => navigation?.navigate('canjear')}>
-            <View style={styles.canjearIcon}><MaterialIcons name="confirmation-number" size={20} color="#f8edf4" /></View>
-            <View style={styles.canjearInfo}><Text style={styles.canjearText}>CANJEAR</Text><Text style={styles.canjearSubtext}>Código y QR</Text></View>
-            <MaterialIcons name="chevron-right" size={22} color="#76552f" />
+          <TouchableOpacity style={styles.canjearBtn} hitSlop={6} activeOpacity={0.75} onPress={() => navigation?.navigate('animalitos')}>
+            <View style={styles.canjearIcon}><MaterialIcons name="pets" size={20} color="#f8edf4" /></View>
           </TouchableOpacity>
         </View>
         <View style={styles.accesosInicioWrap}>
@@ -1320,10 +1297,19 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
             <MaterialIcons name="local-fire-department" size={19} color="#c46d83" />
             <Text style={styles.accesoInicioText}>Racha</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.accesoInicioBtn, styles.accesoInicioLast, !puedeAbrirColeccion && styles.accesoInicioDisabled]} onPress={() => puedeAbrirColeccion && navigation?.navigate('coleccion')} disabled={!puedeAbrirColeccion} activeOpacity={0.75}>
-            <MaterialIcons name="collections-bookmark" size={19} color={puedeAbrirColeccion ? '#6d91a8' : '#aaa49a'} />
-            <Text style={[styles.accesoInicioText, !puedeAbrirColeccion && styles.accesoInicioTextDisabled]}>Colección</Text>
-          </TouchableOpacity>
+          <AlimentoArrastrable
+            alimento={selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex] : ALIMENTOS[0]}
+            cantidad={selectedFoodIndex >= 0 ? Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0) : 0}
+            disabled={overlayActive || !estadoInicio?.animalito || selectedFoodIndex < 0}
+            onDrop={(alimento, x, y) => feedDropRef.current?.(alimento, x, y)}
+            onDragMove={(x, y) => feedHoverRef.current?.(x, y)}
+            draggingRef={draggingRef}
+            onDragState={setArrastreActivo}
+            renderContent={({ ocultarIcono } = {}) => <><Text style={[styles.foodSelectEmoji, ocultarIcono && styles.foodOriginalIconHidden]}>{selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex]?.emoji : '🍖'}</Text>{selectedFoodIndex >= 0 && <Text style={styles.foodSelectCount}>{Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0)}</Text>}</>}
+            style={[styles.accesoInicioBtn, styles.accesoInicioLast, styles.foodAccessButton]}
+            dragPreview
+            onPress={seleccionarAlimento}
+          />
         </View>
         {inventarioAbierto && <InventarioModal visible onClose={() => setInventarioAbierto(false)} />}
         <RachaVisualModal visible={rachaAbierta} onClose={() => { setRachaAbierta(false); setOverlayActive(false); }} />
@@ -1331,15 +1317,11 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
         <View style={styles.temporadasQuickWrap}>
           <TouchableOpacity style={[styles.temporadasQuickBtn, !puedeAbrirColeccion && styles.temporadasQuickDisabled]} hitSlop={6} activeOpacity={0.75} onPress={() => puedeAbrirColeccion && navigation?.navigate('temporadas')} disabled={!puedeAbrirColeccion}>
             <View style={[styles.temporadasQuickIcon, !puedeAbrirColeccion && styles.temporadasQuickIconDisabled]}><MaterialIcons name="event" size={20} color={puedeAbrirColeccion ? '#fff8dc' : '#aaa49a'} /></View>
-            <View style={styles.canjearInfo}><Text style={[styles.temporadasQuickTitle, !puedeAbrirColeccion && styles.temporadasQuickTextDisabled]}>Temporadas</Text><Text style={[styles.temporadasQuickSub, !puedeAbrirColeccion && styles.temporadasQuickTextDisabled]}>Eventos y recompensas</Text></View>
-            <MaterialIcons name="chevron-right" size={21} color={puedeAbrirColeccion ? '#76552f' : '#aaa49a'} />
           </TouchableOpacity>
         </View>
         <View style={styles.comercianteQuickWrap}>
           <TouchableOpacity style={styles.comercianteQuickBtn} activeOpacity={0.75} onPress={abrirComerciante}>
             <View style={styles.comercianteQuickIcon}><MaterialIcons name="storefront" size={19} color="#f4fff0" /></View>
-            <View style={styles.comercianteInfo}><Text style={styles.comercianteTitle}>COMERCIANTE</Text><Text style={styles.comercianteSub}>Intercambia objetos</Text></View>
-            <MaterialIcons name="chevron-right" size={21} color="#466a50" />
             {comercianteNuevo && <View style={styles.unreadDotVerde} />}
           </TouchableOpacity>
         </View>
@@ -1510,6 +1492,7 @@ const styles = StyleSheet.create({
   skinButton: { position: 'absolute', left: 315, bottom: 6, width: 36, height: 41, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 500, zIndex: 500 },
   skinButtonText: { color: '#76552f', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', marginTop: 1 },
   foodSelectButton: { position: 'absolute', left: 357, bottom: 6, width: 36, height: 41, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 500, zIndex: 500, flexDirection: 'column' },
+  foodAccessButton: { position: 'relative', left: undefined, bottom: undefined, zIndex: 20, elevation: 20 },
   foodSelectTouch: { alignItems: 'center', justifyContent: 'center' },
   foodOriginalIconHidden: { opacity: 0 },
   foodSelectEmoji: { fontSize: 15, lineHeight: 17, textAlign: 'center' },
@@ -1523,29 +1506,29 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{ translateX: -350 }, { translateY: -98 }],
+    transform: [{ translateX: -350 }, { translateY: -47 }],
     zIndex: 200,
     elevation: 200,
   },
   canjearBtn: {
-    width: 150, height: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5,
+    width: 38, height: 38, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2,
     borderRadius: 8, backgroundColor: '#e4d5df', borderWidth: 1, borderColor: '#b995af',
     shadowColor: '#513c55', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 7, elevation: 9,
   },
   canjearText: {
     fontSize: 8, fontWeight: '900', color: '#593b57', letterSpacing: 0.2, fontFamily: 'Delius',
   },
-  canjearIcon: { width: 26, height: 26, borderRadius: 6, backgroundColor: '#80557f', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f3e8ed' },
+  canjearIcon: { width: 25, height: 25, borderRadius: 7, backgroundColor: '#80557f', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#f3e8ed' },
   canjearInfo: { flex: 1, marginLeft: 6 },
   canjearSubtext: { color: '#704b6b', fontFamily: 'Delius', fontSize: 6, fontWeight: '700', marginTop: 0 },
-  temporadasQuickWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: -47 }], zIndex: 200, elevation: 200 },
+  temporadasQuickWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: -98 }], zIndex: 200, elevation: 200 },
   comercianteQuickWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: 4 }], zIndex: 200, elevation: 200 },
-  temporadasQuickBtn: { width: 150, height: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, borderRadius: 8, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 7, elevation: 9 },
-  temporadasQuickIcon: { width: 26, height: 26, borderRadius: 6, backgroundColor: '#b07a43', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fff0c5' },
+  temporadasQuickBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, borderRadius: 8, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 7 },
+  temporadasQuickIcon: { width: 25, height: 25, borderRadius: 7, backgroundColor: '#b07a43', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fff0c5' },
   temporadasQuickTitle: { color: '#65492f', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900', letterSpacing: 0.15 },
   temporadasQuickSub: { color: '#80613d', fontFamily: 'Delius', fontSize: 6, fontWeight: '700', marginTop: 0 },
-  comercianteQuickBtn: { width: 150, height: 44, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 5, borderRadius: 8, backgroundColor: '#dce9dc', borderWidth: 1, borderColor: '#a8c4a9', shadowColor: '#405744', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.28, shadowRadius: 7, elevation: 9 },
-  comercianteQuickIcon: { width: 26, height: 26, borderRadius: 6, backgroundColor: '#6f9876', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#eff9e9' },
+  comercianteQuickBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, borderRadius: 8, backgroundColor: '#dce9dc', borderWidth: 1, borderColor: '#a8c4a9', shadowColor: '#405744', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 7 },
+  comercianteQuickIcon: { width: 25, height: 25, borderRadius: 7, backgroundColor: '#6f9876', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#eff9e9' },
   comercianteInfo: { flex: 1, marginLeft: 6 },
   comercianteTitle: { color: '#3f6348', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900' },
   comercianteSub: { color: '#56745c', fontFamily: 'Delius', fontSize: 6, fontWeight: '700' },

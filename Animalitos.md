@@ -156,21 +156,27 @@ No usar nombres temporales como `icono-nuevo`, `icono-prueba` o `icono-final2`.
 
 1. Inspeccionar visualmente todas las bases y varias skins existentes.
 2. Definir por escrito la especie, rareza, paleta, habilidad y concepto de las skins.
-3. Generar solamente la base.
-4. Revisar la base antes de generar skins:
+3. Generar solamente la base, pidiendo expresamente un PNG RGBA con canal alfa real. No pedir ni aceptar un damero dibujado como representación visual de transparencia.
+4. Antes de aprobar visualmente la base, comprobar técnicamente el archivo:
+   - Debe informar modo `RGBA`, no `RGB`.
+   - El canal alfa debe contener valores transparentes y opacos, idealmente un rango `(0, 255)`.
+   - Las cuatro esquinas deben tener alfa cero.
+   - Si el archivo es `RGB`, tiene fondo incrustado o muestra un damero dentro de sus píxeles, se rechaza inmediatamente y se regenera la base. No se crean skins a partir de ese archivo.
+5. Revisar la base antes de generar skins:
    - ¿Parece parte de la misma colección?
    - ¿Se entiende la especie?
    - ¿Se nota la botarga?
    - ¿Tiene un único rostro?
    - ¿El encuadre coincide con los demás?
-5. Corregir la base hasta que esté aprobada.
-6. Usar la base aprobada como referencia principal para cada skin.
-7. Generar cada skin por separado.
-8. Verificar dimensiones y formato antes de conectar los archivos al código: transparencia real para base y skins; fondo opaco de borde a borde para el icono.
-9. Integrar el Animalito en todos los sistemas correspondientes.
-10. Ejecutar la validación del proyecto.
+6. Corregir la base hasta que esté aprobada visual y técnicamente.
+7. Usar únicamente esa base RGBA aprobada como referencia principal para cada skin.
+8. Generar cada skin por separado, exigiendo también PNG RGBA con alfa real desde el prompt inicial.
+9. Validar cada skin inmediatamente después de generarla y antes de continuar con la siguiente. Si una skin es `RGB`, no generar más variantes hasta corregir el proceso.
+10. Verificar dimensiones y formato antes de conectar los archivos al código: transparencia real para base y skins; fondo opaco de borde a borde para el icono.
+11. Integrar el Animalito en todos los sistemas correspondientes.
+12. Ejecutar la validación del proyecto.
 
-No se deben generar las skins a partir de una base todavía dudosa. Cualquier error de identidad se propaga y resulta más costoso corregirlo después.
+No se deben generar las skins a partir de una base todavía dudosa ni de una base `RGB`. Cualquier error de identidad o transparencia se propaga y obliga a procesar varias imágenes nuevamente.
 
 ## 7. Estructura de carpetas y nombres
 
@@ -238,7 +244,9 @@ Silueta muy redonda, compacta y ancha; vista frontal; ojos grandes marrones
 con reflejos blancos; mejillas rosadas; textura de acuarela y papel; contorno
 chocolate grueso e irregular; formas infantiles y legibles.
 
-Lienzo cuadrado con fondo realmente transparente. Personaje completo,
+Lienzo cuadrado en PNG RGBA con canal alfa real y esquinas con alfa cero.
+La transparencia debe existir en los datos del archivo: no dibujar ni mostrar
+un damero gris y blanco. Personaje completo,
 centrado, ocupando alrededor del 75 % del lienzo. Sin piso, sombra, escenario,
 marco, texto, logotipo, marca de agua ni personajes adicionales.
 ```
@@ -263,6 +271,8 @@ formas redondeadas.
 Debe existir exactamente un rostro. No duplicar ojos, pico, nariz, boca,
 orejas ni otros rasgos. No tapar los ojos. Fondo realmente transparente, sin
 damero incrustado, piso, sombra, texto, marco, logotipo o marca de agua.
+El archivo final debe ser PNG RGBA, tener esquinas con alfa cero y conservar
+un rango real de transparencia; una imagen `RGB` no se considera terminada.
 ```
 
 ## 11. Integración en el catálogo central
@@ -344,7 +354,7 @@ Los Animalitos son assets generales: no dependen de una temporada para existir n
 
 - `Aire`: Halcón y Loro.
 - `Agua`: Ajolote y Pez Globo.
-- `Tierra`: Ardilla, Erizo y Gato.
+- `Tierra`: Ardilla, Erizo, Gato y Mono.
 - No hay que añadir condiciones de temporada en `Player`, `Perfil`, `Animalitos` o `Comerciante`.
 - Si tendrá un evento o lote propio, se configura como método de desbloqueo, sin mover sus assets fuera de `assets/Animalitos/`.
 

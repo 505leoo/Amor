@@ -8,9 +8,9 @@ import { auth, db } from './firebaseConfig';
 import RoomBackground from './components/RoomBackground';
 import TabButtons from './components/TabButtons';
 import Loading from './components/Loading';
-import AnimalitoShowcase from './components/AnimalitoShowcase';
+import AnimalitoShowcase, { ThemeMark } from './components/AnimalitoShowcase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
+import { ANIMALITOS, SKINS, TEMATICAS_SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 import { obtenerIconoLocal } from './data/iconosLocales';
 
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
@@ -112,6 +112,13 @@ const RECOMPENSAS_NIVEL = {
     { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
     { nivel: 100, tipo: 'skin', skinId: 'gatot1', icono: '🍓', titulo: 'Nube de Fresa' },
   ],
+  mono: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1200, icono: '🪙', titulo: '1.200 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 45, icono: '◆', titulo: '45 diamantes' },
+    { nivel: 25, tipo: 'iconoLocal', iconoId: 'mono_selva_dorada', icono: '✦', titulo: 'Selva Dorada' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+    { nivel: 100, tipo: 'skin', skinId: 'monot1', icono: '🍌', titulo: 'Banana Tropical' },
+  ],
 };
 
 const Animalitos = ({ navigation, mode }) => {
@@ -132,6 +139,7 @@ const Animalitos = ({ navigation, mode }) => {
   const [recompensasReclamadas, setRecompensasReclamadas] = useState({});
   const [previewRecompensa, setPreviewRecompensa] = useState(null);
   const [tematicaAbierta, setTematicaAbierta] = useState(null);
+  const [skinTemaIndex, setSkinTemaIndex] = useState(0);
   const [iconosPorIdentificador, setIconosPorIdentificador] = useState({});
   const [skinsDesbloqueadas, setSkinsDesbloqueadas] = useState({});
   const [soloDesbloqueados, setSoloDesbloqueados] = useState(false);
@@ -420,10 +428,20 @@ const Animalitos = ({ navigation, mode }) => {
   const puedeMejorar = animalDesbloqueado && estadoMostrado.totalCartas >= cartasNecesarias && dinero >= costoMejora;
   const progresoCartas = Math.min(100, (estadoMostrado.totalCartas / Math.max(1, cartasNecesarias)) * 100);
   const recompensasMostradas = RECOMPENSAS_NIVEL[animalMostradoId] || [];
+  const recompensasCercanas = recompensasMostradas
+    .filter(recompensa => !recompensasReclamadas?.[animalMostradoId]?.[recompensa.nivel])
+    .sort((a, b) => Math.max(0, a.nivel - estadoMostrado.nivel) - Math.max(0, b.nivel - estadoMostrado.nivel))
+    .slice(0, 2);
   const tematicasAnimalMostrado = [...new Set(SKINS
-    .filter(skin => skin.animalId === animalMostradoId && skin.tematica !== 'Originales')
-    .map(skin => skin.tematica))];
-  const skinsTematicaAbierta = tematicaAbierta ? SKINS.filter(skin => skin.tematica === tematicaAbierta) : [];
+    .filter(skin => skin.animalId === animalMostradoId)
+    .flatMap(skin => skin.tematicas || [skin.tematica])
+    .filter(nombre => nombre !== 'Originales'))].map(nombre => ({ nombre, ...(TEMATICAS_SKINS[nombre] || {}) }));
+  const skinsTematicaAbierta = tematicaAbierta ? SKINS.filter(skin => skin.tematicas?.includes(tematicaAbierta) || skin.tematica === tematicaAbierta) : [];
+  const indicesTematicaVisibles = skinsTematicaAbierta.length <= 7
+    ? skinsTematicaAbierta.map((_, index) => index)
+    : [-3, -2, -1, 0, 1, 2, 3].map(offset => (skinTemaIndex + offset + skinsTematicaAbierta.length) % skinsTematicaAbierta.length);
+  const cambiarTematica = nombre => { setTematicaAbierta(nombre); setSkinTemaIndex(0); };
+  const tematicasDisponibles = Object.keys(TEMATICAS_SKINS).filter(nombre => nombre !== 'Originales' && SKINS.some(skin => skin.tematicas?.includes(nombre) || skin.tematica === nombre));
   const animalitosOrdenados = [...animalitosFiltrados]
     .filter(animal => desbloqueados.includes(animal.id))
     .sort((a, b) => {
@@ -509,7 +527,7 @@ const Animalitos = ({ navigation, mode }) => {
               equipando={equipandoShowcase}
               onCartas={() => navigation?.navigate?.('comerciante')}
               tematicas={tematicasAnimalMostrado}
-              onVerTematica={setTematicaAbierta}
+              onVerTematica={cambiarTematica}
               onMejorar={() => manejarMejora(animalMostrado.id)}
               onEquipar={async skin => {
                 const uid = auth.currentUser?.uid;
@@ -544,7 +562,7 @@ const Animalitos = ({ navigation, mode }) => {
                 }
               }}
             >
-              <Text style={s.animalitoSimpleSectionTitle}>RECOMPENSAS</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.animalitoSimpleRewards}>{recompensasMostradas.map(recompensa => { const disponible = estadoMostrado.nivel >= recompensa.nivel; const reclamada = Boolean(recompensasReclamadas?.[animalMostradoId]?.[recompensa.nivel]); return <TouchableOpacity key={recompensa.nivel} disabled={!disponible || reclamada} onPress={() => reclamarRecompensaNivel(recompensa)} style={[s.animalitoSimpleReward, disponible && s.animalitoSimpleRewardReady]} activeOpacity={0.8}><Text style={s.animalitoSimpleRewardLevel}>NV. {recompensa.nivel}</Text><Text style={s.animalitoSimpleRewardIcon}>{recompensa.icono}</Text><Text style={s.animalitoSimpleRewardName} numberOfLines={2}>{reclamada ? 'Reclamado' : recompensa.titulo}</Text></TouchableOpacity>; })}</ScrollView>
+              <View style={s.recompensasCompactas}>{recompensasCercanas.map(recompensa => { const disponible = estadoMostrado.nivel >= recompensa.nivel; return <TouchableOpacity key={recompensa.nivel} disabled={!disponible} onPress={() => reclamarRecompensaNivel(recompensa)} style={[s.animalitoSimpleReward, disponible && s.animalitoSimpleRewardReady]} activeOpacity={0.8}><Text style={s.animalitoSimpleRewardLevel}>NV. {recompensa.nivel}</Text><Text style={s.animalitoSimpleRewardIcon}>{recompensa.icono}</Text><Text style={s.animalitoSimpleRewardName} numberOfLines={1}>{recompensa.titulo}</Text></TouchableOpacity>; })}</View>
             </AnimalitoShowcase>}
           </View>
         </View>
@@ -554,15 +572,10 @@ const Animalitos = ({ navigation, mode }) => {
             <View style={s.tematicaModalTarjeta}>
               <TouchableOpacity style={s.tematicaModalCerrar} onPress={() => setTematicaAbierta(null)} hitSlop={8}><MaterialIcons name="close" size={18} color="#76502d" /></TouchableOpacity>
               <Text style={s.tematicaModalEyebrow}>COLECCIÓN DE TRAJES</Text>
-              <Text style={s.tematicaModalTitulo}>{tematicaAbierta}</Text>
-              <Text style={s.tematicaModalTexto}>Skins de distintos Animalitos que comparten esta temática.</Text>
-              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.tematicaModalLista}>
-                {skinsTematicaAbierta.map(skin => <TouchableOpacity key={skin.id} style={[s.tematicaSkin, { backgroundColor: skin.fondoRareza, borderColor: skin.colorRareza }]} onPress={() => { setSeleccionado(ANIMALITOS.find(animal => animal.id === skin.animalId)); setTematicaAbierta(null); }} activeOpacity={0.82}>
-                  <Image source={skin.imagen} style={s.tematicaSkinImagen} contentFit="contain" cachePolicy="memory" />
-                  <View style={s.tematicaSkinInfo}><Text style={s.tematicaSkinAnimal}>{skin.animalNombre}</Text><Text style={s.tematicaSkinNombre}>{skin.nombre}</Text><Text style={s.tematicaSkinRareza}>{skin.rareza}</Text></View>
-                  <MaterialIcons name="chevron-right" size={20} color="#7c6654" />
-                </TouchableOpacity>)}
-              </ScrollView>
+              <View style={s.tematicaTituloNavegacion}><TouchableOpacity onPress={() => cambiarTematica(tematicasDisponibles[(tematicasDisponibles.indexOf(tematicaAbierta) - 1 + tematicasDisponibles.length) % tematicasDisponibles.length])} style={s.tematicaFlecha} accessibilityLabel="Temática anterior"><MaterialIcons name="chevron-left" size={24} color="#76502d" /></TouchableOpacity><View style={s.tematicaModalTituloFila}><View style={s.tematicaModalIcono}><ThemeMark tematica={{ nombre: tematicaAbierta }} /></View><Text style={s.tematicaModalTitulo}>{tematicaAbierta}</Text></View><TouchableOpacity onPress={() => cambiarTematica(tematicasDisponibles[(tematicasDisponibles.indexOf(tematicaAbierta) + 1) % tematicasDisponibles.length])} style={s.tematicaFlecha} accessibilityLabel="Temática siguiente"><MaterialIcons name="chevron-right" size={24} color="#76502d" /></TouchableOpacity></View>
+              <View style={s.tematicaShowcase}>
+                {indicesTematicaVisibles.map(index => { const skin = skinsTematicaAbierta[index]; const esPrincipal = index === (skinTemaIndex % skinsTematicaAbierta.length); return <TouchableOpacity key={skin.id} onPress={() => setSkinTemaIndex(index)} style={[esPrincipal ? s.tematicaSkinCentral : s.tematicaSkinLateral, { backgroundColor: skin.fondoRareza, borderColor: skin.colorRareza }]} activeOpacity={0.82}><Image source={skin.imagen} style={esPrincipal ? s.tematicaSkinCentralImagen : s.tematicaSkinLateralImagen} contentFit="contain" cachePolicy="memory" />{esPrincipal && <><Text style={s.tematicaSkinCentralAnimal}>{skin.animalNombre}</Text><Text style={s.tematicaSkinCentralNombre}>{skin.nombre}</Text><Text style={s.tematicaSkinCentralRareza}>{skin.rareza}</Text></>}</TouchableOpacity>; })}
+              </View>
             </View>
           </View>
         </Modal>
@@ -1256,18 +1269,22 @@ const s = StyleSheet.create({
   previewDescripcion: { marginTop: 12, color: '#80634a', fontFamily: 'Delius', fontSize: 9, lineHeight: 13, fontWeight: '700', textAlign: 'center' },
   previewBoton: { marginTop: 16, paddingHorizontal: 22, paddingVertical: 6, borderRadius: 9, backgroundColor: '#c99d42', borderWidth: 1, borderColor: '#8d6926' },
   previewBotonTexto: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 9, fontWeight: '900' },
+  recompensasCompactas: { marginTop: 2, flexDirection: 'row', gap: 5, alignItems: 'center', justifyContent: 'center' },
   tematicaModalFondo: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(39,27,20,0.62)', padding: 18 },
   tematicaModalCerrarFondo: { ...StyleSheet.absoluteFillObject },
-  tematicaModalTarjeta: { width: 430, maxWidth: '100%', maxHeight: '82%', borderRadius: 20, overflow: 'hidden', padding: 19, backgroundColor: '#fff3d5', borderWidth: 3, borderColor: '#976231', shadowColor: '#130c08', shadowOffset: { width: 0, height: 9 }, shadowOpacity: 0.52, shadowRadius: 15, elevation: 25 },
+  tematicaModalTarjeta: { width: 560, maxWidth: '100%', borderRadius: 24, overflow: 'hidden', padding: 18, backgroundColor: '#fff3d5', borderWidth: 3, borderColor: '#976231', shadowColor: '#130c08', shadowOffset: { width: 0, height: 9 }, shadowOpacity: 0.52, shadowRadius: 15, elevation: 25 },
   tematicaModalCerrar: { position: 'absolute', zIndex: 2, top: 9, right: 9, width: 29, height: 29, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#f5ddb4', borderWidth: 1, borderColor: '#bb8b4a' },
   tematicaModalEyebrow: { color: '#a06e29', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', letterSpacing: 1.1 },
-  tematicaModalTitulo: { marginTop: 3, color: '#5b3c24', fontFamily: 'Delius', fontSize: 23, fontWeight: '900' },
-  tematicaModalTexto: { marginTop: 3, paddingRight: 25, color: '#87684f', fontFamily: 'Delius', fontSize: 9, lineHeight: 13 },
-  tematicaModalLista: { gap: 9, paddingTop: 14, paddingBottom: 3 },
-  tematicaSkin: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 7, borderWidth: 1.4, borderRadius: 13 },
-  tematicaSkinImagen: { width: 64, height: 62 }, tematicaSkinInfo: { flex: 1 },
-  tematicaSkinAnimal: { color: '#8a705b', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
-  tematicaSkinNombre: { marginTop: 1, color: '#553a29', fontFamily: 'Delius', fontSize: 13, fontWeight: '900' },
+  tematicaTabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12, paddingRight: 8 }, tematicaTab: { minWidth: 80, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 6, paddingVertical: 5, borderRadius: 10, backgroundColor: 'rgba(255,250,239,0.72)', borderWidth: 1 }, tematicaTabActiva: { backgroundColor: '#f7dfad', borderWidth: 2 }, tematicaTabTexto: { flexShrink: 1, color: '#917b68', fontFamily: 'Delius', fontSize: 8, fontWeight: '800' }, tematicaTabTextoActivo: { color: '#5b3c24', fontWeight: '900' },
+  tematicaModalTituloFila: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }, tematicaModalIcono: { fontSize: 27 }, tematicaModalTitulo: { color: '#5b3c24', fontFamily: 'Delius', fontSize: 25, fontWeight: '900' },
+  tematicaModalTexto: { marginTop: 3, paddingRight: 25, color: '#87684f', fontFamily: 'Delius', fontSize: 10, lineHeight: 14 },
+  tematicaTituloNavegacion: { marginTop: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }, tematicaFlecha: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: 17, backgroundColor: '#f5ddb4', borderWidth: 1, borderColor: '#c4985b' },
+  tematicaShowcase: { width: '100%', minHeight: 186, marginTop: 6, flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', justifyContent: 'center', gap: 5, overflow: 'hidden' }, tematicaSkinLateral: { width: 56, height: 96, alignItems: 'center', justifyContent: 'center', borderRadius: 12, backgroundColor: 'rgba(235,220,188,0.72)', opacity: 0.78 }, tematicaSkinLateralImagen: { width: 54, height: 84 }, tematicaSkinCentral: { width: 145, height: 178, alignItems: 'center', justifyContent: 'center', padding: 7, borderRadius: 18, borderWidth: 2, shadowColor: '#8a632d', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.22, shadowRadius: 7, elevation: 6 }, tematicaSkinCentralImagen: { width: 122, height: 122 }, tematicaSkinCentralAnimal: { color: '#8a705b', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' }, tematicaSkinCentralNombre: { marginTop: 1, color: '#553a29', fontFamily: 'Delius', fontSize: 13, fontWeight: '900', textAlign: 'center' }, tematicaSkinCentralRareza: { marginTop: 2, color: '#9d7654', fontFamily: 'Delius', fontSize: 7, fontWeight: '800' },
+  tematicaModalLista: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 12, paddingBottom: 2 },
+  tematicaSkin: { width: '31.8%', minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 4, padding: 5, borderWidth: 1.4, borderRadius: 13 },
+  tematicaSkinImagen: { width: 48, height: 60 }, tematicaSkinInfo: { flex: 1 },
+  tematicaSkinAnimal: { color: '#8a705b', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
+  tematicaSkinNombre: { marginTop: 1, color: '#553a29', fontFamily: 'Delius', fontSize: 10, lineHeight: 12, fontWeight: '900' },
   tematicaSkinRareza: { marginTop: 2, color: '#9d7654', fontFamily: 'Delius', fontSize: 7, fontWeight: '800' },
 });
 

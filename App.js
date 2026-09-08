@@ -629,7 +629,7 @@ export default function App() {
           {currentScreen === 'historia1'       && <Historia1        navigation={navigation} />}
           {currentScreen === 'capsula1'        && <Capsula1         navigation={navigation} route={{ params: screenParams }} />}
           {currentScreen === 'librotemp1'      && <LibroTemp1       navigation={navigation} route={{ params: screenParams }} />}
-          {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} mode={screenParams?.mode} />}
+          {currentScreen === 'animalitos'      && <Animalitos       navigation={navigation} />}
           {currentScreen === 'canjear'          && <Canjear          navigation={navigation} />}
           {currentScreen === 'comerciante'      && <Comerciante      navigation={navigation} temporada={screenParams?.temporada} />}
           {currentScreen === 'lotes'             && <Lotes           navigation={navigation} animalId={screenParams?.animalId} />}

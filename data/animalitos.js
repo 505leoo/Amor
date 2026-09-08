@@ -96,16 +96,41 @@ export const ANIMALITOS = [
     comercio: { color: '#7188a4', fondo: '#e7edf3', borde: '#9cadbf' },
     imagen: require('../assets/Animalitos/Gato/gato1.png'),
   },
+  {
+    id: 'mono',
+    tipo: 'Tierra',
+    nombre: 'Mono',
+    rareza: 'Épico',
+    colorRareza: '#b77a35',
+    pistaBloqueada: 'Entre lianas y frutos dorados espera una amistad traviesa',
+    icono: '🐒',
+    habilidad: 'Agilidad Selvática',
+    habilidadTexto: '+10% de monedas obtenidas en juegos.',
+    legacyUnlockField: 'monoDesbloqueado',
+    comercio: { color: '#9d6a36', fondo: '#f3e3c7', borde: '#c79a62' },
+    imagen: require('../assets/Animalitos/Mono/mono1.png'),
+  },
 ];
 
 const TEMATICAS_POR_SKIN = {
-  halcon_default: 'Originales', halcont1: 'Aventuras', halcont2: 'Aventuras',
+  halcon_default: 'Originales', halcont1: 'Naturaleza', halcont2: 'Naturaleza',
   ardilla_default: 'Originales', ardillat1: 'Naturaleza', ardillat2: 'Naturaleza',
   ajolote_default: 'Originales', ajolotet1: 'Dulces', ajolotet2: 'Dulces',
   erizo_default: 'Originales', erizot1: 'Dulces', erizot2: 'Dulces',
-  loro_default: 'Originales', lorot1: 'Dulces', lorot2: 'Aventuras',
+  loro_default: 'Originales', lorot1: 'Aventuras', lorot2: 'Aventuras',
   pezglobo_default: 'Originales', pezglobot1: 'Dulces', pezglobot2: 'Fantasía',
-  gato_default: 'Originales', gatot1: 'Fantasía', gatot2: 'Fantasía',
+  gato_default: 'Originales', gatot1: 'Dulces', gatot2: 'Fantasía',
+  mono_default: 'Originales', monot1: 'Frutas', monot2: 'Naturaleza',
+};
+
+export const TEMATICAS_SKINS = {
+  Dulces: { icono: '🍬', color: '#c5659c' },
+  Naturaleza: { icono: '🌿', color: '#70975a' },
+  Aventuras: { icono: '🧭', color: '#5b8fba' },
+  Fantasía: { icono: '✨', color: '#8064aa' },
+  Guardianes: { icono: '🛡️', color: '#b47b3d' },
+  Frutas: { icono: '🍌', color: '#d69b28' },
+  Originales: { icono: '🐾', color: '#92775c' },
 };
 
 export const SKINS = [
@@ -130,7 +155,13 @@ export const SKINS = [
   { id: 'gato_default', storageId: 'default', animalId: 'gato', animalNombre: 'Gato', nombre: 'Original', tipo: 'Tierra', rareza: 'Raro', colorRareza: '#6f89ad', fondoRareza: '#e7edf3', imagen: require('../assets/Animalitos/Gato/gato1.png') },
   { id: 'gatot1', storageId: 'gatot1', animalId: 'gato', animalNombre: 'Gato', nombre: 'Nube de Fresa', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#c5659c', fondoRareza: '#f8e0ec', imagen: require('../assets/Animalitos/Gato/skins/gatot1.png') },
   { id: 'gatot2', storageId: 'gatot2', animalId: 'gato', animalNombre: 'Gato', nombre: 'Guardián Lunar', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#dfe7f7', comercioPrecio: 3600, imagen: require('../assets/Animalitos/Gato/skins/gatot2.png') },
-].map(skin => ({ ...skin, tematica: TEMATICAS_POR_SKIN[skin.id] || 'Originales' }));
+  { id: 'mono_default', storageId: 'default', animalId: 'mono', animalNombre: 'Mono', nombre: 'Original', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#b77a35', fondoRareza: '#f3e3c7', imagen: require('../assets/Animalitos/Mono/mono1.png') },
+  { id: 'monot1', storageId: 'monot1', animalId: 'mono', animalNombre: 'Mono', nombre: 'Banana Tropical', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#d69b28', fondoRareza: '#fff0b7', imagen: require('../assets/Animalitos/Mono/skins/monot1.png') },
+  { id: 'monot2', storageId: 'monot2', animalId: 'mono', animalNombre: 'Mono', nombre: 'Árbol Ancestral', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#638b4c', fondoRareza: '#e2eed4', comercioPrecio: 3800, imagen: require('../assets/Animalitos/Mono/skins/monot2.png') },
+].map(skin => {
+  const tematica = /guardi[aá]n/i.test(skin.nombre) ? 'Guardianes' : (TEMATICAS_POR_SKIN[skin.id] || 'Originales');
+  return { ...skin, tematica, tematicas: [tematica] };
+});
 
 export const ANIMALITOS_POR_ID = Object.fromEntries(ANIMALITOS.map(animal => [animal.id, animal]));
 

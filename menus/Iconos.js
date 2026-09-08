@@ -67,6 +67,14 @@ const ICONO_GATO = {
   seccion: 'animales',
   temporada: 't2',
 };
+const ICONO_MONO = {
+  id: 'mono_selva_dorada',
+  nombre: 'mono_selva_dorada',
+  url: null,
+  local: true,
+  source: require('../assets/inicio/iconos/icono-mono-selva-dorada.png'),
+  seccion: 'animales',
+};
 
 const SECCIONES = ['temporada', 'evento', 'animales'];
 const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', animales: '🐾 Animalito' };
@@ -78,6 +86,7 @@ const nombreVisibleIcono = icono => {
   if (icono.id === 'erizo_dulce_medianoche') return 'Dulce Medianoche';
   if (icono.id === 'pezglobo_perla_abisal') return 'Perla Abisal';
   if (icono.id === 'gato_ovillo_dorado') return 'Ovillo Dorado';
+  if (icono.id === 'mono_selva_dorada') return 'Selva Dorada';
   const match = String(icono.nombre || '').match(/^icono_([tea])_(\d+)$/i);
   if (match) {
     const category = { t: 'Temporada', e: 'Evento', a: 'Animalito' }[match[1].toLowerCase()];
@@ -476,7 +485,7 @@ const Iconos = ({ navigation }) => {
     acc[sec] = sortByNombre(iconos.filter(ic => ic.seccion === sec));
     return acc;
   }, {});
-  porSeccion.animales = [...porSeccion.animales, ICONO_ARDILLA, ICONO_AJOLOTE, ICONO_ERIZO, ICONO_PEZGLOBO, ICONO_GATO];
+  porSeccion.animales = [...porSeccion.animales, ICONO_ARDILLA, ICONO_AJOLOTE, ICONO_ERIZO, ICONO_PEZGLOBO, ICONO_GATO, ICONO_MONO];
   const sinSeccion = [ICONO_DEFAULT, ...sortByNombre(iconos.filter(ic => !ic.seccion || !SECCIONES.includes(ic.seccion)))];
   const catalogoCompleto = [...SECCIONES.flatMap(section => porSeccion[section]), ...sinSeccion];
   const iconosObtenidos = catalogoCompleto.filter(icono => {

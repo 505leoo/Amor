@@ -4,6 +4,7 @@ export const ICONOS_LOCALES = {
   erizo_dulce_medianoche: require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.png'),
   pezglobo_perla_abisal: require('../assets/inicio/iconos/icono-pezglobo-perla-abisal.png'),
   gato_ovillo_dorado: require('../assets/inicio/iconos/icono-gato-ovillo-dorado.png'),
+  mono_selva_dorada: require('../assets/inicio/iconos/icono-mono-selva-dorada.png'),
 };
 
 export const obtenerIconoLocal = id => (id ? ICONOS_LOCALES[id] || null : null);
