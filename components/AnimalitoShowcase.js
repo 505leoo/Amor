@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 
 // A scene on the room background, not a dialog: only the information has cards.
-export default function AnimalitoShowcase({ animal, skins, tema, estado, necesarias, costo, puedeMejorar, mejorando, confirmar, equipado, skinEquipada, equipando, onEquipar, onMejorar, onCartas, children }) {
+export default function AnimalitoShowcase({ animal, skins, tema, estado, necesarias, costo, puedeMejorar, mejorando, confirmar, equipado, skinEquipada, equipando, onEquipar, onMejorar, onCartas, tematicas = [], onVerTematica, children }) {
   const [skinId, setSkinId] = useState(skinEquipada);
   const [width, setWidth] = useState(700);
   const index = Math.max(0, skins.findIndex(skin => skin.storageId === skinId));
@@ -54,6 +54,15 @@ export default function AnimalitoShowcase({ animal, skins, tema, estado, necesar
         <MaterialIcons name={skin?.bloqueado ? 'lock-outline' : usando ? 'check' : 'pets'} size={15} color="#fffaf1" /><Text style={s.buttonText}>{equipando ? 'Equipando…' : skin?.bloqueado ? 'Traje bloqueado' : usando ? 'Equipado' : 'Equipar compañero'}</Text>
       </TouchableOpacity>
     </View>
+    {tematicas.length > 0 && <View style={s.tematicas}>
+      <Text style={s.tematicasTitulo}>COLECCIONES DE TRAJES</Text>
+      <Text style={s.tematicasTexto}>Explora skins de otros Animalitos con la misma temática.</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tematicasLista}>
+        {tematicas.map(tematica => <TouchableOpacity key={tematica} onPress={() => onVerTematica?.(tematica)} style={[s.tematicaBoton, { borderColor: tema.acento }]} activeOpacity={0.8}>
+          <MaterialIcons name="auto-awesome" size={13} color={tema.texto} /><Text style={[s.tematicaBotonTexto, { color: tema.texto }]}>{tematica}</Text><MaterialIcons name="chevron-right" size={14} color={tema.texto} />
+        </TouchableOpacity>)}
+      </ScrollView>
+    </View>}
     <View style={s.rewards}>{children}</View>
   </ScrollView>;
 }
@@ -75,4 +84,5 @@ const s = StyleSheet.create({
   track: { height: 8, backgroundColor: '#e6ddce', borderRadius: 4, overflow: 'hidden', marginTop: 12 }, fill: { height: '100%', borderRadius: 4 }, cards: { color: '#88715d', fontSize: 9, marginTop: 5 },
   upgrade: { marginTop: 12, paddingVertical: 9, paddingHorizontal: 6, borderRadius: 8, alignItems: 'center' }, buttonText: { fontFamily: 'Delius', fontSize: 10, fontWeight: '800', color: '#fffaf1', textAlign: 'center' }, cost: { textAlign: 'center', color: '#a08b75', fontSize: 7, marginTop: 5 }, link: { fontSize: 9, textAlign: 'center', marginTop: 12 }, disabled: { opacity: 0.5 },
   equipArea: { alignItems: 'center', marginTop: 12 }, equip: { flexDirection: 'row', gap: 8, paddingHorizontal: 23, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }, rewards: { width: '86%', maxWidth: 570, alignSelf: 'center', marginTop: 18 },
+  tematicas: { width: '86%', maxWidth: 570, alignSelf: 'center', marginTop: 16, padding: 12, borderRadius: 12, backgroundColor: 'rgba(255,250,239,0.84)' }, tematicasTitulo: { color: '#76604d', fontSize: 8, fontWeight: '900', letterSpacing: 1 }, tematicasTexto: { marginTop: 3, color: '#917b68', fontFamily: 'Delius', fontSize: 9 }, tematicasLista: { gap: 8, paddingTop: 9, paddingRight: 4 }, tematicaBoton: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 9, backgroundColor: '#fff6df', borderWidth: 1 }, tematicaBotonTexto: { fontFamily: 'Delius', fontSize: 10, fontWeight: '900' },
 });

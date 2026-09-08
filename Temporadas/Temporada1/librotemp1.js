@@ -89,7 +89,7 @@ export default function LibroTemp1({ navigation, route }) {
           {todasCompletas ? (
             <>
               <View style={styles.regaloMarco}>
-                <Image source={require('../../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png')} style={styles.regaloImg} contentFit="contain" cachePolicy="memory" />
+                <Image source={require('../../assets/Animalitos/Halcon/halcon1.png')} style={styles.regaloImg} contentFit="contain" cachePolicy="memory" />
               </View>
               {halconDesbloqueado
                 ? <View style={styles.regaloBadge}><Text style={styles.regaloBadgeText}>✓ obtenido</Text></View>

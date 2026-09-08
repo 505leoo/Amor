@@ -588,7 +588,7 @@ const CollectionBookPage = ({ onBack, animals, ownedAnimals, animalStates, user 
                   const level = Math.max(1, Number(animalStates[item.id]?.nivel ?? user?.animalitos?.[item.id]?.nivel) || 1);
                   return <TouchableOpacity key={item.id} disabled={!unlocked} onPress={() => { setAnimalId(item.id); setSkinId(item.id === user?.animalito ? (user?.skin || 'default') : 'default'); }} style={[modal.animalRailCard, active && modal.animalRailCardActive, !unlocked && modal.animalRailCardLocked]} activeOpacity={0.8}>
                     <View style={modal.animalRailImageWrap}><ExpoImage source={item.imagen} style={modal.animalRailImage} contentFit="contain" cachePolicy="memory-disk" blurRadius={unlocked ? 0 : 8} />{!unlocked && <View style={modal.animalLockBadge}><MaterialIcons name="lock" size={9} color="#fff8e8" /></View>}</View>
-                    <View style={modal.animalRailInfo}><Text style={modal.animalRailName}>{item.nombre}</Text><Text style={[modal.animalRailRarity, { color: unlocked ? item.colorRareza : '#887867' }]}>{unlocked ? `${item.rareza} · Nv. ${level}` : `Bloqueado · ${String(item.temporada).toUpperCase()}`}</Text></View>
+                    <View style={modal.animalRailInfo}><Text style={modal.animalRailName}>{item.nombre}</Text><Text style={[modal.animalRailRarity, { color: unlocked ? item.colorRareza : '#887867' }]}>{unlocked ? `${item.rareza} · Nv. ${level}` : `Bloqueado · ${item.tipo || 'Tierra'}`}</Text></View>
                     {unlocked && item.id === user?.animalito && <View style={modal.equippedDot}><MaterialIcons name="check" size={9} color="#fff" /></View>}
                   </TouchableOpacity>;
                 })}
@@ -599,7 +599,7 @@ const CollectionBookPage = ({ onBack, animals, ownedAnimals, animalStates, user 
                 <LinearGradient colors={['rgba(255,255,255,0.76)', `${animal?.colorRareza || '#8ba86d'}25`]} style={StyleSheet.absoluteFill} />
                 {selectedSkin && <ExpoImage source={selectedSkin.imagen} style={modal.animalHero} contentFit="contain" cachePolicy="memory-disk" />}
                 <View style={modal.animalHeroInfo}>
-                  <Text style={modal.animalSeason}>{String(animal?.temporada || 't1').toUpperCase()}</Text>
+                  <Text style={modal.animalSeason}>{animal?.tipo || 'Tierra'}</Text>
                   <Text style={modal.animalHeroName}>{animal?.nombre}</Text>
                   <Text style={[modal.animalHeroRarity, { color: selectedSkin?.colorRareza || animal?.colorRareza }]}>{selectedSkin?.nombre || 'Original'} · {selectedSkin?.rareza || animal?.rareza}</Text>
                   <Text style={modal.animalAbility}>{animal?.habilidad}</Text>
@@ -1145,7 +1145,7 @@ const Perfil = ({ navigation, route }) => {
             <View style={styles.favoriteAnimalCard}>
               <View style={styles.blueRibbon}><Text style={styles.ribbonText}>ANIMALITO EQUIPADO</Text></View>
               <Player uid={d.uid} containerStyle={styles.favoriteAnimalContainer} imageStyle={styles.favoriteAnimalImage} placeholder={<SinAnimal />} />
-              <View style={styles.favoriteInfo}><Text style={styles.favoriteName}>{animal?.nombre || 'Sin equipar'}</Text><Text style={styles.favoriteNature}>{animal ? `${animal.rareza} · ${String(animal.temporada).toUpperCase()}` : 'Elige un compañero'}</Text><View style={styles.animalLevelRow}><View style={styles.animalLevelBadge}><Text style={styles.animalLevelText}>{animalLevel}</Text></View><View style={styles.animalProgressWrap}><View style={styles.animalTrack}><View style={[styles.animalFill, { width: `${animalProgress}%` }]} /></View><Text style={styles.animalCards}>{animal ? `${animalCards}/${animalNeeded} cartas` : '—'}</Text></View></View></View>
+              <View style={styles.favoriteInfo}><Text style={styles.favoriteName}>{animal?.nombre || 'Sin equipar'}</Text><Text style={styles.favoriteNature}>{animal ? `${animal.rareza} · ${animal.tipo || 'Tierra'}` : 'Elige un compañero'}</Text><View style={styles.animalLevelRow}><View style={styles.animalLevelBadge}><Text style={styles.animalLevelText}>{animalLevel}</Text></View><View style={styles.animalProgressWrap}><View style={styles.animalTrack}><View style={[styles.animalFill, { width: `${animalProgress}%` }]} /></View><Text style={styles.animalCards}>{animal ? `${animalCards}/${animalNeeded} cartas` : '—'}</Text></View></View></View>
             </View>
             <TouchableOpacity style={styles.collectionAccess} onPress={() => setSeccionPerfil('coleccion')} activeOpacity={0.84}>
               <LinearGradient colors={['#f2cd75', '#ca8e37']} style={styles.collectionIcon}><MaterialIcons name="pets" size={22} color="#fff8dc" /></LinearGradient>

@@ -49,6 +49,24 @@ const ICONO_ERIZO = {
   seccion: 'animales',
   temporada: 't2',
 };
+const ICONO_PEZGLOBO = {
+  id: 'pezglobo_perla_abisal',
+  nombre: 'pezglobo_perla_abisal',
+  url: null,
+  local: true,
+  source: require('../assets/inicio/iconos/icono-pezglobo-perla-abisal.png'),
+  seccion: 'animales',
+  temporada: 't2',
+};
+const ICONO_GATO = {
+  id: 'gato_ovillo_dorado',
+  nombre: 'gato_ovillo_dorado',
+  url: null,
+  local: true,
+  source: require('../assets/inicio/iconos/icono-gato-ovillo-dorado.png'),
+  seccion: 'animales',
+  temporada: 't2',
+};
 
 const SECCIONES = ['temporada', 'evento', 'animales'];
 const SECCION_LABELS = { temporada: '🌸 Temporada', evento: '🎉 Evento', animales: '🐾 Animalito' };
@@ -58,6 +76,8 @@ const nombreVisibleIcono = icono => {
   if (icono.id === 'ardilla_bellota') return 'Bellota dorada';
   if (icono.id === 'ajolote_caramelo') return 'Reino de Caramelo';
   if (icono.id === 'erizo_dulce_medianoche') return 'Dulce Medianoche';
+  if (icono.id === 'pezglobo_perla_abisal') return 'Perla Abisal';
+  if (icono.id === 'gato_ovillo_dorado') return 'Ovillo Dorado';
   const match = String(icono.nombre || '').match(/^icono_([tea])_(\d+)$/i);
   if (match) {
     const category = { t: 'Temporada', e: 'Evento', a: 'Animalito' }[match[1].toLowerCase()];
@@ -456,7 +476,7 @@ const Iconos = ({ navigation }) => {
     acc[sec] = sortByNombre(iconos.filter(ic => ic.seccion === sec));
     return acc;
   }, {});
-  porSeccion.animales = [...porSeccion.animales, ICONO_ARDILLA, ICONO_AJOLOTE, ICONO_ERIZO];
+  porSeccion.animales = [...porSeccion.animales, ICONO_ARDILLA, ICONO_AJOLOTE, ICONO_ERIZO, ICONO_PEZGLOBO, ICONO_GATO];
   const sinSeccion = [ICONO_DEFAULT, ...sortByNombre(iconos.filter(ic => !ic.seccion || !SECCIONES.includes(ic.seccion)))];
   const catalogoCompleto = [...SECCIONES.flatMap(section => porSeccion[section]), ...sinSeccion];
   const iconosObtenidos = catalogoCompleto.filter(icono => {

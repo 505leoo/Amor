@@ -10,14 +10,14 @@ import { useUserDocument } from '../hooks/useUserDocument';
 import NotificationSystem from '../utils/NotificationSystem';
 
 const AVATAR = require('../assets/inicio/iconos/icono1.jpg');
-const HALCON = require('../assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png');
-const ARDILLA = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png');
-const AJOLOTE = require('../assets/temporadas/libro/Temporada2/Animales/Ajolote/ajolote1.png');
-const AJOLOTE_ALGODON = require('../assets/temporadas/libro/Temporada2/Animales/Ajolote/skins/ajolotet1.png');
-const AJOLOTE_GUARDIAN = require('../assets/temporadas/libro/Temporada2/Animales/Ajolote/skins/ajolotet2.png');
-const ERIZO = require('../assets/temporadas/libro/Temporada2/Animales/Erizo/erizo1.png');
-const ERIZO_ARANDANOS = require('../assets/temporadas/libro/Temporada2/Animales/Erizo/skins/erizot1.png');
-const ERIZO_CHOCOLATERO = require('../assets/temporadas/libro/Temporada2/Animales/Erizo/skins/erizot2.png');
+const HALCON = require('../assets/Animalitos/Halcon/halcon1.png');
+const ARDILLA = require('../assets/Animalitos/Ardilla/ardilla1.png');
+const AJOLOTE = require('../assets/Animalitos/Ajolote/ajolote1.png');
+const AJOLOTE_ALGODON = require('../assets/Animalitos/Ajolote/skins/ajolotet1.png');
+const AJOLOTE_GUARDIAN = require('../assets/Animalitos/Ajolote/skins/ajolotet2.png');
+const ERIZO = require('../assets/Animalitos/Erizo/erizo1.png');
+const ERIZO_ARANDANOS = require('../assets/Animalitos/Erizo/skins/erizot1.png');
+const ERIZO_CHOCOLATERO = require('../assets/Animalitos/Erizo/skins/erizot2.png');
 
 const NOTICIAS = [
   {

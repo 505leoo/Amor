@@ -351,9 +351,9 @@ export default function App() {
       await ExpoImage.prefetch(require('./assets/temporadas/libro/libroanimal2.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
       // Precargar las skins del Halcón para que el selector no muestre imágenes tarde.
       [
-        require('./assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png'),
-        require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png'),
-        require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont2.png'),
+        require('./assets/Animalitos/Halcon/halcon1.png'),
+        require('./assets/Animalitos/Halcon/skins/halcont1.png'),
+        require('./assets/Animalitos/Halcon/skins/halcont2.png'),
       ].forEach(source => ExpoImage.prefetch(source, { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {}));
       
       // Cargar stickers en background sin bloquear

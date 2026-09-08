@@ -10,8 +10,8 @@ import TabButtons from './components/TabButtons';
 import Loading from './components/Loading';
 import AnimalitoShowcase from './components/AnimalitoShowcase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { contenidoDisponible, useTemporadaActual } from './hooks/useTemporadaActual';
 import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
+import { obtenerIconoLocal } from './data/iconosLocales';
 
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
 const COSTO_MEJORA = nivel => 120 * nivel;
@@ -27,7 +27,6 @@ const PALETA_RAREZA = {
 const EJEMPLOS_ANIMALITOS = [
   { id: 'ejemplo-panda', nombre: 'Panda', icono: '🐼', rareza: 'Raro', proximo: true },
   { id: 'ejemplo-zorro', nombre: 'Zorro', icono: '🦊', rareza: 'Épico', proximo: true },
-  { id: 'ejemplo-gato', nombre: 'Gato', icono: '🐱', rareza: 'Común', proximo: true },
   { id: 'ejemplo-pinguino', nombre: 'Pingüino', icono: '🐧', rareza: 'Raro', proximo: true },
   { id: 'ejemplo-capibara', nombre: 'Capibara', icono: '🦫', rareza: 'Legendario', proximo: true },
   { id: 'ejemplo-mapache', nombre: 'Mapache', icono: '🦝', rareza: 'Épico', proximo: true },
@@ -99,10 +98,23 @@ const RECOMPENSAS_NIVEL = {
     { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 30, icono: '▣', titulo: '30 cartas universales' },
     { nivel: 100, tipo: 'skin', skinId: 'lorot1', icono: '🎊', titulo: 'Piñata Tropical' },
   ],
+  pezglobo: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1200, icono: '🪙', titulo: '1.200 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 45, icono: '◆', titulo: '45 diamantes' },
+    { nivel: 25, tipo: 'iconoLocal', iconoId: 'pezglobo_perla_abisal', icono: '✦', titulo: 'Perla Abisal' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+    { nivel: 100, tipo: 'skin', skinId: 'pezglobot1', icono: '🪸', titulo: 'Arrecife de Caramelo' },
+  ],
+  gato: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1000, icono: '🪙', titulo: '1.000 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 40, icono: '◆', titulo: '40 diamantes' },
+    { nivel: 25, tipo: 'iconoLocal', iconoId: 'gato_ovillo_dorado', icono: '✦', titulo: 'Ovillo Dorado' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+    { nivel: 100, tipo: 'skin', skinId: 'gatot1', icono: '🍓', titulo: 'Nube de Fresa' },
+  ],
 };
 
 const Animalitos = ({ navigation, mode }) => {
-  const temporadaActual = useTemporadaActual();
   const [equipado, setEquipado] = useState(null);
   const [seleccionado, setSeleccionado] = useState(null);
   const [equipandoShowcase, setEquipandoShowcase] = useState(false);
@@ -119,6 +131,7 @@ const Animalitos = ({ navigation, mode }) => {
   const [mejoraEnCurso, setMejoraEnCurso] = useState(null);
   const [recompensasReclamadas, setRecompensasReclamadas] = useState({});
   const [previewRecompensa, setPreviewRecompensa] = useState(null);
+  const [tematicaAbierta, setTematicaAbierta] = useState(null);
   const [iconosPorIdentificador, setIconosPorIdentificador] = useState({});
   const [skinsDesbloqueadas, setSkinsDesbloqueadas] = useState({});
   const [soloDesbloqueados, setSoloDesbloqueados] = useState(false);
@@ -242,8 +255,8 @@ const Animalitos = ({ navigation, mode }) => {
   }, []);
 
   const animalitosFiltrados = (mode === 'skins' ? SKINS : ANIMALITOS).filter(a => {
-    if (mode !== 'skins') return contenidoDisponible(a.temporada || 't1', temporadaActual);
-    if (!equipado || a.animalId !== equipado || !desbloqueados.includes(a.animalId) || !contenidoDisponible(a.temporada || 't1', temporadaActual)) return false;
+    if (mode !== 'skins') return true;
+    if (!equipado || a.animalId !== equipado || !desbloqueados.includes(a.animalId)) return false;
     return a.storageId === 'default' || skinsEquipadas?.[a.animalId] === a.storageId || Boolean(skinsDesbloqueadas?.[a.animalId]?.[a.storageId]);
   });
 
@@ -290,7 +303,7 @@ const Animalitos = ({ navigation, mode }) => {
   };
 
   const recordatorioMejora = mode === 'skins' ? null : ANIMALITOS
-    .filter(animal => desbloqueados.includes(animal.id) && contenidoDisponible(animal.temporada || 't1', temporadaActual))
+    .filter(animal => desbloqueados.includes(animal.id))
     .map(animal => {
       const estado = estadoAnimal(animal.id);
       const proyeccion = proyectarMejoras(estado, dinero);
@@ -387,6 +400,7 @@ const Animalitos = ({ navigation, mode }) => {
         if (recompensa.tipo === 'skin') {
           transaction.set(animalRef, { skinsDesbloqueadas: { ...(animalData.skinsDesbloqueadas || {}), [recompensa.skinId]: true } }, { merge: true });
         }
+        if (recompensa.tipo === 'iconoLocal') update.iconosDesbloqueados = { ...(data.iconosDesbloqueados || {}), [recompensa.iconoId]: true };
         if (recompensa.tipo === 'iconoPendiente') update.recompensasPendientes = { ...(data.recompensasPendientes || {}), [`${id}Nivel${recompensa.nivel}`]: true };
         transaction.set(ref, update, { merge: true });
       });
@@ -406,6 +420,10 @@ const Animalitos = ({ navigation, mode }) => {
   const puedeMejorar = animalDesbloqueado && estadoMostrado.totalCartas >= cartasNecesarias && dinero >= costoMejora;
   const progresoCartas = Math.min(100, (estadoMostrado.totalCartas / Math.max(1, cartasNecesarias)) * 100);
   const recompensasMostradas = RECOMPENSAS_NIVEL[animalMostradoId] || [];
+  const tematicasAnimalMostrado = [...new Set(SKINS
+    .filter(skin => skin.animalId === animalMostradoId && skin.tematica !== 'Originales')
+    .map(skin => skin.tematica))];
+  const skinsTematicaAbierta = tematicaAbierta ? SKINS.filter(skin => skin.tematica === tematicaAbierta) : [];
   const animalitosOrdenados = [...animalitosFiltrados]
     .filter(animal => desbloqueados.includes(animal.id))
     .sort((a, b) => {
@@ -413,10 +431,9 @@ const Animalitos = ({ navigation, mode }) => {
     return ANIMALITOS.findIndex(animal => animal.id === a.id) - ANIMALITOS.findIndex(animal => animal.id === b.id);
   });
   const animalitosCatalogo = ANIMALITOS
-    .filter(animal => contenidoDisponible(animal.temporada || 't1', temporadaActual))
     .map(animal => desbloqueados.includes(animal.id) ? animal : { ...animal, bloqueado: true });
   const skinsCatalogo = SKINS
-    .filter(skin => Boolean(equipado) && skin.animalId === equipado && desbloqueados.includes(skin.animalId) && contenidoDisponible(skin.temporada || 't1', temporadaActual))
+    .filter(skin => Boolean(equipado) && skin.animalId === equipado && desbloqueados.includes(skin.animalId))
     .map(skin => animalitosFiltrados.some(desbloqueado => desbloqueado.id === skin.id) ? skin : { ...skin, bloqueado: true });
   const elementosCatalogo = mode === 'skins' && !soloDesbloqueados ? skinsCatalogo : (soloDesbloqueados ? animalitosOrdenados : animalitosCatalogo);
   const catalogoSlots = soloDesbloqueados ? animalitosOrdenados : Array.from({ length: 8 }, (_, index) => elementosCatalogo[index] || null);
@@ -482,7 +499,7 @@ const Animalitos = ({ navigation, mode }) => {
             {seleccionado && <AnimalitoShowcase
               key={animalMostrado.id}
               animal={fichaAnimalMostrado}
-              skins={SKINS.filter(skin => skin.animalId === animalMostrado.id && contenidoDisponible(skin.temporada || 't1', temporadaActual)).map(skin => ({ ...skin, bloqueado: !animalDesbloqueado || (skin.storageId !== 'default' && skinsEquipadas?.[skin.animalId] !== skin.storageId && !skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId]) }))}
+              skins={SKINS.filter(skin => skin.animalId === animalMostrado.id).map(skin => ({ ...skin, bloqueado: !animalDesbloqueado || (skin.storageId !== 'default' && skinsEquipadas?.[skin.animalId] !== skin.storageId && !skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId]) }))}
               tema={PALETA_RAREZA[fichaAnimalMostrado.rareza] || PALETA_RAREZA.Común}
               estado={estadoMostrado} necesarias={cartasNecesarias} costo={costoMejora}
               puedeMejorar={puedeMejorar} mejorando={Boolean(mejoraEnCurso)}
@@ -491,6 +508,8 @@ const Animalitos = ({ navigation, mode }) => {
               skinEquipada={skinsEquipadas?.[animalMostrado.id] || 'default'}
               equipando={equipandoShowcase}
               onCartas={() => navigation?.navigate?.('comerciante')}
+              tematicas={tematicasAnimalMostrado}
+              onVerTematica={setTematicaAbierta}
               onMejorar={() => manejarMejora(animalMostrado.id)}
               onEquipar={async skin => {
                 const uid = auth.currentUser?.uid;
@@ -529,6 +548,24 @@ const Animalitos = ({ navigation, mode }) => {
             </AnimalitoShowcase>}
           </View>
         </View>
+        <Modal visible={Boolean(tematicaAbierta)} transparent animationType="fade" onRequestClose={() => setTematicaAbierta(null)}>
+          <View style={s.tematicaModalFondo}>
+            <Pressable style={s.tematicaModalCerrarFondo} onPress={() => setTematicaAbierta(null)} />
+            <View style={s.tematicaModalTarjeta}>
+              <TouchableOpacity style={s.tematicaModalCerrar} onPress={() => setTematicaAbierta(null)} hitSlop={8}><MaterialIcons name="close" size={18} color="#76502d" /></TouchableOpacity>
+              <Text style={s.tematicaModalEyebrow}>COLECCIÓN DE TRAJES</Text>
+              <Text style={s.tematicaModalTitulo}>{tematicaAbierta}</Text>
+              <Text style={s.tematicaModalTexto}>Skins de distintos Animalitos que comparten esta temática.</Text>
+              <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.tematicaModalLista}>
+                {skinsTematicaAbierta.map(skin => <TouchableOpacity key={skin.id} style={[s.tematicaSkin, { backgroundColor: skin.fondoRareza, borderColor: skin.colorRareza }]} onPress={() => { setSeleccionado(ANIMALITOS.find(animal => animal.id === skin.animalId)); setTematicaAbierta(null); }} activeOpacity={0.82}>
+                  <Image source={skin.imagen} style={s.tematicaSkinImagen} contentFit="contain" cachePolicy="memory" />
+                  <View style={s.tematicaSkinInfo}><Text style={s.tematicaSkinAnimal}>{skin.animalNombre}</Text><Text style={s.tematicaSkinNombre}>{skin.nombre}</Text><Text style={s.tematicaSkinRareza}>{skin.rareza}</Text></View>
+                  <MaterialIcons name="chevron-right" size={20} color="#7c6654" />
+                </TouchableOpacity>)}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
         <Loading ref={loadingRef} />
       </View>
     );
@@ -604,7 +641,7 @@ const Animalitos = ({ navigation, mode }) => {
               const index = (columnaIndex * 2) + filaIndex;
               const equipadoAhora = Boolean(traje && equipado === traje.animalId && (skinsEquipadas?.[traje.animalId] || 'default') === traje.storageId);
               return <TouchableOpacity key={traje?.id || `traje-futuro-${index}`} style={[s.trajeTarjeta, traje && { backgroundColor: traje.fondoRareza, borderColor: traje.colorRareza }, equipadoAhora && s.trajeTarjetaActiva, (!traje || traje.bloqueado) && s.trajeTarjetaBloqueada]} disabled={!traje || traje.bloqueado} onPress={() => handleEquipar(traje.id)} activeOpacity={0.82}>
-                {traje ? <><View style={[s.trajeRareza, { backgroundColor: traje.colorRareza }]}><Text style={s.trajeRarezaTexto}>{traje.rareza}</Text></View><Text style={s.trajeTemporada}>{traje.temporada.toUpperCase()} · {traje.animalNombre}</Text>{traje.bloqueado ? <RNImage source={traje.imagen} style={s.trajeImagenBloqueadaBlur} resizeMode="contain" blurRadius={15} /> : <Image source={traje.imagen} style={s.trajeImagen} contentFit="contain" cachePolicy="memory-disk" />}{!traje.bloqueado && <Text style={s.trajeNombre}>{traje.nombre}</Text>}{traje.bloqueado && <><View style={s.trajeBloqueadoVelo} /><View style={s.trajeCandadoInsignia}><Text style={s.trajeCandadoIcono}>🔒</Text></View><View style={s.trajeSecretoPlaca}><Text style={s.trajeCandadoTitulo}>Un secreto te espera</Text><Text style={s.trajeCandadoTexto}>Sigue explorando</Text></View></>}{equipadoAhora && <View style={s.trajeEquipado}><Text style={s.trajeEquipadoTexto}>✓ USANDO</Text></View>}</> : <><Text style={s.trajeFuturoIcono}>✦</Text><Text style={s.trajeFuturoTexto}>Próximamente</Text></>}
+                {traje ? <><View style={[s.trajeRareza, { backgroundColor: traje.colorRareza }]}><Text style={s.trajeRarezaTexto}>{traje.rareza}</Text></View><Text style={s.trajeTemporada}>{traje.tipo} · {traje.animalNombre}</Text>{traje.bloqueado ? <RNImage source={traje.imagen} style={s.trajeImagenBloqueadaBlur} resizeMode="contain" blurRadius={15} /> : <Image source={traje.imagen} style={s.trajeImagen} contentFit="contain" cachePolicy="memory-disk" />}{!traje.bloqueado && <Text style={s.trajeNombre}>{traje.nombre}</Text>}{traje.bloqueado && <><View style={s.trajeBloqueadoVelo} /><View style={s.trajeCandadoInsignia}><Text style={s.trajeCandadoIcono}>🔒</Text></View><View style={s.trajeSecretoPlaca}><Text style={s.trajeCandadoTitulo}>Un secreto te espera</Text><Text style={s.trajeCandadoTexto}>Sigue explorando</Text></View></>}{equipadoAhora && <View style={s.trajeEquipado}><Text style={s.trajeEquipadoTexto}>✓ USANDO</Text></View>}</> : <><Text style={s.trajeFuturoIcono}>✦</Text><Text style={s.trajeFuturoTexto}>Próximamente</Text></>}
               </TouchableOpacity>;
             })}</View>)}
           </ScrollView>}
@@ -623,7 +660,7 @@ const Animalitos = ({ navigation, mode }) => {
                   {item && !item.bloqueado ? <>
                     <View style={s.tipoBurbuja}><Text style={s.tipoBurbujaTexto}>{mode === 'skins' ? '✦' : '🍃'}</Text></View>
                     <Text style={s.tarjetaNombre}>{item.nombre || (item.id === 'default' ? 'Original' : 'Traje')}</Text>
-                    <Text style={s.temporadaTarjeta}>{(item.temporada || 't1').toUpperCase()}</Text>
+                    <Text style={s.temporadaTarjeta}>{item.tipo || 'Tierra'}</Text>
                     <Image source={item.imagen} style={s.tarjetaAnimal} contentFit="contain" cachePolicy="memory" />
                     <View style={s.rarezaPildora}><Text style={s.rarezaTexto}>{item.rareza || 'Común'}</Text></View>
                     <View style={s.tarjetaProgreso}><View style={[s.tarjetaProgresoFill, { width: `${progresoItem}%` }]} /><Text style={s.tarjetaProgresoTexto}>{estadoItem.totalCartas} / {cartasItemNecesarias}</Text></View>
@@ -634,7 +671,7 @@ const Animalitos = ({ navigation, mode }) => {
                     <View style={s.animalBloqueadoInfo}>
                       <Text style={s.bloqueadoIcono}>🔒</Text>
                       <Text style={s.animalBloqueadoTitulo}>{item.nombre}</Text>
-                      <Text style={s.animalBloqueadoPista}>{(item.temporada || 't1').toUpperCase()} · {item.rareza || 'Desconocido'}</Text>
+                      <Text style={s.animalBloqueadoPista}>{item.tipo || 'Tierra'} · {item.rareza || 'Desconocido'}</Text>
                       <Text style={s.animalBloqueadoPista}>Entrá para ver Detalles</Text>
                     </View>
                   </> : <><Text style={s.bloqueadoIcono}>🔒</Text><Text style={s.bloqueadoTexto}>Próximamente</Text></>}
@@ -778,7 +815,7 @@ const Animalitos = ({ navigation, mode }) => {
                 <Text style={s.animalCentroNombre}>{animalitosFiltrados[0].nombre || 'Halcón'}</Text>
                 <Text style={s.animalCentroNivel}>Nivel {estadoAnimal(animalitosFiltrados[0].id).nivel}</Text>
                 <TouchableOpacity style={s.animalCentroBtn} onPress={() => handleEquipar(animalitosFiltrados[0].id)} activeOpacity={0.8}><Text style={s.animalCentroBtnTexto}>{equipado === animalitosFiltrados[0].id ? 'Usando' : 'Usar'}</Text></TouchableOpacity>
-              </> : <Text style={s.vacio}>Completa una temporada para desbloquear una mascota.</Text>}
+              </> : <Text style={s.vacio}>Desbloquea un Animalito para que te acompañe.</Text>}
             </View>
             <View style={s.hiddenLegacyList}>
               {animalitosFiltrados.length === 0
@@ -825,12 +862,15 @@ const Animalitos = ({ navigation, mode }) => {
         <View style={s.previewFondo}>
           <TouchableOpacity style={s.previewCerrarFondo} activeOpacity={1} onPress={() => setPreviewRecompensa(null)} />
           {previewRecompensa && (() => {
+            const iconoLocalPremio = previewRecompensa.tipo === 'iconoLocal' ? obtenerIconoLocal(previewRecompensa.iconoId) : null;
             const iconoPremio = previewRecompensa.tipo === 'iconoPendiente' ? iconosPorIdentificador[previewRecompensa.identificador] : null;
             const iconoSinSubir = previewRecompensa.tipo === 'iconoPendiente' && !iconoPremio;
             return <View style={s.previewTarjeta}>
             <View style={[s.previewIcono, previewRecompensa.tipo === 'diamantes' && s.previewIconoDiamante, previewRecompensa.tipo === 'skin' && s.previewIconoTraje]}>
               {previewRecompensa.tipo === 'skin'
-                ? <Image source={require('./assets/temporadas/libro/Temporada1/Animales/Halcon/skins/halcont1.png')} style={s.previewTrajeImagen} contentFit="contain" cachePolicy="memory-disk" />
+                ? <Image source={require('./assets/Animalitos/Halcon/skins/halcont1.png')} style={s.previewTrajeImagen} contentFit="contain" cachePolicy="memory-disk" />
+                : iconoLocalPremio
+                  ? <Image source={iconoLocalPremio} style={s.previewIconoSubido} contentFit="cover" cachePolicy="memory-disk" />
                 : iconoPremio
                   ? <Image source={{ uri: iconoPremio }} style={s.previewIconoSubido} contentFit="cover" cachePolicy="memory-disk" />
                 : <Text style={s.previewIconoTexto}>{previewRecompensa.icono}</Text>}
@@ -1216,6 +1256,19 @@ const s = StyleSheet.create({
   previewDescripcion: { marginTop: 12, color: '#80634a', fontFamily: 'Delius', fontSize: 9, lineHeight: 13, fontWeight: '700', textAlign: 'center' },
   previewBoton: { marginTop: 16, paddingHorizontal: 22, paddingVertical: 6, borderRadius: 9, backgroundColor: '#c99d42', borderWidth: 1, borderColor: '#8d6926' },
   previewBotonTexto: { color: '#fff8dc', fontFamily: 'Delius', fontSize: 9, fontWeight: '900' },
+  tematicaModalFondo: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(39,27,20,0.62)', padding: 18 },
+  tematicaModalCerrarFondo: { ...StyleSheet.absoluteFillObject },
+  tematicaModalTarjeta: { width: 430, maxWidth: '100%', maxHeight: '82%', borderRadius: 20, overflow: 'hidden', padding: 19, backgroundColor: '#fff3d5', borderWidth: 3, borderColor: '#976231', shadowColor: '#130c08', shadowOffset: { width: 0, height: 9 }, shadowOpacity: 0.52, shadowRadius: 15, elevation: 25 },
+  tematicaModalCerrar: { position: 'absolute', zIndex: 2, top: 9, right: 9, width: 29, height: 29, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: '#f5ddb4', borderWidth: 1, borderColor: '#bb8b4a' },
+  tematicaModalEyebrow: { color: '#a06e29', fontFamily: 'Delius', fontSize: 7, fontWeight: '900', letterSpacing: 1.1 },
+  tematicaModalTitulo: { marginTop: 3, color: '#5b3c24', fontFamily: 'Delius', fontSize: 23, fontWeight: '900' },
+  tematicaModalTexto: { marginTop: 3, paddingRight: 25, color: '#87684f', fontFamily: 'Delius', fontSize: 9, lineHeight: 13 },
+  tematicaModalLista: { gap: 9, paddingTop: 14, paddingBottom: 3 },
+  tematicaSkin: { minHeight: 76, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 7, borderWidth: 1.4, borderRadius: 13 },
+  tematicaSkinImagen: { width: 64, height: 62 }, tematicaSkinInfo: { flex: 1 },
+  tematicaSkinAnimal: { color: '#8a705b', fontFamily: 'Delius', fontSize: 8, fontWeight: '900' },
+  tematicaSkinNombre: { marginTop: 1, color: '#553a29', fontFamily: 'Delius', fontSize: 13, fontWeight: '900' },
+  tematicaSkinRareza: { marginTop: 2, color: '#9d7654', fontFamily: 'Delius', fontSize: 7, fontWeight: '800' },
 });
 
 export default Animalitos;

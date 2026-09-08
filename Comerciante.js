@@ -252,10 +252,10 @@ export default function Comerciante({ navigation, temporada }) {
   const animalEstaDesbloqueado = animal => Boolean(animal) && (animalitosDesbloqueados.includes(animal.id)
     || animalitoEstaDesbloqueado(animal, usuario, animalitosEstado?.[animal.id] || usuario?.animalitos?.[animal.id] || {}));
   const cartasAnimalesDisponibles = CARTAS_POR_ANIMAL
-    .filter(animal => animalEstaDesbloqueado(animal) && contenidoDisponible(animal.temporada || 't1', temporadaActual))
+    .filter(animal => animalEstaDesbloqueado(animal))
     .map(animal => ({
       id: `cartas_${animal.id}_3`,
-      temporada: animal.temporada || 't1',
+      tipoAnimal: animal.tipo || 'Tierra',
       tipo: 'cartasAnimal',
       animalId: animal.id,
       icon: 'style',
@@ -271,12 +271,11 @@ export default function Comerciante({ navigation, temporada }) {
     }));
   const skinsDisponibles = SKINS
     .filter(skin => skin.comercioPrecio
-      && contenidoDisponible(skin.temporada || 't1', temporadaActual)
       && animalEstaDesbloqueado(CARTAS_POR_ANIMAL.find(animal => animal.id === skin.animalId))
       && (!tieneSkin(skin.animalId, skin.storageId) || comprasRotacion[skin.id]))
     .map(skin => ({
       id: skin.id,
-      temporada: skin.temporada || 't1',
+      tipoAnimal: skin.tipo || 'Tierra',
       tipo: 'skin',
       animalId: skin.animalId,
       animalNombre: skin.animalNombre,
@@ -465,7 +464,7 @@ export default function Comerciante({ navigation, temporada }) {
                         : <MaterialIcons name={producto.icon} size={16} color="#a56b16" />}
                     </View>
                     <Text style={[styles.productoNombre, esVisual && styles.productoNombreVisual]}>{producto.tipo === 'icono' ? 'Icono' : producto.tipo === 'skin' ? 'Traje' : producto.nombre}</Text>
-                    {esCartaAnimal && <><Text style={styles.productoTemporada}>{producto.temporada.toUpperCase()}</Text><Text style={styles.productoRareza}>{producto.rareza}</Text></>}
+                    {esCartaAnimal && <><Text style={styles.productoTemporada}>{producto.tipoAnimal}</Text><Text style={styles.productoRareza}>{producto.rareza}</Text></>}
                     {producto.cantidadLabel && <Text style={styles.productoCantidad}>{producto.cantidadLabel}</Text>}
                     {comprado ? <View style={styles.productoEstadoComprado}><Text style={styles.productoEstadoTexto}>✓</Text></View> : <View style={[styles.productoPrecio, vencido && styles.productoPrecioConRecargo]}><Text style={styles.moneda}>🪙</Text><Text style={styles.productoPrecioTexto}>{precio}</Text></View>}
                   </TouchableOpacity>

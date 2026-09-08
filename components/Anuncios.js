@@ -11,9 +11,9 @@ const EVENTOS_ANUNCIOS = {
 };
 const EVENTOS_ORDEN = ['prevencion', 'lotes'];
 
-const ARDILLA_BASE = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png');
-const ARDILLA_TRAJE_1 = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat1.png');
-const ARDILLA_TRAJE_2 = require('../assets/temporadas/libro/Temporada1/Animales/Ardilla/skins/ardillat2.png');
+const ARDILLA_BASE = require('../assets/Animalitos/Ardilla/ardilla1.png');
+const ARDILLA_TRAJE_1 = require('../assets/Animalitos/Ardilla/skins/ardillat1.png');
+const ARDILLA_TRAJE_2 = require('../assets/Animalitos/Ardilla/skins/ardillat2.png');
 const ICONO_ARDILLA = require('../assets/inicio/iconos/icono-ardilla-bellota-v2.png');
 
 function LoteArdilla() {

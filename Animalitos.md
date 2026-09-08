@@ -6,11 +6,11 @@ Esta guía reúne las reglas visuales y técnicas necesarias para agregar un Ani
 
 Antes de generar un Animalito nuevo hay que revisar, como mínimo, estas referencias:
 
-- `assets/temporadas/libro/Temporada1/Animales/Halcon/halcon1.png`
-- `assets/temporadas/libro/Temporada1/Animales/Ardilla/ardilla1.png`
-- `assets/temporadas/libro/Temporada2/Animales/Ajolote/ajolote1.png`
-- `assets/temporadas/libro/Temporada2/Animales/Erizo/erizo1.png`
-- Una skin de cada temporada para entender cómo cambia una botarga completa.
+- `assets/Animalitos/Halcon/halcon1.png`
+- `assets/Animalitos/Ardilla/ardilla1.png`
+- `assets/Animalitos/Ajolote/ajolote1.png`
+- `assets/Animalitos/Erizo/erizo1.png`
+- Una skin de cada tipo para entender cómo cambia una botarga completa.
 
 Los Animalitos tienen estas características compartidas:
 
@@ -94,24 +94,45 @@ Los elementos deben seguir siendo legibles cuando la imagen se muestra dentro de
 
 Cada Animalito debe tener un icono propio, relacionado con su identidad, colores y uno de sus conceptos de temporada. No alcanza con usar un emoji ni con recortar la imagen principal sin adaptar su composición.
 
-El icono funciona como avatar pequeño, recompensa o insignia. Debe conservar el mismo acabado artesanal, pero simplificado para que siga siendo reconocible a 32–64 px.
+El icono funciona como recompensa o pieza de colección. No es un avatar transparente ni un recorte de la imagen principal: es una ilustración cuadrada completa, con fondo propio y una composición especial de póster, como los iconos locales de Ardilla, Ajolote y Erizo.
+
+Antes de crear un icono nuevo hay que revisar visualmente estas referencias obligatorias:
+
+- `assets/inicio/iconos/icono-ardilla-bellota-v2.png`
+- `assets/inicio/iconos/icono-ajolote-caramelo.png`
+- `assets/inicio/iconos/icono-erizo-dulce-medianoche.png`
+
+El personaje debe usar su skin base salvo que la tarea pida expresamente una skin concreta. El motivo del icono puede relacionarse con el animal o su temporada, pero no debe transformar al personaje en un traje distinto.
 
 ### Requisitos visuales
 
-- Composición cuadrada, centrada y con margen suficiente.
-- Rostro, silueta o símbolo principal del Animalito.
-- Un objeto, material o motivo que realmente pertenezca al personaje o a una skin.
-- Paleta conectada con su temporada y rareza.
-- Contorno marrón, textura de acuarela/papel y acabado de la colección.
-- Contraste alto y pocos detalles pequeños.
+- Composición cuadrada completa, sin márgenes transparentes y con el fondo llegando a las cuatro esquinas.
+- El Animalito base aparece grande, frontal y centrado, ocupando aproximadamente entre 72 % y 78 % del lienzo.
+- El personaje debe conservar exactamente su rostro, colores, botarga, proporciones y rasgos de especie de la imagen base.
+- Fondo ilustrado con degradado o resplandor central y rayos radiales detrás del personaje.
+- Motivos decorativos relacionados con el animal distribuidos alrededor de los bordes: objetos, hojas, burbujas, dulces, estrellas u otros símbolos propios de su identidad.
+- Los motivos exteriores enmarcan al personaje y nunca cubren el rostro ni compiten con la silueta principal.
+- Paleta intensa y coherente con el Animalito, con alto contraste entre personaje y fondo.
+- Contornos marrón chocolate, textura de acuarela/papel y acabado artesanal en toda la ilustración, incluido el fondo.
+- Lectura clara al reducirlo a 32–64 px.
 - Sin texto, letras, logos ni marcas de agua.
 
-El objeto del icono debe contar una versión reducida de la identidad del personaje. La bellota representa a Ardilla; el caramelo representa a Ajolote; el cacao y los dulces representan a Erizo. Para Loro podría usarse una pluma de colores, una piñata tropical o un detalle de Capitán Piruleta. No debe ser un objeto elegido al azar.
+El fondo y sus objetos deben contar una versión visual de la identidad del personaje. La bellota y las hojas representan a Ardilla; las nubes, destellos y tonos rosados acompañan a Ajolote; el cacao, los arándanos y las estrellas identifican a Erizo. No deben elegirse objetos al azar ni copiar elementos de una skin si el personaje mostrado usa la base.
+
+### Lo que no debe hacerse
+
+- No generar un personaje aislado sobre fondo transparente.
+- No usar solamente la cabeza o convertir el icono en un avatar circular.
+- No recortar y ampliar directamente la imagen base sin diseñar un fondo.
+- No vestir al Animalito con una skin especial si se pidió la apariencia base.
+- No añadir coronas, collares, joyas o accesorios que cambien la skin base.
+- No usar un fondo plano, vacío o con damero de transparencia.
+- No dejar grandes zonas vacías alrededor del personaje.
 
 ### Requisitos técnicos e integración
 
 - Crear un PNG cuadrado, preferentemente de `1254 × 1254`.
-- Usar transparencia alfa real cuando el componente lo requiera.
+- Usar una imagen opaca RGB de borde a borde, igual que los iconos locales existentes.
 - Probarlo reducido a 32–64 px antes de aprobarlo.
 - Guardarlo en `assets/inicio/iconos/` con un nombre estable.
 - Registrarlo en `data/iconosLocales.js` y en `menus/Iconos.js` o el catálogo remoto si se entrega como recompensa.
@@ -145,7 +166,7 @@ No usar nombres temporales como `icono-nuevo`, `icono-prueba` o `icono-final2`.
 5. Corregir la base hasta que esté aprobada.
 6. Usar la base aprobada como referencia principal para cada skin.
 7. Generar cada skin por separado.
-8. Verificar transparencia y dimensiones antes de conectar los archivos al código.
+8. Verificar dimensiones y formato antes de conectar los archivos al código: transparencia real para base y skins; fondo opaco de borde a borde para el icono.
 9. Integrar el Animalito en todos los sistemas correspondientes.
 10. Ejecutar la validación del proyecto.
 
@@ -156,7 +177,7 @@ No se deben generar las skins a partir de una base todavía dudosa. Cualquier er
 Usar esta estructura exacta:
 
 ```text
-assets/temporadas/libro/TemporadaN/Animales/NombreAnimal/
+assets/Animalitos/NombreAnimal/
 ├── animal1.png
 └── skins/
     ├── animalt1.png
@@ -166,7 +187,7 @@ assets/temporadas/libro/TemporadaN/Animales/NombreAnimal/
 Ejemplo del Loro:
 
 ```text
-assets/temporadas/libro/Temporada2/Animales/Loro/
+assets/Animalitos/Loro/
 ├── loro1.png
 └── skins/
     ├── lorot1.png
@@ -180,7 +201,7 @@ Reglas para los identificadores:
 - Primera skin: `lorot1`.
 - Segunda skin: `lorot2`.
 - Campo de compatibilidad/desbloqueo: `loroDesbloqueado`.
-- Temporada: `t1`, `t2`, etcétera.
+- Tipo: `Aire`, `Agua` o `Tierra`.
 
 No conservar versiones como `-v2`, `final`, `nuevo` o `corregido` dentro de la carpeta final. El código debe apuntar a nombres estables.
 
@@ -251,7 +272,7 @@ Registrar la ficha del animal en `data/animalitos.js`, dentro de `ANIMALITOS`:
 ```js
 {
   id: 'animal',
-  temporada: 't2',
+  tipo: 'Agua',
   nombre: 'Animal',
   rareza: 'Legendario',
   colorRareza: '#d48a2c',
@@ -261,7 +282,7 @@ Registrar la ficha del animal en `data/animalitos.js`, dentro de `ANIMALITOS`:
   habilidadTexto: 'Descripción breve del efecto.',
   legacyUnlockField: 'animalDesbloqueado',
   comercio: { color: '#...', fondo: '#...', borde: '#...' },
-  imagen: require('../assets/temporadas/libro/Temporada2/Animales/Animal/animal1.png'),
+  imagen: require('../assets/Animalitos/Animal/animal1.png'),
 }
 ```
 
@@ -317,13 +338,15 @@ El Animalito puede considerarse desbloqueado mediante:
 
 La segunda skin puede tener `comercioPrecio` si se venderá en el Comerciante. El precio debe guardar relación con su rareza y con las skins existentes.
 
-## 14. Temporadas
+## 14. Tipos y disponibilidad
 
-El campo `temporada` controla cuándo aparece el contenido mediante `contenidoDisponible`.
+Los Animalitos son assets generales: no dependen de una temporada para existir ni para aparecer en la colección. Cada ficha y sus skins deben llevar el mismo campo `tipo`.
 
-- Un Animalito de Temporada 2 debe usar `temporada: 't2'` en su ficha y en sus tres skins.
-- No hay que añadir condiciones manuales en `Player` o `Perfil`.
-- Si tendrá un evento o lote propio, debe añadirse además a la pantalla y configuración correspondiente.
+- `Aire`: Halcón y Loro.
+- `Agua`: Ajolote y Pez Globo.
+- `Tierra`: Ardilla, Erizo y Gato.
+- No hay que añadir condiciones de temporada en `Player`, `Perfil`, `Animalitos` o `Comerciante`.
+- Si tendrá un evento o lote propio, se configura como método de desbloqueo, sin mover sus assets fuera de `assets/Animalitos/`.
 
 ## 15. Lista de comprobación final
 
@@ -371,7 +394,7 @@ El campo `temporada` controla cuándo aparece el contenido mediante `contenidoDi
 - Generar las skins antes de aprobar definitivamente la base.
 - Crear skins que solo añaden gafas, corona o capa sobre la base.
 - Crear el Animalito sin un icono relacionado o dejarlo con un emoji como sustituto permanente.
-- Diseñar un icono que no se entiende al reducirlo a tamaño de avatar.
+- Diseñar un icono que no se entiende al reducirlo a 32–64 px.
 - Referenciar un icono en una recompensa sin registrarlo en el catálogo local o remoto.
 - Suponer que un damero visible significa que el PNG tiene transparencia.
 - Dejar imágenes nuevas fuera del catálogo central.
