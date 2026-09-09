@@ -11,6 +11,7 @@ import TabButtons from './components/TabButtons';
 import RecompensaOverlay from './components/RecompensaOverlay';
 import { auth, db, functions } from './firebaseConfig';
 import { contenidoDisponible, numeroTemporada, useTemporadaActual } from './hooks/useTemporadaActual';
+import { cacheDocument, getCachedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncCallable, syncSetDoc, syncUpdateDoc } from './utils/offlineSync';
 import { useRacha } from './RachaContext';
 import { ANIMALITOS, SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 import { ALIMENTOS } from './data/alimentos';
@@ -138,29 +139,44 @@ export default function Comerciante({ navigation, temporada }) {
     const uid = auth.currentUser?.uid;
     console.log('[Credito Menta] Montaje comercio', { uid: uid || null });
     if (!uid) return undefined;
-    return onSnapshot(doc(db, 'usuarios', uid), snapshot => {
+    const aplicarUsuario = data => {
       if (saliendoRef.current) return;
-      const data = snapshot.data() || {};
       setMonedas(Number.isFinite(data.dinero) ? data.dinero : 0);
       setCredito(data.comercio?.mentaCredito || null);
       setUsuario(data);
-      if (data.comercio) setDoc(doc(db, 'usuarios', uid, 'comercio', 'estado'), data.comercio, { merge: true }).catch(() => {});
-    });
+      if (data.comercio) syncSetDoc(doc(db, 'usuarios', uid, 'comercio', 'estado'), data.comercio, { merge: true }).catch(() => {});
+    };
+    getCachedDocument(uid, ['usuarios', uid]).then(data => { if (data) aplicarUsuario(data); }).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, ['usuarios', uid], aplicarUsuario);
+    const quitarServidor = onSnapshot(doc(db, 'usuarios', uid), snapshot => {
+      const data = snapshot.data() || {};
+      cacheDocument(uid, ['usuarios', uid], data).catch(() => {});
+      aplicarUsuario(data);
+    }, () => {});
+    return () => { quitarCache(); quitarServidor(); };
   }, []);
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
-    return onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+    const aplicarAnimalitos = lista => {
       if (saliendoRef.current) return;
       const estados = {};
-      setAnimalitosDesbloqueados(snapshot.docs.filter(animal => {
-        const data = animal.data() || {};
+      setAnimalitosDesbloqueados(lista.filter(animal => {
+        const data = animal.data || {};
         estados[animal.id] = data;
         return data.desbloqueado === true || (data.desbloqueado !== false && (Number(data.nivel) > 0 || Number(data.cartas ?? data.copias) > 0));
       }).map(animal => animal.id));
       setAnimalitosEstado(estados);
-    }, () => { if (!saliendoRef.current) setAnimalitosDesbloqueados([]); });
+    };
+    getCachedDocument(uid, ['usuarios', uid, 'animalitos', '__index__']).then(data => { if (Array.isArray(data)) aplicarAnimalitos(data); }).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, ['usuarios', uid, 'animalitos', '__index__'], data => { if (Array.isArray(data)) aplicarAnimalitos(data); });
+    const quitarServidor = onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+      const lista = snapshot.docs.map(animal => ({ id: animal.id, data: animal.data() || {} }));
+      cacheDocument(uid, ['usuarios', uid, 'animalitos', '__index__'], lista).catch(() => {});
+      aplicarAnimalitos(lista);
+    }, () => {});
+    return () => { quitarCache(); quitarServidor(); };
   }, []);
 
   useEffect(() => {
@@ -168,22 +184,40 @@ export default function Comerciante({ navigation, temporada }) {
     if (!uid) return undefined;
     return onSnapshot(doc(db, 'usuarios', uid, 'comercio', 'estado'), snap => {
       if (saliendoRef.current) return;
-      if (snap.exists()) setUsuario(previous => ({ ...previous, comercio: snap.data() }));
-      setCredito(snap.data()?.mentaCredito || null);
-    }, () => {});
+      const data = snap.exists() ? (snap.data() || {}) : {};
+      cacheDocument(uid, ['usuarios', uid, 'comercio', 'estado'], data).catch(() => {});
+      if (snap.exists()) setUsuario(previous => ({ ...previous, comercio: data }));
+      setCredito(data.mentaCredito || null);
+    }, () => {
+      getCachedDocument(uid, ['usuarios', uid, 'comercio', 'estado']).then(data => {
+        if (data && !saliendoRef.current) {
+          setUsuario(previous => ({ ...previous, comercio: data }));
+          setCredito(data.mentaCredito || null);
+        }
+      }).catch(() => {});
+    });
   }, []);
 
   useEffect(() => {
-    getDocs(collection(db, 'iconos')).then(snap => {
+    const cargar = async () => {
+      let lista = isOfflineModeEnabled()
+        ? await getCachedDocument(auth.currentUser?.uid, ['catalogos', 'iconos'])
+        : null;
+      if (!Array.isArray(lista)) {
+        const snap = await getDocs(collection(db, 'iconos'));
+        lista = snap.docs.map(icono => ({ id: icono.id, ...icono.data() }));
+        cacheDocument(auth.currentUser?.uid, ['catalogos', 'iconos'], lista).catch(() => {});
+      }
       if (saliendoRef.current) return;
-      setCatalogoIconos(snap.docs.map(icono => ({ id: icono.id, ...icono.data() })));
+      setCatalogoIconos(lista);
       // Fade in cuando cargue
       requestAnimationFrame(() => Animated.timing(productosFadeAnim, {
         toValue: 1,
         duration: 60,
         useNativeDriver: true,
       }).start());
-    }).catch(() => {});
+    };
+    cargar().catch(() => {});
     const fallback = setTimeout(() => productosFadeAnim.setValue(1), 450);
     return () => clearTimeout(fallback);
   }, [productosFadeAnim]);
@@ -218,12 +252,13 @@ export default function Comerciante({ navigation, temporada }) {
     setProcesandoCredito(true);
     try {
       // Asegura que Functions reciba un ID token vigente antes de la llamada.
-      await usuario.getIdToken();
+      const token = await usuario.getIdToken();
       console.log('[Credito Menta] Token disponible', { uid: usuario.uid });
-      await httpsCallable(functions, 'creditoMenta')({ operation, amount });
+      if (isOfflineModeEnabled()) await syncCallable('creditoMenta', { operation, amount, authToken: token });
+      else await httpsCallable(functions, 'creditoMenta')({ operation, amount });
       if (operation === 'solicitar') setPrestamoSeleccionado(null);
       if (operation === 'saldar') setConfirmarSaldar(false);
-      global.showToast?.({ text1: operation === 'solicitar' ? 'Menta te prestó monedas' : 'Deuda saldada', type: 'success' });
+      global.showToast?.({ text1: isOfflineModeEnabled() ? 'Crédito guardado localmente' : operation === 'solicitar' ? 'Menta te prestó monedas' : 'Deuda saldada', text2: isOfflineModeEnabled() ? 'Se procesará al volver Internet' : undefined, type: 'success' });
     } catch (error) {
       console.error('[Credito Menta] Error de crédito', {
         code: error?.code || null,
@@ -324,6 +359,57 @@ export default function Comerciante({ navigation, temporada }) {
     if (!uid) return;
     setComprando(true);
     try {
+      if (isOfflineModeEnabled()) {
+        const data = usuario || {};
+        const comercio = data.comercio || {};
+        const compras = comercio.compras || {};
+        const comprasActuales = compras[rotacion.key] || {};
+        const precio = vencido ? Math.ceil(producto.precio * 1.2) : producto.precio;
+        if (producto.tipo !== 'alimento' && comprasActuales[producto.id]) throw new Error('comprado');
+        if ((Number(data.dinero) || 0) < precio) throw new Error('monedas');
+
+        const update = { dinero: Math.max(0, Number(data.dinero) || 0) - precio };
+        let animalUpdate = null;
+        let animalData = null;
+        if (producto.tipo === 'alimento') {
+          update.alimentos = { ...(data.alimentos || {}), [producto.id]: Math.max(0, Number(data.alimentos?.[producto.id]) || 0) + producto.cantidad };
+        }
+        if (producto.tipo === 'cartasAnimalitos') update.cartasAnimalitos = (data.cartasAnimalitos || 0) + producto.cantidad;
+        if (producto.tipo === 'diamantes') update.diamantes = (data.diamantes ?? data.diamante ?? 0) + producto.cantidad;
+        if (producto.tipo === 'cartasAnimal' || producto.tipo === 'skin') {
+          animalData = animalitosEstado?.[producto.animalId] || data.animalitos?.[producto.animalId] || {};
+          const animal = ANIMALITOS.find(item => item.id === producto.animalId);
+          if (!animalitoEstaDesbloqueado(animal, data, animalData)) throw new Error('animal_bloqueado');
+          if (producto.tipo === 'cartasAnimal') {
+            const cartasActuales = Math.max(0, Number(animalData.cartas ?? animalData.copias ?? 0) || 0);
+            animalUpdate = { desbloqueado: true, cartas: cartasActuales + producto.cantidad, copias: cartasActuales + producto.cantidad };
+          } else {
+            if (animalData.skinsDesbloqueadas?.[producto.skinId] || (data.animalito === producto.animalId && data.skin === producto.skinId)) throw new Error('poseido');
+            animalUpdate = { skinsDesbloqueadas: { ...(animalData.skinsDesbloqueadas || {}), [producto.skinId]: true } };
+            update.skinsDesbloqueadas = { ...(data.skinsDesbloqueadas || {}), [producto.animalId]: { ...(data.skinsDesbloqueadas?.[producto.animalId] || {}), [producto.skinId]: true } };
+          }
+        }
+        if (producto.tipo === 'icono') {
+          if (data.iconosDesbloqueados?.[producto.icono.id] || data.iconoUrl === producto.icono.url) throw new Error('poseido');
+          update.iconosDesbloqueados = { ...(data.iconosDesbloqueados || {}), [producto.icono.id]: true };
+        }
+        const comprasActualizadas = producto.tipo === 'alimento'
+          ? compras
+          : { ...compras, [rotacion.key]: { ...comprasActuales, [producto.id]: true } };
+        await syncUpdateDoc(doc(db, 'usuarios', uid), update, { merge: true });
+        if (animalUpdate) await syncSetDoc(doc(db, 'usuarios', uid, 'animalitos', producto.animalId), animalUpdate, { merge: true });
+        await syncSetDoc(doc(db, 'usuarios', uid, 'comercio', 'estado'), { ...comercio, compras: comprasActualizadas }, { merge: true });
+        setUsuario(current => ({ ...(current || {}), ...update, comercio: { ...comercio, compras: comprasActualizadas } }));
+        setMonedas(update.dinero);
+        if (animalUpdate) {
+          setAnimalitosEstado(current => ({ ...current, [producto.animalId]: { ...(current[producto.animalId] || animalData || {}), ...animalUpdate } }));
+          if (producto.tipo === 'cartasAnimal') setAnimalitosDesbloqueados(current => current.includes(producto.animalId) ? current : [...current, producto.animalId]);
+        }
+        registrarObjetivo('comerciante').catch(() => {});
+        global.showToast?.({ text1: `${producto.nombre} guardado localmente`, text2: 'Se sincronizará al volver Internet', type: 'success' });
+        setProductoSeleccionado(null);
+        return;
+      }
       await runTransaction(db, async transaction => {
         const ref = doc(db, 'usuarios', uid);
         const snap = await transaction.get(ref);

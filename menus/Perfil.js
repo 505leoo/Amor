@@ -11,6 +11,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Svg, { Circle, Ellipse, G, Line, Path, Polygon, Rect } from 'react-native-svg';
 import { collection, deleteField, doc, onSnapshot, runTransaction, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { cacheDocument, getCachedDocument, isOfflineModeEnabled, syncSetDoc, syncUpdateDoc } from '../utils/offlineSync';
 import RoomBackground from '../components/RoomBackground';
 import Player, { SinAnimal } from '../Player';
 import { ANIMALITOS, ANIMALITOS_POR_ID, SKINS_POR_ANIMAL, animalitoEstaDesbloqueado } from '../data/animalitos';
@@ -672,8 +673,28 @@ const Perfil = ({ navigation, route }) => {
     if (!targetUid) return undefined;
     let conexiones = {};
     let memoriaSabores = {};
+    getCachedDocument(targetUid, ['usuarios', targetUid]).then(raw => {
+      if (!raw) return;
+      setUserData(previous => previous || {
+        ...raw,
+        uid: targetUid,
+        nombre: raw.datosCompletos?.nombre || raw.nombre || (!soloLectura ? currentUser?.displayName : null) || 'Usuario',
+        correo: raw.correo || (!soloLectura ? currentUser?.email : null) || '—',
+        dinero: Math.max(0, Number(raw.dinero) || 0),
+        diamantes: Math.max(0, Number(raw.diamantes ?? raw.diamante) || 0),
+        exp: Math.max(0, Number(raw.exp) || 0),
+        animalitos: raw.animalitos || {},
+        skinsDesbloqueadas: raw.skinsDesbloqueadas || {},
+        marcoPerfil: raw.marcoPerfil || 'corazon',
+        marcosComprados: raw.marcosComprados || {},
+        marcosDesbloqueados: { corazon: true, ...(raw.marcosComprados || {}) },
+        rinconcito: raw.rinconcito || {},
+        rinconcitoDesbloqueos: raw.rinconcitoDesbloqueos || {},
+      });
+    }).catch(() => {});
     const unsubscribeUser = onSnapshot(doc(db, 'usuarios', targetUid), snap => {
       const raw = snap.exists() ? (snap.data() || {}) : {};
+      cacheDocument(targetUid, ['usuarios', targetUid], raw).catch(() => {});
       setUserData(previous => ({
         ...raw,
         uid: targetUid,
@@ -708,7 +729,31 @@ const Perfil = ({ navigation, route }) => {
         rinconcito: raw.rinconcito || {},
         rinconcitoDesbloqueos: raw.rinconcitoDesbloqueos || {},
       }));
-    }, () => setUserData(null));
+    }, () => {
+      getCachedDocument(targetUid, ['usuarios', targetUid]).then(raw => {
+        if (!raw) {
+          setUserData(null);
+          return;
+        }
+        setUserData(previous => ({
+          ...raw,
+          uid: targetUid,
+          nombre: raw.datosCompletos?.nombre || raw.nombre || (!soloLectura ? currentUser?.displayName : null) || 'Usuario',
+          correo: raw.correo || (!soloLectura ? currentUser?.email : null) || '—',
+          dinero: Math.max(0, Number(raw.dinero) || 0),
+          diamantes: Math.max(0, Number(raw.diamantes ?? raw.diamante) || 0),
+          exp: Math.max(0, Number(raw.exp) || 0),
+          rachaDiaria: raw.rachaDiaria || {},
+          animalitos: raw.animalitos || {},
+          skinsDesbloqueadas: raw.skinsDesbloqueadas || {},
+          marcoPerfil: raw.marcoPerfil || 'corazon',
+          marcosComprados: raw.marcosComprados || {},
+          marcosDesbloqueados: { corazon: true, ...(raw.marcosComprados || {}) },
+          rinconcito: raw.rinconcito || {},
+          rinconcitoDesbloqueos: raw.rinconcitoDesbloqueos || {},
+        }));
+      }).catch(() => setUserData(null));
+    });
     const unsubscribeGame = onSnapshot(doc(db, 'usuarios', targetUid, 'juegos', 'conexiones'), snap => {
       if (!snap.exists()) return;
       conexiones = snap.data() || {};
@@ -721,8 +766,16 @@ const Perfil = ({ navigation, route }) => {
     const unsubscribeAnimals = onSnapshot(collection(db, 'usuarios', targetUid, 'animalitos'), snap => {
       const next = {};
       snap.docs.forEach(animalDoc => { next[animalDoc.id] = animalDoc.data() || {}; });
+      cacheDocument(targetUid, ['usuarios', targetUid, 'animalitos', '__index__'], Object.entries(next).map(([id, data]) => ({ id, data }))).catch(() => {});
       setAnimalStates(next);
-    }, () => setAnimalStates({}));
+    }, () => {
+      getCachedDocument(targetUid, ['usuarios', targetUid, 'animalitos', '__index__']).then(lista => {
+        if (!Array.isArray(lista)) return;
+        const next = {};
+        lista.forEach(item => { if (item?.id) next[item.id] = item.data || {}; });
+        setAnimalStates(next);
+      }).catch(() => {});
+    });
     const unsubscribeBadges = onSnapshot(collection(db, 'usuarios', targetUid, 'chapas'), snap => {
       const next = {};
       snap.docs.forEach(badgeDoc => { next[badgeDoc.id] = { id: badgeDoc.id, ...(badgeDoc.data() || {}) }; });
@@ -845,7 +898,7 @@ const Perfil = ({ navigation, route }) => {
       }
       const currentTier = BADGE_TIERS[nextLevel - 1];
       const currentAcquisition = history[currentTier.id] || { obtenidaEn: awardedAt, motivo: badge.motivo };
-      await setDoc(doc(db, 'usuarios', userData.uid, 'chapas', badge.id), {
+      await syncSetDoc(doc(db, 'usuarios', userData.uid, 'chapas', badge.id), {
         badgeId: badge.id,
         nombre: badge.title,
         nivel: nextLevel,
@@ -867,7 +920,7 @@ const Perfil = ({ navigation, route }) => {
     const targets = legacyBadgeTargets(legacy);
     if (targets.some(id => !badgeRecords[id])) return;
     legacyCleanupRef.current = true;
-    updateDoc(doc(db, 'usuarios', userData.uid), { chapasPerfil: deleteField() }).catch(() => {
+    syncUpdateDoc(doc(db, 'usuarios', userData.uid), { chapasPerfil: deleteField() }).catch(() => {
       legacyCleanupRef.current = false;
     });
   }, [badgeRecords, soloLectura, userData?.chapasPerfil, userData?.uid]);
@@ -919,7 +972,7 @@ const Perfil = ({ navigation, route }) => {
     setBadgeFadeIds([selectedId, id]);
     setBadgeFadeVersion(version => version + 1);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    if (userData?.uid) updateDoc(doc(db, 'usuarios', userData.uid), { chapasOrden: nextOrder }).catch(() => {});
+    if (userData?.uid) syncUpdateDoc(doc(db, 'usuarios', userData.uid), { chapasOrden: nextOrder }).catch(() => {});
     return true;
   }, [orderedBadges, soloLectura, userData?.uid]);
 
@@ -969,6 +1022,33 @@ const Perfil = ({ navigation, route }) => {
     frameActionRef.current = true;
     setBusyFrameId(frame.id);
     try {
+      if (isOfflineModeEnabled()) {
+        const current = d || {};
+        const purchased = current.marcosComprados || {};
+        const unlocked = frame.precio === 0 || Boolean(purchased[frame.id]);
+        const money = Math.max(0, Number(current.dinero) || 0);
+        if (!unlocked) {
+          const frameIndex = FRAME_OPTIONS.findIndex(item => item.id === frame.id);
+          const missingPrevious = FRAME_OPTIONS.slice(1, frameIndex).find(item => !purchased[item.id]);
+          if (missingPrevious) {
+            const error = new Error('MARCO_ANTERIOR_PENDIENTE');
+            error.code = 'MARCO_ANTERIOR_PENDIENTE';
+            error.previousName = missingPrevious.nombre;
+            throw error;
+          }
+        }
+        if (!unlocked && money < frame.precio) {
+          const error = new Error('MONEDAS_INSUFICIENTES');
+          error.code = 'MONEDAS_INSUFICIENTES';
+          throw error;
+        }
+        const purchasedMap = { ...purchased, ...(frame.precio > 0 ? { [frame.id]: true } : {}) };
+        const nextMoney = unlocked ? money : money - frame.precio;
+        await syncUpdateDoc(doc(db, 'usuarios', d.uid), { dinero: nextMoney, marcoPerfil: frame.id, marcosComprados: purchasedMap }, { merge: true });
+        setUserData(currentData => currentData ? { ...currentData, dinero: nextMoney, marcoPerfil: frame.id, marcosComprados: purchasedMap, marcosDesbloqueados: { corazon: true, ...purchasedMap } } : currentData);
+        global.showToast?.({ type: 'success', text1: unlocked ? 'Marco equipado sin conexión' : 'Marco guardado localmente', text2: 'Se sincronizará al volver Internet' });
+        return;
+      }
       const result = await runTransaction(db, async transaction => {
         const userRef = doc(db, 'usuarios', d.uid);
         const snapshot = await transaction.get(userRef);
@@ -1020,7 +1100,7 @@ const Perfil = ({ navigation, route }) => {
     setRinconSaving(true);
     try {
       const savedConfig = { ...safeConfig, actualizadoEn: new Date() };
-      await setDoc(doc(db, 'usuarios', d.uid), { rinconcito: savedConfig }, { merge: true });
+      await syncSetDoc(doc(db, 'usuarios', d.uid), { rinconcito: savedConfig }, { merge: true });
       setUserData(current => current ? { ...current, rinconcito: savedConfig } : current);
       setSeccionPerfil('principal');
       global.showToast?.({ type: 'success', text1: 'Tu rinconcito quedó precioso', text2: 'Ya se puede ver en tu perfil' });
@@ -1039,6 +1119,22 @@ const Perfil = ({ navigation, route }) => {
     rinconUnlockRef.current = true;
     setRinconUnlocking(unlockKey);
     try {
+      if (isOfflineModeEnabled()) {
+        const current = d || {};
+        const unlocks = current.rinconcitoDesbloqueos || {};
+        if (item.precio === 0 || unlocks?.[type]?.[item.id]) return true;
+        const diamonds = Math.max(0, Number(current.diamantes ?? current.diamante) || 0);
+        if (diamonds < item.precio) {
+          const error = new Error('DIAMANTES_INSUFICIENTES');
+          error.code = 'DIAMANTES_INSUFICIENTES';
+          throw error;
+        }
+        const nextUnlocks = { ...unlocks, [type]: { ...(unlocks[type] || {}), [item.id]: true } };
+        await syncUpdateDoc(doc(db, 'usuarios', d.uid), { diamantes: diamonds - item.precio, rinconcitoDesbloqueos: nextUnlocks }, { merge: true });
+        setUserData(currentData => currentData ? { ...currentData, diamantes: diamonds - item.precio, rinconcitoDesbloqueos: nextUnlocks } : currentData);
+        global.showToast?.({ type: 'success', text1: 'Detalle guardado localmente', text2: 'Se sincronizará al volver Internet' });
+        return true;
+      }
       const result = await runTransaction(db, async transaction => {
         const userRef = doc(db, 'usuarios', d.uid);
         const snapshot = await transaction.get(userRef);

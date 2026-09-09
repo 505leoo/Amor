@@ -4,6 +4,7 @@ import { Image } from 'expo-image';
 import { db, auth } from '../../firebaseConfig';
 import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import TabButtons from '../../components/TabButtons';
+import { syncSetDoc } from '../../utils/offlineSync';
 
 const IMAGENES = [
   require('../../assets/temporadas/libro/Temporada1/Historia/historia1.png'),
@@ -47,7 +48,7 @@ export default function LibroTemp1({ navigation, route }) {
     if (!uid || reclamando) return;
     setReclamando(true);
     try {
-      await setDoc(doc(db, 'usuarios', uid), { halconDesbloqueado: true }, { merge: true });
+      await syncSetDoc(doc(db, 'usuarios', uid), { halconDesbloqueado: true }, { merge: true });
       setHalconDesbloqueado(true);
     } catch (e) {
       console.error('Error al reclamar halcón:', e);

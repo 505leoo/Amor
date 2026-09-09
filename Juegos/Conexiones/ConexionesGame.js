@@ -7,12 +7,13 @@ import Svg, { Circle, Polyline } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
-import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '../../firebaseConfig';
 import RoomBackground from '../../components/RoomBackground';
 import TabButtons from '../../components/TabButtons';
 import { useRacha } from '../../RachaContext';
 import { resolverAvatarUsuario } from '../../data/iconosLocales';
+import { cacheDocument, getCachedDocument, getProjectedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncSetDoc, syncUpdateDoc } from '../../utils/offlineSync';
 
 const { width: W, height: H } = Dimensions.get('window');
 const STORAGE_PREFIX = 'conexiones_progreso_v1_';
@@ -548,15 +549,12 @@ export default memo(function ConexionesGame({ navigation }) {
 
   useEffect(() => {
     if (!uid) return undefined;
-    const unsubscribeUser = onSnapshot(doc(db, 'usuarios', uid), snapshot => {
-      const data = snapshot.data() || {};
-      setPartnerId(data.pareja || null);
-    }, () => {});
-    const unsubscribeGame = onSnapshot(doc(db, 'usuarios', uid, 'juegos', 'conexiones'), snapshot => {
-      const gameData = snapshot.data() || {};
-      const nivelRemoto = Math.min(Math.max(Number(gameData.nivel) || 1, 1), MAX_LEVELS);
+    const gamePath = ['usuarios', uid, 'juegos', 'conexiones'];
+    const aplicarJuego = gameData => {
+      const datos = gameData || {};
+      const nivelRemoto = Math.min(Math.max(Number(datos.nivel) || 1, 1), MAX_LEVELS);
       remoteLevelRef.current = Math.max(remoteLevelRef.current, nivelRemoto);
-      setMyOnlineStats(previous => ({ ...(previous || {}), ...gameData, nivel: nivelRemoto }));
+      setMyOnlineStats(previous => ({ ...(previous || {}), ...datos, nivel: nivelRemoto }));
       setProgress(previous => {
         if (nivelRemoto <= (previous.unlocked || 1)) return previous;
         const merged = { ...previous, unlocked: nivelRemoto };
@@ -564,15 +562,28 @@ export default memo(function ConexionesGame({ navigation }) {
         AsyncStorage.setItem(`${STORAGE_PREFIX}${uid}`, JSON.stringify(merged)).catch(() => {});
         return merged;
       });
+    };
+    const unsubscribeUser = onSnapshot(doc(db, 'usuarios', uid), snapshot => {
+      const data = snapshot.data() || {};
+      setPartnerId(data.pareja || null);
+    }, () => {});
+    getCachedDocument(uid, gamePath).then(aplicarJuego).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, gamePath, aplicarJuego);
+    const unsubscribeGame = onSnapshot(doc(db, ...gamePath), snapshot => {
+      const serverData = snapshot.data() || {};
+      getProjectedDocument(uid, gamePath, serverData).then(projected => {
+        cacheDocument(uid, gamePath, projected).catch(() => {});
+        aplicarJuego(projected);
+      }).catch(() => aplicarJuego(serverData));
     }, () => {});
     const unsubscribeProfile = onSnapshot(doc(db, 'usuarios', uid), snapshot => {
       const data = snapshot.data() || {};
       if (data.juegos?.conexiones) {
-        setDoc(doc(db, 'usuarios', uid, 'juegos', 'conexiones'), data.juegos.conexiones, { merge: true }).catch(() => {});
+        syncSetDoc(doc(db, 'usuarios', uid, 'juegos', 'conexiones'), data.juegos.conexiones, { merge: true }).catch(() => {});
       }
       setMyOnlineStats(previous => ({ ...(previous || {}), nombre: data.nombre, iconoLocalId: data.iconoLocalId, iconoUrl: data.iconoUrl, photoURL: data.photoURL }));
     }, () => {});
-    return () => { unsubscribeUser(); unsubscribeGame(); unsubscribeProfile(); };
+    return () => { unsubscribeUser(); unsubscribeGame(); unsubscribeProfile(); quitarCache(); };
   }, [uid]);
 
   useEffect(() => {
@@ -646,6 +657,50 @@ export default memo(function ConexionesGame({ navigation }) {
     const levelId = Math.trunc(Number(completedLevel.id));
     if (levelId < 1 || levelId > MAX_LEVELS) throw new Error('Nivel inválido');
     const userRef = doc(db, 'usuarios', uid);
+    const gameRef = doc(db, 'usuarios', uid, 'juegos', 'conexiones');
+    const guardarSinConexion = async () => {
+      const [cachedUser, cachedGame] = await Promise.all([
+        getCachedDocument(uid, ['usuarios', uid]),
+        getCachedDocument(uid, gameRef.path),
+      ]);
+      const data = cachedUser || {};
+      const remoteGame = { ...(cachedGame || {}), ...(myOnlineStats || {}) };
+      const claimedStars = { ...(remoteGame.recompensas || {}) };
+      const previousClaim = Math.max(0, Math.min(3, Number(claimedStars[levelId]) || 0));
+      const currentStars = Math.max(0, Math.min(3, stars));
+      const grantedStars = Math.max(0, currentStars - previousClaim);
+      const earned = grantedStars * (4 + levelId);
+      const partidasCompletadas = (Number(remoteGame.partidasCompletadas) || 0) + 1;
+      const bonusTipo = partidasCompletadas % 5 === 0
+        ? (Math.floor(partidasCompletadas / 5) % 2 === 0 ? 'globos' : 'chicles')
+        : null;
+      claimedStars[levelId] = Math.max(previousClaim, currentStars);
+      const totalStars = Object.values(claimedStars).reduce((sum, value) => sum + (Number(value) || 0), 0);
+      const nextUnlocked = Math.max(Number(remoteGame.nivel) || 1, nextProgress.unlocked);
+      const offlineStats = {
+        nivel: nextUnlocked,
+        estrellas: totalStars,
+        puntos: Math.max(Number(remoteGame.puntos) || 0, gameScore(nextProgress)),
+        ultimoNivel: levelId,
+        partidasCompletadas,
+        recompensas: claimedStars,
+        ultimaConexion: serverTimestamp(),
+      };
+      const userUpdate = {
+        exp: (Number(data.exp) || 0) + EXP_POR_VICTORIA,
+        ...(earned > 0 ? { dinero: (Number(data.dinero) || 0) + earned } : {}),
+        ...(bonusTipo === 'chicles' ? { chicles: (Number(data.chicles) || 0) + 1 } : {}),
+        ...(bonusTipo === 'globos' ? { globos: (Number(data.globos) || 0) + 1 } : {}),
+      };
+      // Son escrituras idempotentes: si la app se cierra durante el envío,
+      // la misma operación se reintenta con el mismo resultado y no vuelve a
+      // sumar monedas/EXP con incrementos duplicados.
+      await syncSetDoc(gameRef, offlineStats, { merge: true });
+      await syncUpdateDoc(userRef, userUpdate, { merge: true });
+      setMyOnlineStats(previous => ({ ...(previous || {}), ...offlineStats }));
+      return { earned, exp: EXP_POR_VICTORIA, bonus: bonusTipo ? { tipo: bonusTipo, cantidad: 1 } : null };
+    };
+    if (isOfflineModeEnabled()) return guardarSinConexion();
     return runTransaction(db, async transaction => {
       const snapshot = await transaction.get(userRef);
       const gameSnapshot = await transaction.get(doc(db, 'usuarios', uid, 'juegos', 'conexiones'));
@@ -675,7 +730,7 @@ export default memo(function ConexionesGame({ navigation }) {
         partidasCompletadas,
         recompensas: claimedStars,
       };
-      transaction.set(doc(db, 'usuarios', uid, 'juegos', 'conexiones'), onlineStats, { merge: true });
+      transaction.set(gameRef, onlineStats, { merge: true });
       transaction.set(userRef, {
         exp: (Number(data.exp) || 0) + EXP_POR_VICTORIA,
         ...(earned > 0 ? { dinero: (Number(data.dinero) || 0) + earned } : {}),
@@ -683,8 +738,13 @@ export default memo(function ConexionesGame({ navigation }) {
         ...(bonusTipo === 'globos' ? { globos: (Number(data.globos) || 0) + 1 } : {}),
       }, { merge: true });
       return { earned, exp: EXP_POR_VICTORIA, bonus: bonusTipo ? { tipo: bonusTipo, cantidad: 1 } : null };
+    }).catch(error => {
+      // Si la red cayó después de comenzar la transacción, conservamos la
+      // victoria local y la pasamos a la misma cola persistente.
+      if (isOfflineModeEnabled()) return guardarSinConexion();
+      throw error;
     });
-  }, [uid]);
+  }, [myOnlineStats, uid]);
 
   const startLevel = useCallback((levelId = selectedId) => {
     if (levelId > latestUnlocked) return;

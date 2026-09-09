@@ -19,7 +19,7 @@ export const ThemeMark = ({ tematica }) => {
 };
 
 // A scene on the room background, not a dialog: only the information has cards.
-export default function AnimalitoShowcase({ animal, skins, tema, estado, necesarias, costo, puedeMejorar, mejorando, confirmar, equipado, skinEquipada, equipando, onEquipar, onMejorar, onCartas, tematicas = [], onVerTematica, children }) {
+export default function AnimalitoShowcase({ animal, skins, tema, estado, necesarias, costo, puedeMejorar, mejorando, confirmar, equipado, skinEquipada, equipando, desbloqueado = false, onEquipar, onMejorar, onCartas, tematicas = [], onVerTematica, children }) {
   const [skinId, setSkinId] = useState(skinEquipada);
   const [width, setWidth] = useState(700);
   const index = Math.max(0, skins.findIndex(skin => skin.storageId === skinId));
@@ -72,8 +72,8 @@ export default function AnimalitoShowcase({ animal, skins, tema, estado, necesar
       </View>
     </View>
     <View style={s.equipArea}>
-      <TouchableOpacity onPress={() => onEquipar(skin)} disabled={!skin || skin.bloqueado || usando || equipando} style={[s.equip, { backgroundColor: tema.texto }, (skin?.bloqueado || usando || equipando) && s.disabled]}>
-        <MaterialIcons name={skin?.bloqueado ? 'lock-outline' : usando ? 'check' : 'pets'} size={15} color="#fffaf1" /><Text style={s.buttonText}>{equipando ? 'Equipando…' : skin?.bloqueado ? 'Traje bloqueado' : usando ? 'Equipado' : 'Equipar compañero'}</Text>
+      <TouchableOpacity onPress={() => onEquipar(skin)} disabled={!desbloqueado || !skin || skin.bloqueado || usando || equipando} style={[s.equip, { backgroundColor: tema.texto }, (!desbloqueado || skin?.bloqueado || usando || equipando) && s.disabled]}>
+        <MaterialIcons name={!desbloqueado || skin?.bloqueado ? 'lock-outline' : usando ? 'check' : 'pets'} size={15} color="#fffaf1" /><Text style={s.buttonText}>{equipando ? 'Equipando…' : !desbloqueado ? 'Animalito bloqueado' : skin?.bloqueado ? 'Traje bloqueado' : usando ? 'Equipado' : 'Equipar compañero'}</Text>
       </TouchableOpacity>
     </View>
     </View>

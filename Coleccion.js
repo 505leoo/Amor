@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList, StatusBar } from 'react-native';
 import { collection, getDocs, doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { db, auth } from './firebaseConfig';
+import { syncDeleteDoc, syncUpdateDoc } from './utils/offlineSync';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -112,7 +113,7 @@ const Coleccion = ({ onClose, navigation }) => {
       const { imageUrl, selectedAt } = snap.data();
       const elapsed = Date.now() - selectedAt.toMillis();
       if (elapsed > 24 * 60 * 60 * 1000) {
-        await deleteDoc(ref);
+        await syncDeleteDoc(ref);
       } else {
         setCartaSticker({ imageUrl });
       }
@@ -145,7 +146,7 @@ const Coleccion = ({ onClose, navigation }) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
-      await updateDoc(doc(db, 'usuarios', user.uid), {
+      await syncUpdateDoc(doc(db, 'usuarios', user.uid), {
         selectedSticker: { id: sticker.id, name: sticker.name, imageUrl: sticker.imageUrl, rarity: sticker.rarity, season: sticker.season }
       });
       setSelectedStickerId(sticker.id);
@@ -156,7 +157,7 @@ const Coleccion = ({ onClose, navigation }) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
-      await updateDoc(doc(db, 'usuarios', user.uid), { selectedSticker: null });
+      await syncUpdateDoc(doc(db, 'usuarios', user.uid), { selectedSticker: null });
       setSelectedStickerId(null);
     } catch (e) {}
   };

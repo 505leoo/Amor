@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Pressable, Image as RNImage, ScrollView, FlatList, Modal, Animated } from 'react-native';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { collection, doc, getDocs, onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
@@ -12,6 +11,14 @@ import AnimalitoShowcase, { ThemeMark } from './components/AnimalitoShowcase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ANIMALITOS, SKINS, TEMATICAS_SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 import { obtenerIconoLocal } from './data/iconosLocales';
+import { cacheDocument, getCachedDocument, getProjectedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncSetDoc } from './utils/offlineSync';
+
+// Los animalitos son assets locales del bundle. Usamos el Image nativo para
+// que FlatList no dependa de la caché de expo-image ni de una resolución de
+// red antes de mostrar una tarjeta.
+const Image = ({ source, style, contentFit = 'contain', cachePolicy: _cachePolicy, priority: _priority, transition: _transition, ...props }) => (
+  <RNImage source={source} style={style} resizeMode={contentFit} {...props} />
+);
 
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
 const COSTO_MEJORA = nivel => 120 * nivel;
@@ -22,21 +29,6 @@ const PALETA_RAREZA = {
   Épico: { fondo: '#eadcf3', brillo: '#fbf3ff', acento: '#9160b7', texto: '#583672' },
   Legendario: { fondo: '#f5e2bd', brillo: '#fff8e6', acento: '#c4862e', texto: '#704815' },
 };
-// Tarjetas de muestra para darle más recorrido visual a la grilla sin
-// convertirlas en mascotas desbloqueables ni alterar la colección real.
-const EJEMPLOS_ANIMALITOS = [
-  { id: 'ejemplo-panda', nombre: 'Panda', icono: '🐼', rareza: 'Raro', proximo: true },
-  { id: 'ejemplo-zorro', nombre: 'Zorro', icono: '🦊', rareza: 'Épico', proximo: true },
-  { id: 'ejemplo-pinguino', nombre: 'Pingüino', icono: '🐧', rareza: 'Raro', proximo: true },
-  { id: 'ejemplo-capibara', nombre: 'Capibara', icono: '🦫', rareza: 'Legendario', proximo: true },
-  { id: 'ejemplo-mapache', nombre: 'Mapache', icono: '🦝', rareza: 'Épico', proximo: true },
-  { id: 'ejemplo-nutria', nombre: 'Nutria', icono: '🦦', rareza: 'Raro', proximo: true },
-  { id: 'ejemplo-mariposa', nombre: 'Mariposa', icono: '🦋', rareza: 'Legendario', proximo: true },
-  { id: 'ejemplo-koala', nombre: 'Koala', icono: '🐨', rareza: 'Común', proximo: true },
-  { id: 'ejemplo-oso', nombre: 'Osito', icono: '🐻', rareza: 'Raro', proximo: true },
-  { id: 'ejemplo-sapo', nombre: 'Sapo', icono: '🐸', rareza: 'Épico', proximo: true },
-  { id: 'ejemplo-pulpo', nombre: 'Pulpo', icono: '🐙', rareza: 'Legendario', proximo: true },
-];
 const proyectarMejoras = ({ nivel, cartasPropias, cartasUniversales }, dineroDisponible) => {
   let nivelSimulado = Math.max(1, Number(nivel) || 1);
   let propias = Math.max(0, Number(cartasPropias) || 0);
@@ -119,6 +111,102 @@ const RECOMPENSAS_NIVEL = {
     { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
     { nivel: 100, tipo: 'skin', skinId: 'monot1', icono: '🍌', titulo: 'Banana Tropical' },
   ],
+  buho: [
+    { nivel: 5, tipo: 'dinero', cantidad: 900, icono: '🪙', titulo: '900 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 35, icono: '◆', titulo: '35 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'buho_icon', icono: '✦', titulo: 'Icono de Búho', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
+  ],
+  murcielago: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1100, icono: '🪙', titulo: '1.100 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 40, icono: '◆', titulo: '40 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'murcielago_icon', icono: '✦', titulo: 'Icono de Murciélago', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+  ],
+  tortuga: [
+    { nivel: 5, tipo: 'dinero', cantidad: 900, icono: '🪙', titulo: '900 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 35, icono: '◆', titulo: '35 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'tortuga_icon', icono: '✦', titulo: 'Icono de Tortuga', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
+  ],
+  pulpo: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1100, icono: '🪙', titulo: '1.100 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 40, icono: '◆', titulo: '40 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'pulpo_icon', icono: '✦', titulo: 'Icono de Pulpo', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+  ],
+  zorro: [
+    { nivel: 5, tipo: 'dinero', cantidad: 900, icono: '🪙', titulo: '900 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 35, icono: '◆', titulo: '35 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'zorro_icon', icono: '✦', titulo: 'Icono de Zorro', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
+  ],
+  delfin: [
+    { nivel: 5, tipo: 'dinero', cantidad: 900, icono: '🪙', titulo: '900 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 35, icono: '◆', titulo: '35 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'delfin_icon', icono: '✦', titulo: 'Icono de Delfín', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
+  ],
+  colibri: [
+    { nivel: 5, tipo: 'dinero', cantidad: 800, icono: '🪙', titulo: '800 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 30, icono: '◆', titulo: '30 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'colibri_icon', icono: '✦', titulo: 'Icono de Colibrí', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
+  ],
+  mariposa: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1000, icono: '🪙', titulo: '1.000 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 40, icono: '◆', titulo: '40 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'mariposa_icon', icono: '✦', titulo: 'Icono de Mariposa', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+  ],
+  abeja: [
+    { nivel: 5, tipo: 'dinero', cantidad: 700, icono: '🪙', titulo: '700 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 25, icono: '◆', titulo: '25 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'abeja_icon', icono: '✦', titulo: 'Icono de Abeja', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 15, icono: '▣', titulo: '15 cartas universales' },
+  ],
+  ballena: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1400, icono: '🪙', titulo: '1.400 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 50, icono: '◆', titulo: '50 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'ballena_icon', icono: '✦', titulo: 'Icono de Ballena', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 30, icono: '▣', titulo: '30 cartas universales' },
+  ],
+  cangrejo: [
+    { nivel: 5, tipo: 'dinero', cantidad: 900, icono: '🪙', titulo: '900 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 35, icono: '◆', titulo: '35 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'cangrejo_icon', icono: '✦', titulo: 'Icono de Cangrejo', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
+  ],
+  caballitodemar: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1000, icono: '🪙', titulo: '1.000 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 40, icono: '◆', titulo: '40 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'caballitodemar_icon', icono: '✦', titulo: 'Icono de Caballito de Mar', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+  ],
+  conejo: [
+    { nivel: 5, tipo: 'dinero', cantidad: 700, icono: '🪙', titulo: '700 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 25, icono: '◆', titulo: '25 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'conejo_icon', icono: '✦', titulo: 'Icono de Conejo', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 15, icono: '▣', titulo: '15 cartas universales' },
+  ],
+  oso: [
+    { nivel: 5, tipo: 'dinero', cantidad: 900, icono: '🪙', titulo: '900 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 35, icono: '◆', titulo: '35 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'oso_icon', icono: '✦', titulo: 'Icono de Oso', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 20, icono: '▣', titulo: '20 cartas universales' },
+  ],
+  panda: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1400, icono: '🪙', titulo: '1.400 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 50, icono: '◆', titulo: '50 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'panda_icon', icono: '✦', titulo: 'Icono de Panda', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 30, icono: '▣', titulo: '30 cartas universales' },
+  ],
+  mapache: [
+    { nivel: 5, tipo: 'dinero', cantidad: 1100, icono: '🪙', titulo: '1.100 monedas' },
+    { nivel: 15, tipo: 'diamantes', cantidad: 40, icono: '◆', titulo: '40 diamantes' },
+    { nivel: 25, tipo: 'iconoPendiente', identificador: 'mapache_icon', icono: '✦', titulo: 'Icono de Mapache', detalle: 'Próximamente' },
+    { nivel: 75, tipo: 'cartasAnimalitos', cantidad: 25, icono: '▣', titulo: '25 cartas universales' },
+  ],
 };
 
 const Animalitos = ({ navigation, mode }) => {
@@ -188,9 +276,8 @@ const Animalitos = ({ navigation, mode }) => {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     AsyncStorage.getItem(`skin_${uid}`).then(value => { if (value) setEquipadaSkin(value); }).catch(() => {});
-    const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
-      if (!snap.exists()) return;
-      const data = snap.data();
+    const aplicarDatosUsuario = data => {
+      if (!data) return;
       setEquipadaSkin(data.skin ?? 'default');
       if (data.animalito) setSkinsEquipadas(prev => ({ ...prev, [data.animalito]: data.skin ?? prev[data.animalito] ?? 'default' }));
       setNombreUsuario(data.datosCompletos?.nombre || data.nombre || auth.currentUser?.displayName || 'Usuario');
@@ -210,9 +297,17 @@ const Animalitos = ({ navigation, mode }) => {
         if (estado?.desbloqueado || Number(estado?.nivel) > 0 || Number(estado?.cartas ?? estado?.copias) > 0) lista.push(animalId);
       });
       setDesbloqueados(prev => [...new Set([...prev, ...lista])]);
-
-    });
-    return unsub;
+    };
+    getCachedDocument(uid, ['usuarios', uid]).then(cached => aplicarDatosUsuario(cached)).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, ['usuarios', uid], aplicarDatosUsuario);
+    const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
+      if (!snap.exists()) return;
+      getProjectedDocument(uid, ['usuarios', uid], snap.data()).then(data => {
+        cacheDocument(uid, ['usuarios', uid], data).catch(() => {});
+        aplicarDatosUsuario(data);
+      }).catch(() => aplicarDatosUsuario(snap.data()));
+    }, () => {});
+    return () => { unsub(); quitarCache(); };
   }, []);
 
   // El progreso propio de cada animalito vive en su subcolección. Escuchar la
@@ -220,14 +315,15 @@ const Animalitos = ({ navigation, mode }) => {
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
-    return onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+    const aplicarEstadosAnimalitos = listaDocumentos => {
       const estados = {};
       const desbloqueadosSubcoleccion = [];
       const skinsPorAnimal = {};
       const equipadasPorAnimal = {};
-      snapshot.docs.forEach(animalDoc => {
-        const data = animalDoc.data() || {};
-        const esArdillaInicialErronea = animalDoc.id === 'ardilla'
+      listaDocumentos.forEach(animalDoc => {
+        const id = animalDoc.id;
+        const data = typeof animalDoc.data === 'function' ? animalDoc.data() || {} : animalDoc.data || {};
+        const esArdillaInicialErronea = id === 'ardilla'
           && data.desbloqueado === true
           && Math.max(1, Number(data.nivel) || 1) === 1
           && Math.max(0, Number(data.cartas ?? data.copias) || 0) === 0
@@ -235,20 +331,29 @@ const Animalitos = ({ navigation, mode }) => {
           && Object.keys(data.skinsDesbloqueadas || {}).length === 0;
         if (esArdillaInicialErronea && !limpiezaArdillaRef.current) {
           limpiezaArdillaRef.current = true;
-          setDoc(animalDoc.ref, { desbloqueado: false }, { merge: true }).catch(() => { limpiezaArdillaRef.current = false; });
+          syncSetDoc(doc(db, 'usuarios', uid, 'animalitos', id), { desbloqueado: false }, { merge: true }).catch(() => { limpiezaArdillaRef.current = false; });
         }
-        estados[animalDoc.id] = { ...data, nivel: Math.max(1, Number(data.nivel) || 1) };
-        skinsPorAnimal[animalDoc.id] = data.skinsDesbloqueadas || {};
-        equipadasPorAnimal[animalDoc.id] = data.skin || 'default';
+        estados[id] = { ...data, nivel: Math.max(1, Number(data.nivel) || 1) };
+        skinsPorAnimal[id] = data.skinsDesbloqueadas || {};
+        equipadasPorAnimal[id] = data.skin || 'default';
         const desbloqueado = data.desbloqueado === true
           || (data.desbloqueado !== false && Boolean(data.nivel || data.cartas || data.copias));
-        if (desbloqueado && !esArdillaInicialErronea) desbloqueadosSubcoleccion.push(animalDoc.id);
+        if (desbloqueado && !esArdillaInicialErronea) desbloqueadosSubcoleccion.push(id);
       });
       setAnimalesEstado(prev => ({ ...prev, ...estados }));
       setSkinsDesbloqueadas(prev => ({ ...prev, ...skinsPorAnimal }));
       setSkinsEquipadas(prev => ({ ...prev, ...equipadasPorAnimal }));
       setDesbloqueados(prev => [...new Set([...prev, ...desbloqueadosSubcoleccion])]);
+    };
+    getCachedDocument(uid, ['usuarios', uid, 'animalitos', '__index__']).then(cached => {
+      if (Array.isArray(cached)) aplicarEstadosAnimalitos(cached.map(item => ({ id: item.id, data: item.data })));
+    }).catch(() => {});
+    const unsub = onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+      const lista = snapshot.docs.map(animalDoc => ({ id: animalDoc.id, data: animalDoc.data() || {} }));
+      cacheDocument(uid, ['usuarios', uid, 'animalitos', '__index__'], lista).catch(() => {});
+      aplicarEstadosAnimalitos(lista);
     }, () => {});
+    return unsub;
   }, []);
 
   useEffect(() => {
@@ -285,13 +390,15 @@ const Animalitos = ({ navigation, mode }) => {
         setEquipado(skin.animalId);
         setSkinsEquipadas(prev => ({ ...prev, [skin.animalId]: nextSkin }));
         AsyncStorage.setItem(`skin_${uid}`, nextSkin).catch(() => {});
-        await setDoc(doc(db, 'usuarios', uid, 'animalitos', skin.animalId), { skin: nextSkin }, { merge: true });
-        await setDoc(doc(db, 'usuarios', uid), { animalito: skin.animalId, skin: nextSkin }, { merge: true });
+        await syncSetDoc(doc(db, 'usuarios', uid, 'animalitos', skin.animalId), { skin: nextSkin }, { merge: true });
+        await syncSetDoc(doc(db, 'usuarios', uid), { animalito: skin.animalId, skin: nextSkin }, { merge: true });
       } else {
         const nuevo = equipado === id ? null : id;
         const skinDelAnimal = nuevo ? (skinsEquipadas?.[nuevo] || 'default') : 'default';
         setEquipadaSkin(skinDelAnimal);
-        await setDoc(doc(db, 'usuarios', uid), { animalito: nuevo, skin: skinDelAnimal }, { merge: true });
+        setEquipado(nuevo);
+        if (nuevo) setSkinsEquipadas(prev => ({ ...prev, [nuevo]: skinDelAnimal }));
+        await syncSetDoc(doc(db, 'usuarios', uid), { animalito: nuevo, skin: skinDelAnimal }, { merge: true });
       }
     } catch (e) {
       console.error('Error al equipar animalito:', e);
@@ -464,10 +571,7 @@ const Animalitos = ({ navigation, mode }) => {
 
   if (mode !== 'skins') {
     const animalesDisponibles = soloDesbloqueados ? animalitosOrdenados : animalitosCatalogo;
-    const listaSimple = [
-      ...animalesDisponibles,
-      ...EJEMPLOS_ANIMALITOS,
-    ];
+    const listaSimple = animalesDisponibles;
     return (
       <View style={s.nuevaPantalla}>
         <StatusBar hidden />
@@ -489,7 +593,7 @@ const Animalitos = ({ navigation, mode }) => {
               bounces={false}
               renderItem={({ item, index }) => {
               const bloqueado = Boolean(item?.bloqueado);
-              const esEjemplo = Boolean(item?.proximo);
+              const esEjemplo = false;
                 const activo = item?.id === seleccionado?.id;
                 const tema = PALETA_RAREZA[item?.rareza] || PALETA_RAREZA.Común;
                 const estadoItem = item && !bloqueado ? estadoAnimal(item.id) : null;
@@ -502,7 +606,7 @@ const Animalitos = ({ navigation, mode }) => {
                       <LinearGradient colors={faltantesItem ? [tema.acento, tema.texto] : ['#9dce65', '#589044']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.catalogCardProgressFill, { width: `${Math.min(100, estadoItem.totalCartas / requeridasItem * 100)}%` }]} />
                       <MaterialIcons name="style" size={10} color="#ffe6a1" /><Text style={s.catalogCardProgressText}>{estadoItem.totalCartas}/{requeridasItem}</Text>
                     </View>
-                    <Image source={item.imagen} style={s.animalitoSimpleImage} contentFit="contain" cachePolicy="memory" />
+                    <Image source={item.imagen} style={s.animalitoSimpleImage} contentFit="contain" cachePolicy="memory-disk" />
                     <Text style={s.catalogCardName} numberOfLines={1}>{item.nombre.toUpperCase()}</Text>
                     <LinearGradient colors={[tema.acento, tema.texto]} style={s.catalogCardFooter}>
                       <Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text>
@@ -521,6 +625,7 @@ const Animalitos = ({ navigation, mode }) => {
               tema={PALETA_RAREZA[fichaAnimalMostrado.rareza] || PALETA_RAREZA.Común}
               estado={estadoMostrado} necesarias={cartasNecesarias} costo={costoMejora}
               puedeMejorar={puedeMejorar} mejorando={Boolean(mejoraEnCurso)}
+              desbloqueado={animalDesbloqueado}
               confirmar={mejoraPendiente === animalMostrado.id}
               equipado={equipado === animalMostrado.id}
               skinEquipada={skinsEquipadas?.[animalMostrado.id] || 'default'}
@@ -535,21 +640,37 @@ const Animalitos = ({ navigation, mode }) => {
                 equipandoShowcaseRef.current = true;
                 setEquipandoShowcase(true);
                 try {
-                  await runTransaction(db, async transaction => {
-                    const userRef = doc(db, 'usuarios', uid);
-                    const petRef = doc(db, 'usuarios', uid, 'animalitos', skin.animalId);
-                    const userSnap = await transaction.get(userRef);
-                    const petSnap = await transaction.get(petRef);
-                    const usuario = userSnap.data() || {};
-                    const pet = petSnap.data() || usuario.animalitos?.[skin.animalId] || {};
-                    if (!animalitoEstaDesbloqueado(fichaAnimalMostrado, usuario, pet)) throw new Error('Animalito bloqueado');
-                    const desbloqueada = skin.storageId === 'default' || pet.skin === skin.storageId
-                      || (usuario.animalito === skin.animalId && usuario.skin === skin.storageId)
-                      || pet.skinsDesbloqueadas?.[skin.storageId] || usuario.skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId];
+                  const userRef = doc(db, 'usuarios', uid);
+                  const petRef = doc(db, 'usuarios', uid, 'animalitos', skin.animalId);
+                  if (isOfflineModeEnabled()) {
+                    const [usuario, pet] = await Promise.all([
+                      getCachedDocument(uid, userRef.path),
+                      getCachedDocument(uid, petRef.path),
+                    ]);
+                    const usuarioLocal = usuario || {};
+                    const petLocal = pet || animalesEstado?.[skin.animalId] || {};
+                    if (!animalitoEstaDesbloqueado(fichaAnimalMostrado, usuarioLocal, petLocal)) throw new Error('Animalito bloqueado');
+                    const desbloqueada = skin.storageId === 'default' || petLocal.skin === skin.storageId
+                      || (usuarioLocal.animalito === skin.animalId && usuarioLocal.skin === skin.storageId)
+                      || petLocal.skinsDesbloqueadas?.[skin.storageId] || usuarioLocal.skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId];
                     if (!desbloqueada) throw new Error('Traje bloqueado');
-                    transaction.set(petRef, { skin: skin.storageId }, { merge: true });
-                    transaction.set(userRef, { animalito: skin.animalId, skin: skin.storageId }, { merge: true });
-                  });
+                    await syncSetDoc(petRef, { skin: skin.storageId }, { merge: true });
+                    await syncSetDoc(userRef, { animalito: skin.animalId, skin: skin.storageId }, { merge: true });
+                  } else {
+                    await runTransaction(db, async transaction => {
+                      const userSnap = await transaction.get(userRef);
+                      const petSnap = await transaction.get(petRef);
+                      const usuario = userSnap.data() || {};
+                      const pet = petSnap.data() || usuario.animalitos?.[skin.animalId] || {};
+                      if (!animalitoEstaDesbloqueado(fichaAnimalMostrado, usuario, pet)) throw new Error('Animalito bloqueado');
+                      const desbloqueada = skin.storageId === 'default' || pet.skin === skin.storageId
+                        || (usuario.animalito === skin.animalId && usuario.skin === skin.storageId)
+                        || pet.skinsDesbloqueadas?.[skin.storageId] || usuario.skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId];
+                      if (!desbloqueada) throw new Error('Traje bloqueado');
+                      transaction.set(petRef, { skin: skin.storageId }, { merge: true });
+                      transaction.set(userRef, { animalito: skin.animalId, skin: skin.storageId }, { merge: true });
+                    });
+                  }
                   setEquipado(skin.animalId);
                   setEquipadaSkin(skin.storageId);
                   setSkinsEquipadas(prev => ({ ...prev, [skin.animalId]: skin.storageId }));
@@ -574,7 +695,7 @@ const Animalitos = ({ navigation, mode }) => {
               <Text style={s.tematicaModalEyebrow}>COLECCIÓN DE TRAJES</Text>
               <View style={s.tematicaTituloNavegacion}><TouchableOpacity onPress={() => cambiarTematica(tematicasDisponibles[(tematicasDisponibles.indexOf(tematicaAbierta) - 1 + tematicasDisponibles.length) % tematicasDisponibles.length])} style={s.tematicaFlecha} accessibilityLabel="Temática anterior"><MaterialIcons name="chevron-left" size={24} color="#76502d" /></TouchableOpacity><View style={s.tematicaModalTituloFila}><View style={s.tematicaModalIcono}><ThemeMark tematica={{ nombre: tematicaAbierta }} /></View><Text style={s.tematicaModalTitulo}>{tematicaAbierta}</Text></View><TouchableOpacity onPress={() => cambiarTematica(tematicasDisponibles[(tematicasDisponibles.indexOf(tematicaAbierta) + 1) % tematicasDisponibles.length])} style={s.tematicaFlecha} accessibilityLabel="Temática siguiente"><MaterialIcons name="chevron-right" size={24} color="#76502d" /></TouchableOpacity></View>
               <View style={s.tematicaShowcase}>
-                {indicesTematicaVisibles.map(index => { const skin = skinsTematicaAbierta[index]; const esPrincipal = index === (skinTemaIndex % skinsTematicaAbierta.length); return <TouchableOpacity key={skin.id} onPress={() => setSkinTemaIndex(index)} style={[esPrincipal ? s.tematicaSkinCentral : s.tematicaSkinLateral, { backgroundColor: skin.fondoRareza, borderColor: skin.colorRareza }]} activeOpacity={0.82}><Image source={skin.imagen} style={esPrincipal ? s.tematicaSkinCentralImagen : s.tematicaSkinLateralImagen} contentFit="contain" cachePolicy="memory" />{esPrincipal && <><Text style={s.tematicaSkinCentralAnimal}>{skin.animalNombre}</Text><Text style={s.tematicaSkinCentralNombre}>{skin.nombre}</Text><Text style={s.tematicaSkinCentralRareza}>{skin.rareza}</Text></>}</TouchableOpacity>; })}
+                {indicesTematicaVisibles.map(index => { const skin = skinsTematicaAbierta[index]; const esPrincipal = index === (skinTemaIndex % skinsTematicaAbierta.length); return <TouchableOpacity key={skin.id} onPress={() => setSkinTemaIndex(index)} style={[esPrincipal ? s.tematicaSkinCentral : s.tematicaSkinLateral, { backgroundColor: skin.fondoRareza, borderColor: skin.colorRareza }]} activeOpacity={0.82}><Image source={skin.imagen} style={esPrincipal ? s.tematicaSkinCentralImagen : s.tematicaSkinLateralImagen} contentFit="contain" cachePolicy="memory-disk" />{esPrincipal && <><Text style={s.tematicaSkinCentralAnimal}>{skin.animalNombre}</Text><Text style={s.tematicaSkinCentralNombre}>{skin.nombre}</Text><Text style={s.tematicaSkinCentralRareza}>{skin.rareza}</Text></>}</TouchableOpacity>; })}
               </View>
             </View>
           </View>
@@ -934,7 +1055,7 @@ const s = StyleSheet.create({
   catalogCardProgress: { position: 'absolute', top: 0, left: 0, right: 0, height: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: '#393340', overflow: 'hidden', zIndex: 4 },
   catalogCardProgressFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   catalogCardProgressText: { color: '#fff0bc', fontSize: 7, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  catalogCardName: { position: 'absolute', right: 4, bottom: '29%', maxWidth: '79%', color: '#fffdf5', fontFamily: 'Delius', fontSize: 9, fontWeight: '900', textAlign: 'right', textShadowColor: '#342936', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2, zIndex: 3 },
+  catalogCardName: { position: 'absolute', right: 6, bottom: '29%', maxWidth: '79%', color: '#fffdf5', fontFamily: 'Delius', fontSize: 9, fontWeight: '900', textAlign: 'right', textShadowColor: '#342936', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2, zIndex: 3 },
   catalogCardFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '26%', paddingLeft: 32, paddingRight: 3, justifyContent: 'center', borderTopWidth: 1.5, borderTopColor: '#493d49', zIndex: 3 },
   catalogCardRarityText: { color: '#fff9e9', fontSize: 6.2, fontWeight: '900', fontFamily: 'Delius' },
   catalogCardMissing: { color: 'rgba(255,249,233,0.85)', fontSize: 5, marginTop: 1, fontWeight: '700' },

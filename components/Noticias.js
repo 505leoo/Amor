@@ -8,6 +8,7 @@ import { doc, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'fireba
 import { auth, db } from '../firebaseConfig';
 import { useUserDocument } from '../hooks/useUserDocument';
 import NotificationSystem from '../utils/NotificationSystem';
+import { syncSetDoc } from '../utils/offlineSync';
 
 const AVATAR = require('../assets/inicio/iconos/icono1.jpg');
 const HALCON = require('../assets/Animalitos/Halcon/halcon1.png');
@@ -203,7 +204,7 @@ export default function Noticias({ visible, onDismiss, onContinue, version, init
 
   useEffect(() => {
     if (!visible || !uid || noticiaSeleccionada !== INVITACION_ID || miNoticia?.visto) return;
-    setDoc(doc(db, 'usuarios', uid, 'noticias', INVITACION_ID), {
+    syncSetDoc(doc(db, 'usuarios', uid, 'noticias', INVITACION_ID), {
       noticiaId: INVITACION_ID,
       tipo: 'invitacion_pareja',
       parejaUid,
@@ -217,7 +218,7 @@ export default function Noticias({ visible, onDismiss, onContinue, version, init
 
   const guardarContinuada = async () => {
     if (uid) {
-      await setDoc(doc(db, 'usuarios', uid, 'noticias', noticia.id), {
+      await syncSetDoc(doc(db, 'usuarios', uid, 'noticias', noticia.id), {
         noticiaId: noticia.id,
         visto: true,
         continuada: true,

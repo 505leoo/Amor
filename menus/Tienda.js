@@ -9,6 +9,7 @@ import TabButtons from '../components/TabButtons';
 import StickerUploader from '../components/StickerUploader';
 import { useMusicPlayer } from '../MusicContext';
 import { getSeasonTemplates } from '../Coleccion';
+import { syncUpdateDoc } from '../utils/offlineSync';
 
 const Tienda = ({ navigation }) => {
   const [stickers, setStickers] = useState([]);
@@ -314,7 +315,7 @@ const AnimatedCard = ({ item, index, ownedStickers, buySticker, getCardGradient,
 
     try {
       const user = auth.currentUser;
-      await updateDoc(doc(db, 'usuarios', user.uid), {
+      await syncUpdateDoc(doc(db, 'usuarios', user.uid), {
         dinero: userMoney - sticker.price,
         ownedStickers: arrayUnion(sticker.id)
       });

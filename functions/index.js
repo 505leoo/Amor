@@ -41,11 +41,13 @@ const BITACORA_INTERVALO_MS = 10 * 60 * 1000;
 // aproximadamente 8 horas en llegar a cero.
 const PERDIDA_SACIEDAD_POR_HORA = 100 / 8;
 const OBJETIVOS_RACHA = {
-  inicio: {puntos: 2},
-  nivel: {puntos: 0, meta: 12, hitos: {7: 1, 12: 2}},
-  alimentar: {puntos: 0, meta: 2, hitos: {2: 1}},
-  comerciante: {puntos: 0, meta: 3, hitos: {1: 1, 2: 1, 3: 2}},
+  inicio: {puntos: 2, meta: 1, hitos: {1: 2}},
+  nivel: {puntos: 0, meta: 1, hitos: {1: 3}},
+  alimentar: {puntos: 0, meta: 4, hitos: {4: 3}},
+  comerciante: {puntos: 0, meta: 1, hitos: {1: 2}},
 };
+const OBJETIVO_IDS = Object.keys(OBJETIVOS_RACHA);
+const objetivosDiariosCompletos = (objetivos = {}) => OBJETIVO_IDS.every((id) => Boolean(objetivos && objetivos[id] && objetivos[id].completado));
 
 const conductaEvent = (id, delta, texto, tipo = delta < 0 ? "negativa" : "positiva") => ({
   id,
@@ -112,6 +114,11 @@ const recompensaVariable = (uid, dayKey, conducta, opciones) => {
 const puntosConductaSeguro = (value) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
+};
+const diasRachaSeguro = (racha = {}, puntosTotales = 0) => {
+  const tieneDiasGuardados = racha.diasConsecutivos !== undefined && racha.diasConsecutivos !== null;
+  return tieneDiasGuardados ? Math.max(0, Number(racha.diasConsecutivos) || 0) :
+    Math.floor(Math.max(0, Number(puntosTotales) || 0) / PUNTOS_POR_DIA_RACHA);
 };
 
 const dayKeyInRachaZone = (date = new Date()) => {
@@ -211,7 +218,7 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
     const streakBefore = Math.max(0, Number(racha.diasConsecutivos) || 0);
     let puntosTotales = Math.max(0, Number(racha.puntosTotales) || streakBefore * PUNTOS_POR_DIA_RACHA);
     const puntosTotalesAntesProceso = puntosTotales;
-    const diasConsecutivosAntesProceso = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+    const diasConsecutivosAntesProceso = diasRachaSeguro(racha, puntosTotales);
     const ultimaCompleta = String(racha.ultimaFechaCompleta || "");
     const ultimaEvaluada = String(racha.ultimaFechaEvaluada || "");
     const tieneHistorial = Boolean(ultimaCompleta || ultimaEvaluada || racha.puntosTotales !== undefined || racha.puntosConducta !== undefined || streakBefore > 0);
@@ -221,11 +228,11 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
       inicio = previousRachaDays(hastaDia, 30);
     }
     const dias = rachaDayRange(inicio, hastaDia);
-    if (!dias.length) return {ajuste: null, cierre: null, puntosTotales, diasConsecutivos: Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA)};
+    if (!dias.length) return {ajuste: null, cierre: null, puntosTotales, diasConsecutivos: diasRachaSeguro(racha, puntosTotales)};
     const referencias = dias.map((dia) => userRef.collection("racha_diaria").doc(dia));
     const snapshots = await Promise.all(referencias.map((referencia) => tx.get(referencia)));
     let puntosConducta = puntosConductaSeguro(racha.puntosConducta);
-    let diasConsecutivos = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+    let diasConsecutivos = diasRachaSeguro(racha, puntosTotales);
     const ajustes = [];
     let ultimoDiaCerrado = null;
     let huboDiaCompletado = false;
@@ -233,7 +240,7 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
       const datos = snapshot.exists ? snapshot.data() || {} : {};
       if (snapshot.exists || tieneHistorial || puntosConducta !== 0) {
         ultimoDiaCerrado = dias[index];
-        huboDiaCompletado = huboDiaCompletado || Boolean(datos.completado || dias[index] === ultimaCompleta);
+        huboDiaCompletado = huboDiaCompletado || Boolean(datos.completado || objetivosDiariosCompletos(datos.objetivos) || dias[index] === ultimaCompleta);
       }
       const tienePuntosGuardados = datos.puntosDia !== undefined || datos.puntos !== undefined;
       const puntos = tienePuntosGuardados ?
@@ -250,7 +257,7 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
       const puntosTotalesAntes = puntosTotales;
       const anterior = diasConsecutivos;
       puntosTotales = Math.max(0, puntosTotales - penalizacion);
-      diasConsecutivos = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+      diasConsecutivos = diasRachaSeguro(racha, puntosTotales);
       const evento = conductaEvent(
           `cierre-${dias[index]}`,
           -penalizacion,
@@ -346,14 +353,14 @@ const registrarPenalizacionHambre = async (uid, banda, saciedad) => {
       saciedad: Math.max(0, Math.round(saciedad)),
       descuento,
     };
-    const diasConsecutivos = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+    const diasConsecutivos = diasRachaSeguro(racha, puntosTotales);
     tx.set(dayRef, {
       fecha: dayKey,
       meta: META_RACHA_DIARIA,
       puntos: puntosDia,
       puntosDia,
       puntosDiaInicio: puntosDiaInicio,
-      completado: puntosDia >= META_RACHA_DIARIA,
+      completado: Boolean(rawDay.completado || objetivosDiariosCompletos(rawDay.objetivos)),
       bonoDiaAplicado: Boolean(rawDay.bonoDiaAplicado || (rawDay.completado && rawDay.bonoDiaAplicado === undefined)),
       puntosTotales,
       eventos: bitacora.events,
@@ -660,9 +667,9 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
     const currentDayRaw = {
       fecha: dayKey,
       meta: META_RACHA_DIARIA,
-      puntos: puntosConductaInicial,
-      puntosDia: puntosConductaInicial,
-      puntosDiaInicio: puntosConductaInicial,
+      puntos: 0,
+      puntosDia: 0,
+      puntosDiaInicio: 0,
       puntosTotales: 0,
       objetivos: {},
       eventos: [],
@@ -671,13 +678,6 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
       completado: false,
       ...persistedDay,
     };
-    if (currentDayRaw.puntosDiaInicio === undefined &&
-      currentDayRaw.puntosDia === 0 && puntosConductaInicial !== 0 &&
-      !Object.keys(currentDayRaw.objetivos || {}).length) {
-      currentDayRaw.puntos = puntosConductaInicial;
-      currentDayRaw.puntosDia = puntosConductaInicial;
-      currentDayRaw.puntosDiaInicio = puntosConductaInicial;
-    }
     if (persistedDay.bonoDiaAplicado === undefined) {
       currentDayRaw.bonoDiaAplicado = Boolean(currentDayRaw.completado && currentDayRaw.puntosDiaInicio === undefined);
     }
@@ -691,7 +691,7 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
       puntosDiaInicio,
       puntosTotales: Math.max(0, Number(currentDayRaw.puntosTotales) || 0),
       bonoDiaAplicado: Boolean(currentDayRaw.bonoDiaAplicado),
-      completado: Boolean(currentDayRaw.completado || puntosDiaAntes >= META_RACHA_DIARIA),
+      completado: Boolean(currentDayRaw.completado || objetivosDiariosCompletos(currentDayRaw.objetivos)),
     };
     const objetivos = {...(currentDay.objetivos || {})};
     const puntosTotalesAntes = Math.max(0, Number(rachaAnterior.puntosTotales) || Number(currentDay.puntosTotales) || (Math.max(0, Number(rachaAnterior.diasConsecutivos) || 0) * PUNTOS_POR_DIA_RACHA));
@@ -741,7 +741,6 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
       hitosGanados.reduce((total, [, puntos]) => total + puntos, 0);
     const puntosDia = puntosDiaAntes + puntosConducta;
     let puntosTotales = puntosTotalesAntes + puntosConducta;
-    const completado = puntosDia >= META_RACHA_DIARIA;
     const puntosAplicados = Math.max(0, puntosConducta);
     const objetivoCompletado = objetivoCuentaAcciones ? cantidadNueva >= objective.meta : true;
     objetivos[objectiveId] = {
@@ -750,11 +749,12 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
       puntos: puntosConducta,
       completadoEn: admin.firestore.FieldValue.serverTimestamp(),
     };
+    const completado = objetivosDiariosCompletos(objetivos);
 
-    const diasAntes = Math.max(Math.max(0, Number(rachaAnterior.diasConsecutivos) || 0), Math.floor(puntosTotalesAntes / PUNTOS_POR_DIA_RACHA));
+    const diasAntes = diasRachaSeguro(rachaAnterior, puntosTotalesAntes);
     const nuevoDiaCompletado = completado && !currentDay.bonoDiaAplicado;
     if (nuevoDiaCompletado) puntosTotales += BONUS_DIA_RACHA;
-    const diasConsecutivos = Math.floor(puntosTotales / PUNTOS_POR_DIA_RACHA);
+    const diasConsecutivos = nuevoDiaCompletado ? diasAntes + 1 : diasAntes;
     let ultimaFechaCompleta = rachaAnterior.ultimaFechaCompleta || null;
     if (nuevoDiaCompletado) ultimaFechaCompleta = dayKey;
     const conductaTexto = objectiveId === "inicio" ?
@@ -843,6 +843,8 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
       nuevaRacha: diasConsecutivos > diasAntes,
       hitosGanados: hitosGanados.map(([cantidad, puntos]) => ({cantidad, puntos})),
       bitacoraRegistrada: bitacora.registrada,
+      objetivosCompletados: OBJETIVO_IDS.filter((id) => objetivos[id] && objetivos[id].completado).length,
+      totalObjetivos: OBJETIVO_IDS.length,
     };
   });
   return {...result, ajuste: ajustePendiente.ajuste || null};

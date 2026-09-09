@@ -9,6 +9,7 @@ import { doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/fires
 import RoomBackground from '../../components/RoomBackground';
 import TabButtons from '../../components/TabButtons';
 import { useRacha } from '../../RachaContext';
+import { cacheDocument, getCachedDocument, getProjectedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncSetDoc, syncUpdateDoc } from '../../utils/offlineSync';
 
 const { width: W } = Dimensions.get('window');
 const MAX_LEVEL = 200;
@@ -97,12 +98,22 @@ const DulcesGame = memo(({ navigation }) => {
     }).catch(() => {});
     if (!uid) return () => { active = false; };
     const gameRef = doc(db, 'usuarios', uid, 'juegos', 'memoriaSabores');
-    const unsubscribe = onSnapshot(gameRef, snapshot => {
-      const saved = Math.max(1, Math.min(MAX_LEVEL, Number(snapshot.data()?.nivel) || 1));
-      setUnlockedLevel(saved);
+    const gamePath = ['usuarios', uid, 'juegos', 'memoriaSabores'];
+    const aplicarJuego = data => {
+      const saved = Math.max(1, Math.min(MAX_LEVEL, Number(data?.nivel) || 1));
+      setUnlockedLevel(previous => Math.max(previous, saved));
       AsyncStorage.setItem(localKey, String(saved)).catch(() => {});
+    };
+    getCachedDocument(uid, gamePath).then(aplicarJuego).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, gamePath, aplicarJuego);
+    const unsubscribe = onSnapshot(gameRef, snapshot => {
+      const serverData = snapshot.data() || {};
+      getProjectedDocument(uid, gamePath, serverData).then(projected => {
+        cacheDocument(uid, gamePath, projected).catch(() => {});
+        aplicarJuego(projected);
+      }).catch(() => aplicarJuego(serverData));
     }, () => {});
-    return () => { active = false; unsubscribe(); };
+    return () => { active = false; unsubscribe(); quitarCache(); };
   }, [uid]);
 
   const clearTimer = useCallback(() => {
@@ -153,10 +164,53 @@ const DulcesGame = memo(({ navigation }) => {
     AsyncStorage.setItem(`@amor:memoria-sabores:nivel:${uid || 'guest'}`, String(nextLevel)).catch(() => {});
     if (!uid) return { coins: 0, diamonds: 0, exp: 0, bonus: null };
     const gameRef = doc(db, 'usuarios', uid, 'juegos', 'memoriaSabores');
+    const userRef = doc(db, 'usuarios', uid);
+    const guardarSinConexion = async () => {
+      const [cachedGame, cachedUser] = await Promise.all([
+        getCachedDocument(uid, gameRef.path),
+        getCachedDocument(uid, userRef.path),
+      ]);
+      const remote = cachedGame || {};
+      const userData = cachedUser || {};
+      const oldLevel = Math.max(1, Number(remote.nivel) || 1);
+      const completed = { ...(remote.completados || {}) };
+      const old = completed[completedLevel] || {};
+      completed[completedLevel] = {
+        estrellas: Math.max(Number(old.estrellas) || 0, Math.min(3, stars)),
+        movimientos: Math.min(Number(old.movimientos) || movesUsed, movesUsed),
+        completadoEn: serverTimestamp(),
+      };
+      const grantedStars = Math.max(0, Math.min(3, stars) - (Number(old.estrellas) || 0));
+      const coins = grantedStars * (6 + Math.min(completedLevel, 20));
+      const diamonds = grantedStars + (stars === 3 ? 1 : 0);
+      const completedGames = (Number(remote.partidasCompletadas) || 0) + 1;
+      const bonus = completedGames % 5 === 0
+        ? { tipo: completedGames % 10 === 0 ? 'globos' : 'chicles', cantidad: 2 }
+        : null;
+      const offlineStats = {
+        nivel: Math.max(oldLevel, nextLevel),
+        ultimoNivel: completedLevel,
+        estrellas: Object.values(completed).reduce((total, item) => total + (Number(item.estrellas) || 0), 0),
+        partidasCompletadas: completedGames,
+        completados: completed,
+        actualizadoEn: serverTimestamp(),
+      };
+      const userUpdate = {
+        exp: (Number(userData.exp) || 0) + 8,
+        ...(coins > 0 ? { dinero: (Number(userData.dinero) || 0) + coins } : {}),
+        ...(diamonds > 0 ? { diamantes: (Number(userData.diamantes) || 0) + diamonds } : {}),
+        ...(bonus?.tipo === 'chicles' ? { chicles: (Number(userData.chicles) || 0) + bonus.cantidad } : {}),
+        ...(bonus?.tipo === 'globos' ? { globos: (Number(userData.globos) || 0) + bonus.cantidad } : {}),
+      };
+      await syncSetDoc(gameRef, offlineStats, { merge: true });
+      await syncUpdateDoc(userRef, userUpdate, { merge: true });
+      setUnlockedLevel(previous => Math.max(previous, nextLevel));
+      return { coins, diamonds, exp: 8, bonus };
+    };
+    if (isOfflineModeEnabled()) return guardarSinConexion();
     return runTransaction(db, async transaction => {
       const snapshot = await transaction.get(gameRef);
       const remote = snapshot.exists() ? snapshot.data() || {} : {};
-      const userRef = doc(db, 'usuarios', uid);
       const userSnapshot = await transaction.get(userRef);
       const userData = userSnapshot.data() || {};
       const oldLevel = Math.max(1, Number(remote.nivel) || 1);
@@ -190,6 +244,9 @@ const DulcesGame = memo(({ navigation }) => {
         ...(bonus?.tipo === 'globos' ? { globos: (Number(userData.globos) || 0) + bonus.cantidad } : {}),
       }, { merge: true });
       return { coins, diamonds, exp: 8, bonus };
+    }).catch(error => {
+      if (isOfflineModeEnabled()) return guardarSinConexion();
+      throw error;
     });
   }, [uid]);
 

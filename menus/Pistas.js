@@ -4,6 +4,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { collection, doc, setDoc, getDoc } from 'firebase/firestore';
 import { db, auth } from '../firebaseConfig';
+import { syncSetDoc } from '../utils/offlineSync';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -77,7 +78,7 @@ const Pistas = ({ navigation }) => {
     try {
       const user = auth.currentUser;
       if (user) {
-        await setDoc(doc(db, 'usuarios', user.uid), {
+        await syncSetDoc(doc(db, 'usuarios', user.uid), {
           [`pista${pistaNumber}`]: completed
         }, { merge: true });
       }

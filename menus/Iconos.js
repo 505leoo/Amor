@@ -10,6 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { cacheDocument, getCachedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncDeleteDoc, syncUpdateDoc } from '../utils/offlineSync';
 import RoomBackground from '../components/RoomBackground';
 import { Buffer } from 'buffer';
 
@@ -119,10 +120,20 @@ let iconosCarga = null;
 const cargarCatalogoIconos = async () => {
   if (iconosCache) return iconosCache;
   if (!iconosCarga) {
-    iconosCarga = getDocs(collection(db, 'iconos')).then(snap => {
+    iconosCarga = (async () => {
+      const uid = auth.currentUser?.uid;
+      if (isOfflineModeEnabled()) {
+        const local = await getCachedDocument(uid, ['catalogos', 'iconos']);
+        if (Array.isArray(local)) {
+          iconosCache = local;
+          return iconosCache;
+        }
+      }
+      const snap = await getDocs(collection(db, 'iconos'));
       iconosCache = snap.docs.map(icono => ({ id: icono.id, ...icono.data() }));
+      cacheDocument(uid, ['catalogos', 'iconos'], iconosCache).catch(() => {});
       return iconosCache;
-    }).finally(() => { iconosCarga = null; });
+    })().finally(() => { iconosCarga = null; });
   }
   return iconosCarga;
 };
@@ -353,14 +364,21 @@ const Iconos = ({ navigation }) => {
     cargarIconos();
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
-    return onSnapshot(doc(db, 'usuarios', uid), snap => {
-      const data = snap.data() || {};
+    const aplicarDatos = data => {
       setIconoSeleccionado(data.iconoLocalId || data.iconoUrl || null);
       if (data.iconoUrl === undefined) {
-        updateDoc(doc(db, 'usuarios', uid), { iconoUrl: null }, { merge: true }).catch(() => {});
+        syncUpdateDoc(doc(db, 'usuarios', uid), { iconoUrl: null }, { merge: true }).catch(() => {});
       }
       setIconosDesbloqueados(data.iconosDesbloqueados || {});
-    });
+    };
+    getCachedDocument(uid, ['usuarios', uid]).then(data => { if (data) aplicarDatos(data); }).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, ['usuarios', uid], aplicarDatos);
+    const quitarServidor = onSnapshot(doc(db, 'usuarios', uid), snap => {
+      const data = snap.data() || {};
+      cacheDocument(uid, ['usuarios', uid], data).catch(() => {});
+      aplicarDatos(data);
+    }, () => {});
+    return () => { quitarCache(); quitarServidor(); };
   }, []);
 
   const cargarIconos = async () => {
@@ -382,7 +400,7 @@ const Iconos = ({ navigation }) => {
     try {
       const esLocal = Boolean(ic.local);
       const valor = ic.id === ICONO_DEFAULT_ID ? null : esLocal ? ic.id : ic.url;
-      await updateDoc(doc(db, 'usuarios', auth.currentUser.uid), {
+      await syncUpdateDoc(doc(db, 'usuarios', auth.currentUser.uid), {
         iconoUrl: esLocal ? null : valor,
         iconoLocalId: esLocal ? ic.id : null,
       });
@@ -449,7 +467,7 @@ const Iconos = ({ navigation }) => {
         text: 'Eliminar', style: 'destructive',
         onPress: async () => {
           try {
-            await deleteDoc(doc(db, 'iconos', ic.id));
+            await syncDeleteDoc(doc(db, 'iconos', ic.id));
             setIconos(prev => prev.filter(x => x.id !== ic.id));
             setActivoId(null);
           } catch (e) { console.error('Error al eliminar:', e); }
@@ -461,7 +479,7 @@ const Iconos = ({ navigation }) => {
   const handleGuardarEdicion = async (nuevoNombre) => {
     if (!nuevoNombre.trim()) return;
     try {
-      await updateDoc(doc(db, 'iconos', editTarget.id), { nombre: nuevoNombre.trim() });
+      await syncUpdateDoc(doc(db, 'iconos', editTarget.id), { nombre: nuevoNombre.trim() });
       setIconos(prev => prev.map(x => x.id === editTarget.id ? { ...x, nombre: nuevoNombre.trim() } : x));
       setEditTarget(null);
       setActivoId(null);

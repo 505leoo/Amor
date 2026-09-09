@@ -1,9 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Animated, StatusBar, Image as RNImage, Modal, TouchableOpacity, ActivityIndicator } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import { Asset } from 'expo-asset';
 import { doc, getDoc, collection, getDocs, query, limit } from 'firebase/firestore';
 import { auth, db } from './firebaseConfig';
 import { Image } from 'expo-image';
+import { isOfflineModeEnabled } from './utils/offlineSync';
+import { CACHE_STATE_KEY, RECURSOS_APP, claveRecurso, recursosPreparados } from './Descargas';
 
 import { LinearGradient } from 'expo-linear-gradient';
 
@@ -29,6 +33,16 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
   const containerFade = useRef(new Animated.Value(0)).current;
   const [showContent, setShowContent] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('');
+  const [loadError, setLoadError] = useState(null);
+  const [retryNonce, setRetryNonce] = useState(0);
+  const mountedRef = useRef(true);
+  const isConnectedRef = useRef(isConnected);
+
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
   const gradientColors = ['transparent', 'transparent', 'transparent'];
 
@@ -41,17 +55,82 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
   }, [updateStatus, onComplete]);
 
   const preloadLocalAssets = async () => {
-    await Asset.loadAsync([
-      require('./assets/temporadas/libro/libro1.png'),
-      require('./assets/temporadas/libro/libro2.png'),
-      require('./assets/temporadas/libro/Temporada1/logo1.png'),
-      require('./assets/inicio/inicio.png'),
-      require('./assets/temporadas/libro/Temporada1/fondo1.png'),
-      require('./assets/temporadas/libro/Temporada2/fondo2.png'),
-    ]).catch(error => console.warn('[Intro] Error precargando assets', error?.message || error));
+    if (!isConnectedRef.current || isOfflineModeEnabled()) {
+      if (mountedRef.current) {
+        progressWidth.setValue(1);
+        setLoadingStatus('Sin conexión · usando recursos incluidos');
+      }
+      return { skipped: true };
+    }
+
+    const failed = [];
+    let loaded = 0;
+    const total = RECURSOS_APP.length;
+    const batchSize = 5;
+    const cargarUno = async (modulo, indice) => {
+      let ultimoError = null;
+      let asset = null;
+      for (let intento = 1; intento <= 3; intento += 1) {
+        try {
+          asset = Asset.fromModule(modulo);
+          await asset.downloadAsync();
+          break;
+        } catch (error) {
+          ultimoError = error;
+          if (intento < 3) await new Promise(resolve => setTimeout(resolve, 180 * intento));
+        }
+      }
+      if (!asset) {
+        // Algunos recursos estáticos (JSON/Lottie/audio) forman parte del
+        // bundle, pero expo-asset no siempre puede convertirlos en un Asset
+        // descargable. Al estar incluidos por require(), ya están disponibles
+        // sin conexión y no deben bloquear la entrada a la app.
+        console.warn('[Intro] Recurso estático disponible desde el bundle', {
+          indice: indice + 1,
+          error: ultimoError?.message || String(ultimoError || 'desconocido'),
+        });
+        return true;
+      }
+
+      // Algunos recursos ya están dentro del bundle y no exponen una URI
+      // descargable en el dispositivo de desarrollo. El require() sigue
+      // siendo una fuente válida; la precarga visual es una optimización y no
+      // debe convertir un asset local correcto en un fallo fatal.
+      const tipo = String(asset.type || '').toLowerCase();
+      if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(tipo) && (asset.localUri || asset.uri)) {
+        Image.prefetch(asset.localUri || asset.uri, { cachePolicy: 'memory-disk', priority: 'high' }).catch(error => {
+          console.warn('[Intro] Imagen local disponible, pero no se pudo calentar la caché', { indice: indice + 1, error: error?.message || error });
+        });
+      }
+      return true;
+    };
+
+    for (let inicio = 0; inicio < total; inicio += batchSize) {
+      const lote = RECURSOS_APP.slice(inicio, inicio + batchSize);
+      await Promise.all(lote.map((modulo, offset) => cargarUno(modulo, inicio + offset)));
+      loaded += lote.length;
+      if (mountedRef.current) {
+        setLoadingStatus(`Preparando recursos · ${loaded}/${total}`);
+        Animated.timing(progressWidth, { toValue: loaded / total, duration: 140, useNativeDriver: false }).start();
+      }
+    }
+
+    if (failed.length) {
+      const detalle = failed.slice(0, 3).map(item => `#${item.indice}`).join(', ');
+      throw new Error(`No se pudieron preparar ${failed.length} recursos (${detalle})`);
+    }
+
+    await AsyncStorage.setItem(CACHE_STATE_KEY, JSON.stringify({
+      estado: 'ready',
+      recursos: RECURSOS_APP.map((modulo, indice) => claveRecurso(modulo, indice)),
+      omitidos: [],
+      preparadoEn: Date.now(),
+    })).catch(error => console.warn('[Intro] No se pudo guardar el manifiesto local', error?.message || error));
+    return { skipped: false, total };
   };
 
   const preloadFirebaseData = async () => {
+    if (!isConnectedRef.current || isOfflineModeEnabled()) return;
     try {
       const preloadPromises = [
         getDocs(query(collection(db, 'stickers'), limit(5))).catch(() => null),
@@ -81,18 +160,21 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
     } catch (error) {}
   };
 
+  const validarRecursosParaModoOffline = async () => {
+    const preparado = await recursosPreparados();
+    if (preparado) return true;
+    if (mountedRef.current) {
+      progressWidth.setValue(0);
+      setLoadingStatus('Sin conexión · preparación requerida');
+      setLoadError('Sin internet. Conéctate a una red y pulsa REINTENTAR para preparar los recursos antes de usar la app sin conexión.');
+    }
+    return false;
+  };
+
   useEffect(() => {
     const startSequence = async () => {
       if (sequenceStartedRef.current) return;
       sequenceStartedRef.current = true;
-      // El fondo ya esta montado desde el primer render. La precarga no debe
-      // bloquear la intro ni retrasar la navegacion.
-      Asset.loadAsync(fondoLocal).then(() => {
-        console.log('[Intro] Fondo local preparado');
-      }).catch(error => {
-        console.warn('[Intro] No se pudo preparar el fondo', error?.message || error);
-      });
-
       setShowContent(true);
       
       // Animaciones suaves con useNativeDriver: true
@@ -114,42 +196,34 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
         }),
       ]).start();
       
-      if (isAuthenticated) {
+      setLoadError(null);
+      const networkState = await NetInfo.fetch().catch(() => null);
+      const hayConexion = isConnectedRef.current
+        && networkState?.isConnected !== false
+        && !isOfflineModeEnabled();
+      if (hayConexion) {
+        setLoadingStatus('Preparando recursos…');
         try {
-          await Promise.race([
-            getDocs(query(collection(db, 'usuarios'), limit(1))),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 2500)),
-          ]);
+          await preloadLocalAssets();
+          // Los datos remotos son auxiliares; no deben retrasar la entrada
+          // después de que todos los recursos locales quedaron preparados.
+          if (isAuthenticated && isConnectedRef.current) preloadFirebaseData().catch(() => {});
         } catch (error) {
-          if (!isConnected) setLoadingStatus('Sin conexión a Internet');
+          console.warn('[Intro] Precarga incompleta', error?.message || error);
+          if (mountedRef.current) {
+            setLoadError(error?.message || 'No se pudieron preparar todos los recursos.');
+            setLoadingStatus('No se pudo completar la preparación');
+          }
+          return;
         }
+      } else {
+        const puedeContinuar = await validarRecursosParaModoOffline();
+        if (!puedeContinuar) return;
+        await preloadLocalAssets();
       }
-      
-      setLoadingStatus('Cargando datos...');
-      
-      // Iniciar animación de progress bar (5 segundos garantizados)
-      const progressPromise = new Promise(resolve => {
-        Animated.timing(progressWidth, {
-          toValue: 1,
-          duration: 5000,
-          useNativeDriver: false,
-        }).start(() => resolve());
-      });
-      
-      // Preload en paralelo (no bloquea la animación)
-      const preloadPromise = Promise.race([
-        Promise.all([preloadLocalAssets(), isAuthenticated ? preloadFirebaseData() : Promise.resolve()]).catch(error => {
-          console.warn('[Intro] Precarga incompleta, continuando', error?.message || error);
-        }),
-        new Promise(resolve => setTimeout(resolve, 4500)),
-      ]);
-      
-      await Promise.all([progressPromise, preloadPromise]).catch(error => {
-        console.warn('[Intro] Error no bloqueante en carga', error?.message || error);
-      });
-      
-      setLoadingStatus('Preparando interfaz...');
-      await new Promise(resolve => setTimeout(resolve, 300));
+
+      if (mountedRef.current) setLoadingStatus('Preparando interfaz…');
+      await new Promise(resolve => setTimeout(resolve, 220));
       sequenceFinishedRef.current = true;
       if (!completedRef.current && ['unavailable', 'error'].includes(updateStatusRef.current)) {
         completedRef.current = true;
@@ -158,16 +232,8 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
     };
 
     startSequence();
-    const fallbackTimer = setTimeout(() => {
-      if (!completedRef.current && ['unavailable', 'error'].includes(updateStatusRef.current)) {
-        completedRef.current = true;
-        console.warn('[Intro] Salida de emergencia: finalizando intro');
-        onComplete();
-      }
-    }, 7000);
-
-    return () => clearTimeout(fallbackTimer);
-  }, [isAuthenticated, isConnected]);
+    return undefined;
+  }, [isAuthenticated, isConnected, retryNonce]);
 
   return (
     <Animated.View style={styles.container}> 
@@ -210,6 +276,9 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
         />
         
         <Text style={styles.loadingText}>{loadingStatus}</Text>
+        {loadError && <TouchableOpacity style={styles.retryButton} onPress={() => { sequenceStartedRef.current = false; setLoadError(null); progressWidth.setValue(0); setRetryNonce(value => value + 1); }} activeOpacity={0.85}>
+          <Text style={styles.retryText}>REINTENTAR</Text>
+        </TouchableOpacity>}
       </LinearGradient>
       <Modal visible={updateStatus === 'available' || updateStatus === 'downloading'} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.updateOverlay}>
@@ -345,6 +414,8 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
   },
+  retryButton: { position: 'absolute', bottom: 43, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 12, backgroundColor: 'rgba(96,53,47,0.82)', borderWidth: 1, borderColor: 'rgba(255,248,220,0.65)' },
+  retryText: { color: '#fff8dc', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   updateOverlay: { flex: 1, backgroundColor: 'rgba(46, 25, 27, 0.72)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   updateCard: { width: '86%', maxWidth: 430, alignItems: 'center', paddingHorizontal: 28, paddingTop: 24, paddingBottom: 19, borderRadius: 24, backgroundColor: '#fff7e8', borderWidth: 3, borderColor: '#e8b77d', shadowColor: '#351b19', shadowOffset: { width: 0, height: 9 }, shadowOpacity: 0.45, shadowRadius: 15, elevation: 24 },
   updateSparkle: { width: 43, height: 43, marginTop: -47, marginBottom: 10, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#df7f75', borderWidth: 3, borderColor: '#ffe9bd' },

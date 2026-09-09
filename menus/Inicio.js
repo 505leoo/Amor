@@ -8,6 +8,7 @@ import { LibroJuegos } from '../components/botones';
 import Player from '../Player';
 import Pareja from '../components/Pareja';
 import PanelPerfil from '../components/PanelPerfil';
+import Descargas from '../Descargas';
 import RecompensaOverlay from '../components/RecompensaOverlay';
 import RuletaDiariaModal from '../components/RuletaDiariaModal';
 import PreguntonasModal from '../components/PreguntonasModal';
@@ -25,6 +26,7 @@ import { InventarioModal } from './Inventario';
 import RoomBackground from '../components/RoomBackground';
 import { RachaVisualModal } from '../components/RachaVisual';
 import { useRacha } from '../RachaContext';
+import { cacheDocument, getCachedDocument, getProjectedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncSetDoc, syncUpdateDoc } from '../utils/offlineSync';
 import { ALIMENTOS, calcularSaciedad, estadoSaciedad } from '../data/alimentos';
 import * as Haptics from 'expo-haptics';
 
@@ -441,7 +443,7 @@ const MoneyMenu = memo(() => {
 
   useEffect(() => {
     if (loaded && uid && typeof userData?.diamantes !== 'number') {
-      setDoc(doc(db, 'usuarios', uid), { diamantes: diamonds }, { merge: true }).catch(() => {});
+      syncSetDoc(doc(db, 'usuarios', uid), { diamantes: diamonds }, { merge: true }).catch(() => {});
     }
   }, [loaded, uid, userData?.diamantes, diamonds]);
 
@@ -712,16 +714,25 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
 
   useEffect(() => {
     if (!cuidadoRef) return undefined;
-    return onSnapshot(cuidadoRef, snap => {
+    const aplicarCuidado = datos => {
+      if (datos) setCuidado(datos);
+    };
+    getCachedDocument(uid, cuidadoRef.path).then(aplicarCuidado).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, cuidadoRef.path, aplicarCuidado);
+    const quitarServidor = onSnapshot(cuidadoRef, snap => {
       if (snap.exists()) {
-        const datos = snap.data() || {};
-        setCuidado(datos);
+        const datosServidor = snap.data() || {};
+        getProjectedDocument(uid, cuidadoRef.path, datosServidor).then(datos => {
+          cacheDocument(uid, cuidadoRef.path, datos).catch(() => {});
+          aplicarCuidado(datos);
+        }).catch(() => aplicarCuidado(datosServidor));
         // Los documentos antiguos no tenían propietario explícito. Se
         // completa una sola vez para que el aviso de hambre llegue a una
         // única persona y no a los dos miembros de la pareja.
-        if (!datos.animalitoUid && uid) setDoc(cuidadoRef, { animalitoUid: uid }, { merge: true }).catch(() => {});
-      } else setDoc(cuidadoRef, { participantes, animalitoUid: uid, saciedad: 100, actualizadaEnMs: Date.now(), creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() }, { merge: true }).catch(() => {});
+        if (!datosServidor.animalitoUid && uid) syncSetDoc(cuidadoRef, { animalitoUid: uid }, { merge: true }).catch(() => {});
+      } else syncSetDoc(cuidadoRef, { participantes, animalitoUid: uid, saciedad: 100, actualizadaEnMs: Date.now(), creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() }, { merge: true }).catch(() => {});
     }, () => {});
+    return () => { quitarServidor(); quitarCache(); };
   }, [cuidadoRef, participantes]);
 
   useEffect(() => {
@@ -759,23 +770,19 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
     alimentandoRef.current = true;
     setAlimentando(true);
     try {
-      const resultado = await runTransaction(db, async transaction => {
-        const usuarioRef = doc(db, 'usuarios', uid);
-        const usuarioSnap = await transaction.get(usuarioRef);
-        const cuidadoSnap = await transaction.get(cuidadoRef);
-        const usuario = usuarioSnap.data() || {};
-        const alimentos = { ...(usuario.alimentos || {}) };
-        const valorInventario = alimentos[alimentoSeguro.id];
-        const disponibles = Math.max(0, Number(valorInventario) || 0);
-        console.log('[Alimentar] inventario verificado', { id: alimentoSeguro.id, valor: valorInventario, disponibles });
+      const usuarioRef = doc(db, 'usuarios', uid);
+      let resultado;
+      if (isOfflineModeEnabled()) {
+        const datosCuidado = cuidado || {};
+        const alimentos = { ...(inventario || {}) };
+        const disponibles = Math.max(0, Number(alimentos[alimentoSeguro.id]) || 0);
+        console.log('[Alimentar] inventario verificado', { id: alimentoSeguro.id, valor: alimentos[alimentoSeguro.id], disponibles });
         if (disponibles < 1) throw new Error('sin_alimento');
-        const datosCuidado = cuidadoSnap.exists() ? (cuidadoSnap.data() || {}) : {};
         const actual = calcularSaciedad(datosCuidado);
         if (actual >= 99.5) throw new Error('lleno');
         const nueva = Math.min(100, actual + alimentoSeguro.saciedad);
         alimentos[alimentoSeguro.id] = disponibles - 1;
-        transaction.set(usuarioRef, { alimentos }, { merge: true });
-        transaction.set(cuidadoRef, {
+        const cuidadoActualizado = {
           participantes,
           saciedad: nueva,
           actualizadaEnMs: Date.now(),
@@ -783,9 +790,41 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
           ultimaAlimentacionPor: uid,
           ultimoAlimento: alimentoSeguro.id,
           ultimaAlimentacionEn: serverTimestamp(),
-        }, { merge: true });
-        return { recuperado: Math.round(nueva - actual), nuevaSaciedad: Math.round(nueva) };
-      });
+        };
+        resultado = { recuperado: Math.round(nueva - actual), nuevaSaciedad: Math.round(nueva) };
+        // Una transacción web no puede ejecutarse sin red. Guardamos ambos
+        // cambios en la cola, actualizamos el caché inmediatamente y dejamos
+        // que se reproduzcan en orden al volver Internet.
+        await syncUpdateDoc(usuarioRef, { alimentos }, { merge: true });
+        await syncSetDoc(cuidadoRef, cuidadoActualizado, { merge: true });
+        setCuidado(previous => ({ ...(previous || {}), ...cuidadoActualizado }));
+      } else {
+        resultado = await runTransaction(db, async transaction => {
+          const usuarioSnap = await transaction.get(usuarioRef);
+          const cuidadoSnap = await transaction.get(cuidadoRef);
+          const usuario = usuarioSnap.data() || {};
+          const alimentosServidor = { ...(usuario.alimentos || {}) };
+          const disponiblesServidor = Math.max(0, Number(alimentosServidor[alimentoSeguro.id]) || 0);
+          if (disponiblesServidor < 1) throw new Error('sin_alimento');
+          const datosServidor = cuidadoSnap.exists() ? (cuidadoSnap.data() || {}) : {};
+          const actualServidor = calcularSaciedad(datosServidor);
+          if (actualServidor >= 99.5) throw new Error('lleno');
+          const nuevaServidor = Math.min(100, actualServidor + alimentoSeguro.saciedad);
+          alimentosServidor[alimentoSeguro.id] = disponiblesServidor - 1;
+          transaction.set(usuarioRef, { alimentos: alimentosServidor }, { merge: true });
+          transaction.set(cuidadoRef, {
+            participantes,
+            saciedad: nuevaServidor,
+            actualizadaEnMs: Date.now(),
+            actualizadaEn: serverTimestamp(),
+            ultimaAlimentacionPor: uid,
+            ultimoAlimento: alimentoSeguro.id,
+            ultimaAlimentacionEn: serverTimestamp(),
+          }, { merge: true });
+          return { recuperado: Math.round(nuevaServidor - actualServidor), nuevaSaciedad: Math.round(nuevaServidor) };
+        });
+        setCuidado(previous => ({ ...(previous || {}), saciedad: resultado.nuevaSaciedad, actualizadaEnMs: Date.now() }));
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       onFed?.(alimentoSeguro, resultado);
     } catch (error) {
@@ -806,7 +845,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
       alimentandoRef.current = false;
       setAlimentando(false);
     }
-  }, [cuidadoRef, disabled, onFed, participantes, uid]);
+  }, [cuidado, cuidadoRef, disabled, inventario, onFed, participantes, uid]);
 
   const soltar = useCallback((alimento, pageX, pageY) => {
     // El botón representa la acción de alimentar y es el único origen de
@@ -1068,7 +1107,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
     });
     if (foodFeedbackTimer.current) clearTimeout(foodFeedbackTimer.current);
     foodFeedbackTimer.current = setTimeout(() => setFoodFeedback(null), 1300);
-    if (nuevaSaciedad >= 60) registrarObjetivo('alimentar').catch(() => {});
+    registrarObjetivo('alimentar').catch(() => {});
   }, [petFeedScale, petFeedY, registrarObjetivo]);
 
   useEffect(() => () => {
@@ -1078,6 +1117,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   const { puedeReclamar: regaloDisponible } = useRecompensaDiaria({ paused: overlayActive });
   const [comercianteNuevo, setComercianteNuevo] = useState(false);
   const [inventarioAbierto, setInventarioAbierto] = useState(false);
+  const [descargasAbierta, setDescargasAbierta] = useState(false);
   const [regalosAbiertos, setRegalosAbiertos] = useState(false);
   const [ruletaAbierta, setRuletaAbierta] = useState(false);
   const [preguntonasAbiertas, setPreguntonasAbiertas] = useState(false);
@@ -1283,6 +1323,9 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
         {avisoSeleccion && <View style={[styles.feedNotice, styles.feedNoticeSelection]} pointerEvents="none"><Text style={styles.feedNoticeText}>{avisoSeleccion}</Text></View>}
         <Pareja navigation={navigation} isPaused={overlayActive} />
         <PanelPerfil navigation={navigation} />
+        <TouchableOpacity style={styles.descargasAccess} onPress={() => { setDescargasAbierta(true); setOverlayActive(true); }} activeOpacity={0.8} accessibilityRole="button" accessibilityLabel="Preparar descargas">
+          <MaterialIcons name="cloud-download" size={17} color="#fff8dc" />
+        </TouchableOpacity>
         <View style={styles.canjearWrap}>
           <TouchableOpacity style={styles.canjearBtn} hitSlop={6} activeOpacity={0.75} onPress={() => navigation?.navigate('animalitos')}>
             <View style={styles.canjearIcon}><MaterialIcons name="pets" size={20} color="#f8edf4" /></View>
@@ -1312,6 +1355,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
           />
         </View>
         {inventarioAbierto && <InventarioModal visible onClose={() => setInventarioAbierto(false)} />}
+        <Descargas visible={descargasAbierta} onClose={() => { setDescargasAbierta(false); setOverlayActive(false); }} />
         <RachaVisualModal visible={rachaAbierta} onClose={() => { setRachaAbierta(false); setOverlayActive(false); }} />
         <Eventos navigation={navigation} />
         <View style={styles.temporadasQuickWrap}>
@@ -1359,6 +1403,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
 
 const styles = StyleSheet.create({
   container: { flex: 1, overflow: 'hidden' },
+  descargasAccess: { position: 'absolute', top: 8, left: 238, width: 31, height: 31, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: 'rgba(111,152,118,0.82)', borderWidth: 1, borderColor: 'rgba(239,249,233,0.72)', shadowColor: '#405744', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.16, shadowRadius: 3, elevation: 220, zIndex: 220 },
   moneyMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   resourcesRow: { position: 'absolute', top: -1, left: '50%', width: 150, height: 24, transform: [{ translateX: -75 }], flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2, borderBottomLeftRadius: 10, borderBottomRightRadius: 10, backgroundColor: '#f1e1bd', borderWidth: 1, borderTopWidth: 0, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 5, zIndex: 220, elevation: 12 },
   diamondMenu: { flex: 1, height: 22, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },

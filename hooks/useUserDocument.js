@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { cacheDocument, getCachedDocument, getProjectedDocument, subscribeCachedDocument } from '../utils/offlineSync';
 
 // Un único listener por usuario para toda la app. El caché se conserva mientras
 // la aplicación está abierta, incluso si una pantalla se desmonta y vuelve.
@@ -20,15 +21,41 @@ const startStore = uid => {
     store.stopTimer = null;
   }
   if (store.unsubscribe) return store;
-  store.unsubscribe = onSnapshot(doc(db, 'usuarios', uid), snapshot => {
-    const nextData = snapshot.data() || {};
-    store.data = nextData;
+  // Hidratar primero desde AsyncStorage. El listener de Firestore puede tardar
+  // o fallar por completo cuando la app se abre sin red.
+  getCachedDocument(uid, ['usuarios', uid]).then(cached => {
+    if (!cached || store.data) return;
+    store.data = cached;
     store.loaded = true;
     store.error = null;
     store.listeners.forEach(listener => listener(store));
+  }).catch(() => {});
+  store.unsubscribe = onSnapshot(doc(db, 'usuarios', uid), snapshot => {
+    const nextData = snapshot.data() || {};
+    // Un snapshot del servidor puede llegar después de una acción offline.
+    // Reaplicamos la cola pendiente para que la UI no retroceda visualmente.
+    getProjectedDocument(uid, ['usuarios', uid], nextData).then(projected => {
+      store.data = projected;
+      store.loaded = true;
+      store.error = null;
+      cacheDocument(uid, ['usuarios', uid], projected).catch(() => {});
+      store.listeners.forEach(listener => listener(store));
+    }).catch(() => {
+      store.data = nextData;
+      store.loaded = true;
+      store.error = null;
+      store.listeners.forEach(listener => listener(store));
+    });
   }, error => {
     store.loaded = true;
     store.error = error;
+    store.listeners.forEach(listener => listener(store));
+  });
+  store.cacheUnsubscribe = subscribeCachedDocument(uid, ['usuarios', uid], nextData => {
+    if (!nextData) return;
+    store.data = nextData;
+    store.loaded = true;
+    store.error = null;
     store.listeners.forEach(listener => listener(store));
   });
   return store;
@@ -43,6 +70,8 @@ const releaseStore = store => {
     if (store.listeners.size > 0 || !store.unsubscribe) return;
     store.unsubscribe();
     store.unsubscribe = null;
+    store.cacheUnsubscribe?.();
+    store.cacheUnsubscribe = null;
   }, 30000);
 };
 

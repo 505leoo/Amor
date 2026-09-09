@@ -5,6 +5,7 @@ import TabButtons from '../../../components/TabButtons';
 import RecompensaOverlay from '../../../components/RecompensaOverlay';
 import { db, auth } from '../../../firebaseConfig';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { syncSetDoc } from '../../../utils/offlineSync';
 
 const NODOS = [
   { id: 1, titulo: 'El Primer Encuentro', descripcion: 'El comienzo de todo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia1.png'), recompensa: '✨ Recuerdo desbloqueado', mision: '¿En qué lugar se conocieron por primera vez?', respuesta: 'parque', completado: true },
@@ -46,7 +47,7 @@ export default function Historia1({ navigation }) {
       const t1 = snap.data().temporada1 || {};
       setNodos(prev => prev.map(n => ({ ...n, completado: !!t1[`nodo${n.id}`] })));
     }).catch(() => {});
-    setDoc(doc(db, 'usuarios', uid), { historia1Visto: serverTimestamp() }, { merge: true }).catch(() => {});
+    syncSetDoc(doc(db, 'usuarios', uid), { historia1Visto: serverTimestamp() }, { merge: true }).catch(() => {});
   }, []);
 
   const completados = nodos.filter(n => n.completado).length;
@@ -72,7 +73,7 @@ export default function Historia1({ navigation }) {
       setModalNodo(prev => ({ ...prev, completado: true }));
       setFase('recompensa');
       const uid = auth.currentUser?.uid;
-      if (uid) setDoc(doc(db, 'Historias', uid), { temporada1: { [`nodo${modalNodo.id}`]: true } }, { merge: true }).catch(() => {});
+      if (uid) syncSetDoc(doc(db, 'Historias', uid), { temporada1: { [`nodo${modalNodo.id}`]: true } }, { merge: true }).catch(() => {});
       setError(false);
     } else {
       setError(true);

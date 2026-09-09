@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, setDoc, onSnapshot, serverTimestamp, increment } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
 import { useUserDocument } from './useUserDocument';
+import { getCachedDocument, subscribeCachedDocument, syncSetDoc } from '../utils/offlineSync';
 
 const recompensaCache = new Map();
 
@@ -41,9 +42,8 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
     }
 
     const ref = doc(db, 'usuarios', uid, 'recompensaDiaria', 'estado');
-    const unsub = onSnapshot(ref, snap => {
-      if (snap.exists()) {
-        const data = snap.data();
+    const procesarEstado = (data, existe = true) => {
+      if (existe) {
         const timestampGuardado = data.ultimoReclamo;
         const diaGuardado = data.diaActual ?? 1;
         
@@ -57,7 +57,7 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
         
         if (timestampGuardado && haPasado24Horas(timestampGuardado)) {
           const nuevodia = diaGuardado + 1;
-          setDoc(ref, { diaActual: nuevodia, ultimoReclamo: null }, { merge: true });
+          syncSetDoc(ref, { diaActual: nuevodia, ultimoReclamo: null }, { merge: true }).catch(() => {});
           setDiaActual(nuevodia);
           setUltimoReclamo(null);
           recompensaCache.set(uid, { diaActual: nuevodia, ultimoReclamo: null });
@@ -67,15 +67,20 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
           recompensaCache.set(uid, { diaActual: diaGuardado, ultimoReclamo: timestampGuardado });
         }
       } else {
-        setDoc(ref, { diaActual: 1, ultimoReclamo: null });
+        syncSetDoc(ref, { diaActual: 1, ultimoReclamo: null }).catch(() => {});
         setDiaActual(1);
         setUltimoReclamo(null);
         recompensaCache.set(uid, { diaActual: 1, ultimoReclamo: null });
       }
       setLoading(false);
-    });
+    };
+    getCachedDocument(uid, ['usuarios', uid, 'recompensaDiaria', 'estado']).then(cached => {
+      if (cached) procesarEstado(cached, true);
+    }).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, ['usuarios', uid, 'recompensaDiaria', 'estado'], data => procesarEstado(data, true));
+    const unsub = onSnapshot(ref, snap => procesarEstado(snap.data(), snap.exists()));
     
-    return unsub;
+    return () => { unsub(); quitarCache(); };
   }, [paused]);
 
   const haPasado24Horas = (timestamp) => {
@@ -97,10 +102,10 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
     
     const recompensa = getRecompensaDiariaDelDia(diaActual, userData);
     if (recompensa.tipo === 'halcon') {
-      await setDoc(userRef, {
+      await syncSetDoc(userRef, {
         halconDesbloqueado: true,
       }, { merge: true });
-      await setDoc(doc(db, 'usuarios', uid, 'animalitos', 'halcon'), {
+      await syncSetDoc(doc(db, 'usuarios', uid, 'animalitos', 'halcon'), {
         desbloqueado: true,
         nivel: 1,
         copias: 3,
@@ -109,16 +114,19 @@ export const useRecompensaDiaria = ({ paused = false } = {}) => {
         desbloqueadoAt: serverTimestamp(),
       }, { merge: true });
     } else if (recompensa.tipo === 'ticketRuleta') {
-      await setDoc(doc(db, 'usuarios', uid, 'inventario', 'ticket_ruleta'), {
+      await syncSetDoc(doc(db, 'usuarios', uid, 'inventario', 'ticket_ruleta'), {
         tipo: 'ticket_ruleta',
         nombre: 'Ticket de Ruleta',
         cantidad: increment(recompensa.cantidad),
       }, { merge: true });
     } else {
-      await setDoc(userRef, { [recompensa.tipo]: increment(recompensa.cantidad) }, { merge: true });
+      await syncSetDoc(userRef, { [recompensa.tipo]: increment(recompensa.cantidad) }, { merge: true });
     }
     
-    await setDoc(ref, { ultimoReclamo: serverTimestamp() }, { merge: true });
+    await syncSetDoc(ref, { ultimoReclamo: serverTimestamp() }, { merge: true });
+    const reclamoLocal = new Date().toISOString();
+    setUltimoReclamo(reclamoLocal);
+    recompensaCache.set(uid, { diaActual, ultimoReclamo: reclamoLocal });
   };
 
   return { diaActual, ultimoReclamo, puedeReclamar, loading, reclamar, userData };

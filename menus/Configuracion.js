@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
+import { syncSetDoc } from '../utils/offlineSync';
 import { signOut } from 'firebase/auth';
 import NotificationSystem from '../utils/NotificationSystem';
 import { gameColors, gamePanel } from '../theme/gameTheme';
@@ -90,7 +91,7 @@ export const ConfiguracionModal = ({ visible, onClose }) => {
     await guardarConfig(nuevaConfig);
     if (opcionId === 'notificaciones') {
       const uid = auth.currentUser?.uid;
-      if (uid) await setDoc(doc(db, 'usuarios', uid), { notificaciones: Boolean(nuevaConfig.notificaciones) }, { merge: true }).catch(() => {});
+      if (uid) await syncSetDoc(doc(db, 'usuarios', uid), { notificaciones: Boolean(nuevaConfig.notificaciones) }, { merge: true }).catch(() => {});
       if (nuevaConfig.notificaciones) {
         await NotificationSystem.registerForPushNotifications().catch(() => {});
       } else {

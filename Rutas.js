@@ -17,6 +17,7 @@ import { collection, doc, getDocs, onSnapshot, runTransaction, serverTimestamp, 
 import { getDownloadURL, ref, uploadBytesResumable } from 'firebase/storage';
 import { auth, db, storage } from './firebaseConfig';
 import TabButtons from './components/TabButtons';
+import { syncSetDoc } from './utils/offlineSync';
 
 const RUTA_PRINCIPAL = [
   { id: 'colectivo', numero: '01', titulo: 'El comienzo', lugar: 'El colectivo', descripcion: 'Guardá una foto del colectivo: ahí empieza el día de Aurora.', etiqueta: 'PRIMER RECUERDO', recompensa: 'Unas gomitas', icono: 'directions-bus', color: '#e887a8' },
@@ -550,7 +551,7 @@ export default function Rutas({ navigation }) {
         try { resolve(await getDownloadURL(uploadTask.snapshot.ref)); } catch (error) { reject(error); }
       }));
       const savedData = { pasoId: step.id, titulo: step.titulo, lugar: step.lugar, recompensa: step.recompensa, estado: 'completado', fotoUrl, storagePath, actualizadoEn: serverTimestamp() };
-      await setDoc(doc(db, 'usuarios', user.uid, 'rutas', step.id), savedData, { merge: true });
+      await syncSetDoc(doc(db, 'usuarios', user.uid, 'rutas', step.id), savedData, { merge: true });
       setProgressById(current => ({ ...current, [step.id]: { ...savedData, actualizadoEn: new Date(), fotoUrl } }));
       setSelectedPhoto(null); notify('success', `Recuerdo guardado: ${step.titulo}`);
       if (step.id === 'flores' && user.email?.toLowerCase() === 'auro@gmail.com') {
@@ -605,7 +606,7 @@ export default function Rutas({ navigation }) {
     const uid = auth.currentUser?.uid;
     if (!uid || !parejaUid || !fotoPareja?.fotoUrl || eventoTerminado) return;
     try {
-      await setDoc(doc(db, 'usuarios', parejaUid, 'rutas', pasoId), {
+      await syncSetDoc(doc(db, 'usuarios', parejaUid, 'rutas', pasoId), {
         calificaciones: { [uid]: { estrellas, calificadaEn: new Date() } },
         actualizadoEn: serverTimestamp(),
       }, { merge: true });
@@ -624,7 +625,7 @@ export default function Rutas({ navigation }) {
       return;
     }
     try {
-      await setDoc(doc(db, 'usuarios', user.uid, 'rutas', 'flores'), {
+      await syncSetDoc(doc(db, 'usuarios', user.uid, 'rutas', 'flores'), {
         recompensaFloresReclamada: true,
         recompensaFloresReclamadaEn: serverTimestamp(),
         actualizadoEn: serverTimestamp(),
@@ -643,7 +644,7 @@ export default function Rutas({ navigation }) {
     if (!user || user.email?.toLowerCase() !== 'auro@gmail.com') return;
     if (!yaReclamada) {
       try {
-        await setDoc(doc(db, 'usuarios', user.uid, 'rutas', pasoId), {
+        await syncSetDoc(doc(db, 'usuarios', user.uid, 'rutas', pasoId), {
           recompensaReclamada: true,
           recompensaReclamadaEn: serverTimestamp(),
           actualizadoEn: serverTimestamp(),

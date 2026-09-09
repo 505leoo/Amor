@@ -9,6 +9,7 @@ import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, quer
 import { getCachedUserData, useUserDocument } from '../hooks/useUserDocument';
 import { ProfileFrame } from '../menus/Perfil';
 import { resolverAvatarUsuario } from '../data/iconosLocales';
+import { cacheDocument, getCachedDocument, isOfflineModeEnabled, syncAddDoc } from '../utils/offlineSync';
 
 let usuariosCache = null;
 let usuariosRequest = null;
@@ -17,11 +18,22 @@ const USUARIOS_CACHE_MS = 2 * 60 * 1000;
 const getUsuariosCacheados = async () => {
   if (usuariosCache && Date.now() - usuariosCacheAt < USUARIOS_CACHE_MS) return usuariosCache;
   if (!usuariosRequest) {
-    usuariosRequest = getDocs(collection(db, 'usuarios')).then(snap => {
+    usuariosRequest = (async () => {
+      const uid = auth.currentUser?.uid;
+      if (isOfflineModeEnabled()) {
+        const local = await getCachedDocument(uid, ['catalogos', 'usuarios_pareja']);
+        if (Array.isArray(local)) {
+          usuariosCache = local;
+          usuariosCacheAt = Date.now();
+          return usuariosCache;
+        }
+      }
+      const snap = await getDocs(collection(db, 'usuarios'));
       usuariosCache = snap.docs.map(item => ({ id: item.id, ...item.data() }));
+      cacheDocument(uid, ['catalogos', 'usuarios_pareja'], usuariosCache).catch(() => {});
       usuariosCacheAt = Date.now();
       return usuariosCache;
-    }).finally(() => { usuariosRequest = null; });
+    })().finally(() => { usuariosRequest = null; });
   }
   return usuariosRequest;
 };
@@ -213,7 +225,7 @@ export default memo(function Pareja({ navigation, isPaused }) {
       // La lista visible ya contiene solo usuarios disponibles; reutilizarla
       // evita volver a descargar la colección completa al tocar el botón.
       const promesas = usuarios.map(usuario => {
-          return addDoc(collection(db, 'invitaciones_pareja'), {
+          return syncAddDoc(collection(db, 'invitaciones_pareja'), {
             de: uid,
             para: usuario.id,
             timestamp: serverTimestamp(),
@@ -223,7 +235,7 @@ export default memo(function Pareja({ navigation, isPaused }) {
       
       await Promise.all(promesas);
       setSolicitudEnviada(true);
-      global.showToast?.({ text1: 'Solicitud enviada ✓', type: 'success' });
+      global.showToast?.({ text1: isOfflineModeEnabled() ? 'Solicitud guardada localmente ✓' : 'Solicitud enviada ✓', text2: isOfflineModeEnabled() ? 'Se enviará al volver Internet' : undefined, type: 'success' });
     } catch (e) {
       console.error('Error al enviar solicitud:', e);
       global.showToast?.({ text1: 'Error al enviar solicitud', type: 'error' });
@@ -233,8 +245,11 @@ export default memo(function Pareja({ navigation, isPaused }) {
   const enviarInvitacion = async (destinatario) => {
     try {
       // Verificar si el destinatario ya tiene pareja
-      const destSnap = await getDoc(doc(db, 'usuarios', destinatario.id));
-      const tienePareja = !!destSnap.data()?.pareja;
+      let tienePareja = false;
+      if (!isOfflineModeEnabled()) {
+        const destSnap = await getDoc(doc(db, 'usuarios', destinatario.id));
+        tienePareja = !!destSnap.data()?.pareja;
+      }
 
       if (tienePareja) {
         // Avisar que tiene pareja pero igual preguntar — usamos global.showToast como confirmación simple
@@ -242,14 +257,14 @@ export default memo(function Pareja({ navigation, isPaused }) {
         global.showToast?.({ text1: `${destinatario.nombre} ya tiene pareja. Invitación enviada igual.`, type: 'info' });
       }
 
-      await addDoc(collection(db, 'invitaciones_pareja'), {
+      await syncAddDoc(collection(db, 'invitaciones_pareja'), {
         de: uid,
         para: destinatario.id,
         timestamp: serverTimestamp(),
         estado: 'pendiente',
       });
       setEnviados(prev => ({ ...prev, [destinatario.id]: true }));
-      global.showToast?.({ text1: 'Invitación enviada ✓', type: 'success' });
+      global.showToast?.({ text1: isOfflineModeEnabled() ? 'Invitación guardada localmente ✓' : 'Invitación enviada ✓', text2: isOfflineModeEnabled() ? 'Se enviará al volver Internet' : undefined, type: 'success' });
     } catch (e) {
       console.error('Error al enviar invitación:', e);
     }

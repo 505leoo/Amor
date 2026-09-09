@@ -11,6 +11,7 @@ import { auth, db, functions } from '../firebaseConfig';
 import RecompensaOverlay from './RecompensaOverlay';
 import { ANIMALITOS_POR_ID, SKINS } from '../data/animalitos';
 import { obtenerIconoLocal } from '../data/iconosLocales';
+import { cacheDocument, getCachedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncCallable } from '../utils/offlineSync';
 
 const PREMIOS = [
   { id: 'pierdes_300', tipo: 'perdida', cantidad: 300, label: '-300', icono: 'money-off', color: '#ad4148', nivel: 'malo', peso: 20 },
@@ -98,13 +99,23 @@ export default function RuletaDiariaModal({ visible, onClose }) {
     setEstadoGiros({ ticketsCargados: false, ruletaCargada: false, tickets: 0, diarioUsado: false });
     const ticketRef = doc(db, 'usuarios', uid, 'inventario', 'ticket_ruleta');
     const ruletaRef = doc(db, 'usuarios', uid, 'minijuegos', 'ruleta_diaria');
+    const aplicarTickets = data => setEstadoGiros(actual => ({ ...actual, ticketsCargados: true, tickets: Math.max(0, Number(data?.cantidad) || 0) }));
+    const aplicarRuleta = data => setEstadoGiros(actual => ({ ...actual, ruletaCargada: true, diarioUsado: data?.ultimoGiroDia === diaArgentina() }));
+    getCachedDocument(uid, ['usuarios', uid, 'inventario', 'ticket_ruleta']).then(aplicarTickets).catch(() => {});
+    getCachedDocument(uid, ['usuarios', uid, 'minijuegos', 'ruleta_diaria']).then(aplicarRuleta).catch(() => {});
+    const quitarTicketsCache = subscribeCachedDocument(uid, ['usuarios', uid, 'inventario', 'ticket_ruleta'], aplicarTickets);
+    const quitarRuletaCache = subscribeCachedDocument(uid, ['usuarios', uid, 'minijuegos', 'ruleta_diaria'], aplicarRuleta);
     const quitarTickets = onSnapshot(ticketRef, snap => {
-      setEstadoGiros(actual => ({ ...actual, ticketsCargados: true, tickets: Math.max(0, Number(snap.data()?.cantidad) || 0) }));
+      const data = snap.data() || {};
+      cacheDocument(uid, ['usuarios', uid, 'inventario', 'ticket_ruleta'], data).catch(() => {});
+      aplicarTickets(data);
     }, () => setEstadoGiros(actual => ({ ...actual, ticketsCargados: true })));
     const quitarRuleta = onSnapshot(ruletaRef, snap => {
-      setEstadoGiros(actual => ({ ...actual, ruletaCargada: true, diarioUsado: snap.data()?.ultimoGiroDia === diaArgentina() }));
+      const data = snap.data() || {};
+      cacheDocument(uid, ['usuarios', uid, 'minijuegos', 'ruleta_diaria'], data).catch(() => {});
+      aplicarRuleta(data);
     }, () => setEstadoGiros(actual => ({ ...actual, ruletaCargada: true })));
-    return () => { quitarTickets(); quitarRuleta(); };
+    return () => { quitarTickets(); quitarRuleta(); quitarTicketsCache(); quitarRuletaCache(); };
   }, [visible]);
   const estadoCargado = estadoGiros.ticketsCargados && estadoGiros.ruletaCargada;
   const giroDiarioDisponible = estadoCargado && !estadoGiros.diarioUsado;
@@ -135,6 +146,22 @@ export default function RuletaDiariaModal({ visible, onClose }) {
       const llamarRuleta = httpsCallable(functions, 'girarRuletaDiariaV1');
       let token = await usuario.getIdToken();
       let respuesta;
+      if (isOfflineModeEnabled()) {
+        await syncCallable('girarRuletaDiariaV1', { authToken: token });
+        const usaDiario = !estadoGiros.diarioUsado;
+        setEstadoGiros(actual => ({
+          ...actual,
+          diarioUsado: usaDiario ? true : actual.diarioUsado,
+          tickets: usaDiario ? actual.tickets : Math.max(0, actual.tickets - 1),
+        }));
+        giro.setValue(0);
+        giroManual.setValue(0);
+        Animated.timing(giro, { toValue: 1, duration: 1500, useNativeDriver: false }).start(() => {
+          setMensaje('Tu giro quedó guardado. Se resolverá al volver Internet.');
+          setGirando(false);
+        });
+        return;
+      }
       try {
         respuesta = await llamarRuleta({ authToken: token });
       } catch (error) {

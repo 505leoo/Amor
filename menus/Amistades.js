@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndi
 import { LinearGradient } from 'expo-linear-gradient';
 import { auth, db } from '../firebaseConfig';
 import { collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, arrayRemove, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { syncAddDoc, syncDeleteDoc, syncUpdateDoc } from '../utils/offlineSync';
 
 const Avatar = ({ name }) => {
   const initials = (name || 'U').split(' ').map(n => n[0]).slice(0,2).join('').toUpperCase();
@@ -79,7 +80,7 @@ export default function Amistades({ navigation }) {
     // prevent duplicate taps
     setProcessingIds(p => [...p, friendId]);
     try {
-      const docRef = await addDoc(collection(db, 'friend_requests'), {
+      const docRef = await syncAddDoc(collection(db, 'friend_requests'), {
         from: currentUid,
         fromName: auth.currentUser?.displayName || null,
         fromEmail: auth.currentUser?.email || null,
@@ -112,8 +113,8 @@ export default function Amistades({ navigation }) {
       
       const myRef = doc(db, 'usuarios', currentUid);
       const friendRef = doc(db, 'usuarios', friendId);
-      await updateDoc(myRef, { amigos: arrayRemove(friendId) });
-      await updateDoc(friendRef, { amigos: arrayRemove(currentUid) });
+      await syncUpdateDoc(myRef, { amigos: arrayRemove(friendId) });
+      await syncUpdateDoc(friendRef, { amigos: arrayRemove(currentUid) });
       showMessage('Amigo eliminado', 'success');
     } catch (error) {
       console.error('remove friend error', error);
@@ -134,7 +135,7 @@ export default function Amistades({ navigation }) {
         where('status', '==', 'pending')
       );
       const snapshot = await getDocs(qCancel);
-      const deletePromises = snapshot.docs.map(doc => deleteDoc(doc.ref));
+      const deletePromises = snapshot.docs.map(doc => syncDeleteDoc(doc.ref));
       await Promise.all(deletePromises);
       setSentRequests(s => s.filter(id => id !== friendId));
       showMessage('Solicitud cancelada', 'success');

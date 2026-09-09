@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Animated, AppState, BackHandler, View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
+import { Animated, AppState, BackHandler, Text, View, StyleSheet, StatusBar as RNStatusBar } from 'react-native';
 import { Asset } from 'expo-asset';
 import * as Updates from 'expo-updates';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -54,6 +54,7 @@ import UpdateModal from './components/UpdateModal';
 import SystemUpdateGate from './components/SystemUpdateGate';
 import GlobalClickEffect from './components/GlobalClickEffect';
 import { RachaCompletionRitual, RachaGlobalToast } from './components/RachaVisual';
+import { cacheDocument, flushPendingWrites, getCachedDocument, getSyncStatus, isOfflineModeEnabled, loadOfflineState, startOfflineSync, syncSetDoc, syncUpdateDoc, useOfflineSyncStatus } from './utils/offlineSync';
 
 const APP_VERSION = require('./app.json').expo?.extra?.updateVersion
   || require('./app.json').expo?.version
@@ -91,6 +92,16 @@ const RachaDailyLogin = () => {
   return null;
 };
 
+const OfflineBanner = () => {
+  const uid = auth.currentUser?.uid;
+  const status = useOfflineSyncStatus(uid);
+  if (!status.modeEnabled && status.online) return null;
+  const texto = status.pending
+    ? `Guardadito ✨ ${status.pending} en espera.`
+    : 'Sin internet ✨ Todo guardado.';
+  return <View pointerEvents="none" style={styles.offlineBanner}><Text style={styles.offlineBannerText}>{texto}</Text></View>;
+};
+
 export default function App() {
   const [loading, setLoading]           = useState(true);
   const [authChecked, setAuthChecked]   = useState(false);
@@ -120,7 +131,7 @@ export default function App() {
   }, [estadoActualizacion]);
 
   const comprobarActualizacion = useCallback(async ({ force = false } = {}) => {
-    if (__DEV__ || !Updates.isEnabled) {
+    if (__DEV__ || !Updates.isEnabled || isOfflineModeEnabled()) {
       setEstadoActualizacion('unavailable');
       return;
     }
@@ -356,7 +367,9 @@ export default function App() {
         require('./assets/Animalitos/Halcon/skins/halcont2.png'),
       ].forEach(source => ExpoImage.prefetch(source, { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {}));
       
-      // Cargar stickers en background sin bloquear
+      // Cargar stickers en background sin bloquear. En modo sin línea los
+      // recursos locales siguen disponibles, pero no intentamos abrir red.
+      if (isOfflineModeEnabled() || (auth.currentUser && !getSyncStatus(auth.currentUser.uid).online)) return;
       getDocs(collection(db, 'stickers')).then(snap => {
         const urls = snap.docs.map(d => d.data().imageUrl).filter(Boolean);
         // Precargar máximo 3 en paralelo, no todos
@@ -372,18 +385,40 @@ export default function App() {
   useEffect(() => {
     NavigationBar.setVisibilityAsync('hidden').catch(() => {});
 
+    const stopOfflineSync = startOfflineSync();
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      await loadOfflineState(currentUser?.uid).catch(() => {});
+      if (currentUser && !isOfflineModeEnabled()) flushPendingWrites(currentUser.uid).catch(() => {});
+      const networkState = await NetInfo.fetch().catch(() => ({ isConnected: true }));
+      const sesionSinLinea = isOfflineModeEnabled() || networkState.isConnected === false;
+      if (currentUser && !sesionSinLinea) {
+        // Animalitos se abre a menudo justo después de Inicio. Dejamos el
+        // índice de la subcolección preparado mientras hay red para que el
+        // catálogo y los desbloqueos estén disponibles aunque la conexión
+        // se pierda antes de entrar a esa pantalla.
+        getDocs(collection(db, 'usuarios', currentUser.uid, 'animalitos')).then(snapshot => {
+          const lista = snapshot.docs.map(animalDoc => ({ id: animalDoc.id, data: animalDoc.data() || {} }));
+          cacheDocument(currentUser.uid, ['usuarios', currentUser.uid, 'animalitos', '__index__'], lista).catch(() => {});
+        }).catch(error => console.warn('[App] No se pudo preparar el catálogo local de Animalitos', error?.message || error));
+      }
       let temporada = 't1';
       try {
+        if (sesionSinLinea) throw new Error('offline-session');
         const temporadaSnap = await getDoc(doc(db, 'Temporada', 'actual'));
         const datos = temporadaSnap.data() || {};
+        if (currentUser) cacheDocument(currentUser.uid, ['Temporada', 'actual'], datos).catch(() => {});
         temporada = temporadaParaUsuario(datos, currentUser?.email);
         if (!temporadaSnap.exists()) {
           await setDoc(doc(db, 'Temporada', 'actual'), { Temporada: 't1', DebugTemporada: 't1', creadaEn: serverTimestamp(), actualizadaEn: serverTimestamp() });
         } else if (!datos.DebugTemporada) {
           await updateDoc(doc(db, 'Temporada', 'actual'), { DebugTemporada: 't1' });
         }
-      } catch (error) { console.warn('[App] No se pudo leer la temporada, usando t1', error?.message || error); }
+      } catch (error) {
+        const temporadaLocal = currentUser ? await getCachedDocument(currentUser.uid, ['Temporada', 'actual']) : null;
+        if (temporadaLocal) temporada = temporadaParaUsuario(temporadaLocal, currentUser?.email);
+        console.warn('[App] No se pudo leer la temporada, usando datos locales', error?.message || error);
+      }
       const temporadaSeleccionada = temporada === 't2' ? 't2' : 't1';
       setTemporadaInicio(temporadaSeleccionada);
 
@@ -406,6 +441,7 @@ export default function App() {
           if (auth.currentUser?.uid !== currentUser.uid) return;
           AsyncStorage.getItem(`config_${currentUser.uid}`).then(value => {
             if (auth.currentUser?.uid !== currentUser.uid) return;
+            if (sesionSinLinea) return;
             let notificationsEnabled = true;
             try { notificationsEnabled = value ? JSON.parse(value)?.notificaciones !== false : true; } catch {}
             if (!notificationsEnabled) return;
@@ -420,7 +456,11 @@ export default function App() {
         // Si estamos sin conexión, esta lectura falla y no escribimos nada; así
         // evitamos que un falso "documento inexistente" reinicie dinero o EXP.
         const currentUserDocRef = doc(db, 'usuarios', currentUser.uid);
-        getDocFromServer(currentUserDocRef).then(snap => {
+        if (sesionSinLinea) {
+          // Auth conserva la sesión localmente. Si Firestore no está disponible,
+          // el perfil persistido por useUserDocument permite entrar sin red.
+          preloadImages();
+        } else getDocFromServer(currentUserDocRef).then(snap => {
           if (snap.exists()) {
             const data = snap.data();
             if (data.pareja) {
@@ -442,11 +482,11 @@ export default function App() {
             if (data.appVersion !== APP_VERSION) updates.appVersion = APP_VERSION;
             if (data.fechaUltimaRacha   === undefined) updates.fechaUltimaRacha   = new Date().toISOString();
             if (Object.keys(updates).length > 0)
-              updateDoc(currentUserDocRef, updates).catch(() => {});
+              syncUpdateDoc(currentUserDocRef, updates).catch(() => {});
           } else {
             // Una cuenta autenticada sin perfil puede recuperar sus datos básicos,
             // pero no inventamos un saldo desde el arranque de la aplicación.
-            setDoc(currentUserDocRef, {
+            syncSetDoc(currentUserDocRef, {
               uid: currentUser.uid,
               correo: currentUser.email || null,
               displayName: currentUser.displayName || 'Usuario',
@@ -478,7 +518,10 @@ export default function App() {
       if (status !== 'granted') ImagePicker.requestMediaLibraryPermissionsAsync();
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      stopOfflineSync?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -506,7 +549,9 @@ export default function App() {
     const publicarActividad = () => {
       const currentUser = auth.currentUser;
       if (!currentUser || AppState.currentState !== 'active') return;
-      setDoc(doc(db, 'usuarios', currentUser.uid), {
+      const syncStatus = getSyncStatus(currentUser.uid);
+      if (!syncStatus.online || isOfflineModeEnabled()) return;
+      syncSetDoc(doc(db, 'usuarios', currentUser.uid), {
         ultimaActividad: serverTimestamp(),
         componenteActual: global.currentScreen || 'main',
         isOnline: true,
@@ -533,6 +578,7 @@ export default function App() {
         <RachaDailyLogin />
         <MusicProvider onVisualClick={mostrarClickGlobal}>
           <RNStatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
+          <OfflineBanner />
 
           {currentScreen === 'intro' && (
               <Intro
@@ -546,14 +592,16 @@ export default function App() {
                   return;
                 }
                 (async () => {
-                  const usuarioSnap = await getDoc(doc(db, 'usuarios', userRef.current.uid));
-                  const usuarioData = usuarioSnap.data() || {};
-                  const parejaUid = usuarioSnap.data()?.pareja;
+                  const uid = userRef.current.uid;
+                  const usarCache = isOfflineModeEnabled() || !getSyncStatus(uid).online || !isConnected;
+                  const usuarioSnap = usarCache ? null : await getDoc(doc(db, 'usuarios', uid)).catch(() => null);
+                  const usuarioData = usuarioSnap?.data?.() || await getCachedDocument(uid, ['usuarios', uid]) || {};
+                  const parejaUid = usuarioData.pareja;
                   let completo = false;
                   if (parejaUid) {
-                    const reporteSnap = await getDoc(doc(db, 'reportes_semanales', reporteId(userRef.current.uid, parejaUid, semanaActual())));
-                    const reportes = reporteSnap.data()?.reportes || {};
-                    completo = Boolean(reportes[userRef.current.uid]);
+                    const reporteSnap = usarCache ? null : await getDoc(doc(db, 'reportes_semanales', reporteId(uid, parejaUid, semanaActual()))).catch(() => null);
+                    const reportes = reporteSnap?.data?.()?.reportes || {};
+                    completo = Boolean(reportes[uid]);
                   }
                   setTipoAnuncio('prevencion');
                   setEventosAnuncio(completo ? ['prevencion', 'lotes', 'fechas'] : ['prevencion', 'lotes', 'reporte', 'fechas']);
@@ -668,4 +716,6 @@ const styles = StyleSheet.create({
   screenHidden: { display: 'none' },
   boot: { flex: 1, backgroundColor: '#8f9295' },
   bootOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: '#8f9295', zIndex: 9999, elevation: 9999 },
+  offlineBanner: { position: 'absolute', top: 35, left: 0, right: 0, zIndex: 80, alignItems: 'center' },
+  offlineBannerText: { maxWidth: '79%', paddingHorizontal: 9, paddingVertical: 3, overflow: 'hidden', borderRadius: 9, color: 'rgba(255,248,220,0.88)', backgroundColor: 'rgba(73,67,65,0.43)', borderWidth: 1, borderColor: 'rgba(255,248,220,0.09)', fontFamily: 'Delius', fontSize: 6.7, fontWeight: '900', textAlign: 'center' },
 });

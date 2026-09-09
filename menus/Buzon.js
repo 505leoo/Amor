@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, Animated, St
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { auth, db } from '../firebaseConfig';
+import { syncAddDoc, syncDeleteDoc, syncSetDoc, syncUpdateDoc } from '../utils/offlineSync';
 import { collection, query, where, onSnapshot, doc, updateDoc, deleteDoc, arrayUnion, getDoc, addDoc, serverTimestamp, increment, setDoc } from 'firebase/firestore';
 import TabButtons from '../components/TabButtons';
 
@@ -106,7 +107,7 @@ export const BuzonModal = ({ visible, onClose }) => {
       if (cancelado || snap.exists()) return;
       const vencida = Date.now() > Number(credito.vencimientoMs);
       const dias = Math.max(0, Math.ceil((Number(credito.vencimientoMs) - Date.now()) / 86400000));
-      return setDoc(deudaRef, {
+      return syncSetDoc(deudaRef, {
         para: uid,
         tipo: 'deuda',
         creditoId: credito.creditoId || null,
@@ -181,12 +182,12 @@ export const BuzonModal = ({ visible, onClose }) => {
       const miSnap = await getDoc(doc(db, 'usuarios', uid));
       const miPareja = miSnap.data()?.pareja;
       if (miPareja) {
-        await setDoc(doc(db, 'usuarios', uid), { pareja: null }, { merge: true });
-        await setDoc(doc(db, 'usuarios', miPareja), { pareja: null }, { merge: true });
+        await syncSetDoc(doc(db, 'usuarios', uid), { pareja: null }, { merge: true });
+        await syncSetDoc(doc(db, 'usuarios', miPareja), { pareja: null }, { merge: true });
       }
-      await setDoc(doc(db, 'usuarios', uid), { pareja: solicitud.de }, { merge: true });
-      await setDoc(doc(db, 'usuarios', solicitud.de), { pareja: uid }, { merge: true });
-      await addDoc(collection(db, 'buzon'), {
+      await syncSetDoc(doc(db, 'usuarios', uid), { pareja: solicitud.de }, { merge: true });
+      await syncSetDoc(doc(db, 'usuarios', solicitud.de), { pareja: uid }, { merge: true });
+      await syncAddDoc(collection(db, 'buzon'), {
         para: uid,
         tipo: 'pareja_confirmada',
         creadoEn: serverTimestamp(),
@@ -194,7 +195,7 @@ export const BuzonModal = ({ visible, onClose }) => {
         leido: false,
         texto: 'Ahora son pareja por el resto de la eternidad.',
       });
-      await deleteDoc(doc(db, 'invitaciones_pareja', solicitud.id));
+      await syncDeleteDoc(doc(db, 'invitaciones_pareja', solicitud.id));
       setSolicitudSeleccionada(null);
       global.showToast?.({ text1: 'Ahora son pareja', type: 'success' });
     } catch (error) {
@@ -209,7 +210,7 @@ export const BuzonModal = ({ visible, onClose }) => {
     if (!solicitud || procesandoSolicitud) return;
     setProcesandoSolicitud(true);
     try {
-      await deleteDoc(doc(db, 'invitaciones_pareja', solicitud.id));
+      await syncDeleteDoc(doc(db, 'invitaciones_pareja', solicitud.id));
       setSolicitudSeleccionada(null);
     } catch (error) {
       global.showToast?.({ text1: 'No se pudo rechazar la solicitud.', type: 'error' });
@@ -401,12 +402,12 @@ export default function Buzon({ navigation }) {
       const miPareja = miSnap.data()?.pareja;
       if (miPareja) {
         // Separarse de la pareja actual primero
-        await setDoc(doc(db, 'usuarios', currentUid), { pareja: null }, { merge: true });
-        await setDoc(doc(db, 'usuarios', miPareja), { pareja: null }, { merge: true });
+        await syncSetDoc(doc(db, 'usuarios', currentUid), { pareja: null }, { merge: true });
+        await syncSetDoc(doc(db, 'usuarios', miPareja), { pareja: null }, { merge: true });
       }
-      await setDoc(doc(db, 'usuarios', currentUid), { pareja: inv.de }, { merge: true });
-      await setDoc(doc(db, 'usuarios', inv.de), { pareja: currentUid }, { merge: true });
-      await deleteDoc(doc(db, 'invitaciones_pareja', inv.id));
+      await syncSetDoc(doc(db, 'usuarios', currentUid), { pareja: inv.de }, { merge: true });
+      await syncSetDoc(doc(db, 'usuarios', inv.de), { pareja: currentUid }, { merge: true });
+      await syncDeleteDoc(doc(db, 'invitaciones_pareja', inv.id));
       global.showToast?.({ text1: '¡Ahora son pareja!', type: 'success' });
     } catch (e) {
       console.error('Error al aceptar pareja:', e);
@@ -415,7 +416,7 @@ export default function Buzon({ navigation }) {
 
   const rechazarPareja = async (inv) => {
     try {
-      await deleteDoc(doc(db, 'invitaciones_pareja', inv.id));
+      await syncDeleteDoc(doc(db, 'invitaciones_pareja', inv.id));
     } catch (e) {
       console.error('Error al rechazar pareja:', e);
     }
@@ -434,9 +435,9 @@ export default function Buzon({ navigation }) {
     try {
       const meRef = doc(db, 'usuarios', currentUid);
       const otherRef = doc(db, 'usuarios', req.from);
-      await updateDoc(meRef, { amigos: arrayUnion(req.from) });
-      await updateDoc(otherRef, { amigos: arrayUnion(currentUid) });
-      await deleteDoc(doc(db, 'friend_requests', req.id));
+      await syncUpdateDoc(meRef, { amigos: arrayUnion(req.from) });
+      await syncUpdateDoc(otherRef, { amigos: arrayUnion(currentUid) });
+      await syncDeleteDoc(doc(db, 'friend_requests', req.id));
       Alert.alert('Solicitud aceptada', 'Ahora sois amigos');
     } catch (error) {
       console.error('accept error', error);
@@ -446,7 +447,7 @@ export default function Buzon({ navigation }) {
 
   const reject = async (req) => {
     try {
-      await updateDoc(doc(db, 'friend_requests', req.id), { status: 'rejected' });
+      await syncUpdateDoc(doc(db, 'friend_requests', req.id), { status: 'rejected' });
       Alert.alert('Solicitud rechazada');
     } catch (error) {
       console.error('reject error', error);
@@ -462,15 +463,15 @@ export default function Buzon({ navigation }) {
     if (!giftTitle.trim()) return Alert.alert('Error', 'Ingresa un título para el regalo');
 
     try {
-      await updateDoc(doc(db, 'usuarios', currentUid), {
+      await syncUpdateDoc(doc(db, 'usuarios', currentUid), {
         monedas: increment(-amount)
       });
       
-      await updateDoc(doc(db, 'usuarios', selectedFriend.id), {
+      await syncUpdateDoc(doc(db, 'usuarios', selectedFriend.id), {
         monedas: increment(amount)
       });
       
-      await addDoc(collection(db, 'gifts'), {
+      await syncAddDoc(collection(db, 'gifts'), {
         from: currentUid,
         fromName: auth.currentUser?.displayName || 'Anónimo',
         to: selectedFriend.id,

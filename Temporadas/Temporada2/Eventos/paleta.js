@@ -4,6 +4,7 @@ import { Image as ExpoImage } from 'expo-image';
 import Svg, { Defs, LinearGradient, Stop, Circle, Ellipse, Path, G, Line } from 'react-native-svg';
 const AnimatedSvg = Animated.createAnimatedComponent(Svg);
 import TabButtons from '../../../components/TabButtons';
+import { syncUpdateDoc } from '../../../utils/offlineSync';
 import Loading from '../../../components/Loading';
 import { db, auth } from '../../../firebaseConfig';
 import { doc, onSnapshot, updateDoc, collection, query, where, getDocs, getDoc, setDoc, increment } from 'firebase/firestore';
@@ -278,7 +279,7 @@ export default function Paleta({ navigation, route }) {
       // Si no tiene el campo "globos", crearlo con 0
       if (data.globos === undefined) {
         try {
-          await updateDoc(userRef, { globos: 0 });
+          await syncUpdateDoc(userRef, { globos: 0 });
           setPaletas(0);
         } catch (error) {
           console.error('Error creando campo globos:', error);
@@ -357,7 +358,7 @@ export default function Paleta({ navigation, route }) {
       }
 
       // ── Guardar en Firestore ───────────────────────────────────────────
-      await updateDoc(userRef, {
+      await syncUpdateDoc(userRef, {
         dinero:    (data.dinero || 0) + monTotal,
         exp:       (data.exp    || 0) + expTotal,
         pityMayor: resetMayor ? 100 : nuevoMayor,
@@ -401,7 +402,7 @@ export default function Paleta({ navigation, route }) {
     // Actualizar globos en Firestore
     try {
       const userRef = doc(db, 'usuarios', uid);
-      await updateDoc(userRef, { globos: paletas - 1 });
+    await syncUpdateDoc(userRef, { globos: paletas - 1 });
     } catch (error) {
       console.error('Error actualizando globos:', error);
       setIsGrowing(false);

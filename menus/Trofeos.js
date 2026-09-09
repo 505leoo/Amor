@@ -12,6 +12,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { syncUpdateDoc } from '../utils/offlineSync';
 import TabButtons from '../components/TabButtons';
 import { useTrofeos } from '../TrofeosContext';
 import { TROFEOS_DEF } from '../utils/trofeosDef';
@@ -70,7 +71,7 @@ const Trofeos = ({ navigation }) => {
     try {
       const uid = auth.currentUser?.uid;
       if (!uid) return;
-      await updateDoc(doc(db, 'usuarios', uid), { xp: newXp });
+      await syncUpdateDoc(doc(db, 'usuarios', uid), { xp: newXp });
       refreshTrofeos();
     } catch (e) {
       console.error('Error saving XP:', e);
@@ -93,7 +94,7 @@ const Trofeos = ({ navigation }) => {
     try {
       const uid = auth.currentUser?.uid;
       if (!uid) return;
-      await updateDoc(doc(db, 'usuarios', uid), { 
+      await syncUpdateDoc(doc(db, 'usuarios', uid), {
         xp: newXp,
         claimedTrofeos: newClaimedTrofeos
       });
@@ -133,7 +134,7 @@ const Trofeos = ({ navigation }) => {
     try {
       const uid = auth.currentUser?.uid;
       if (!uid) return;
-      await updateDoc(doc(db, 'usuarios', uid), { 
+      await syncUpdateDoc(doc(db, 'usuarios', uid), {
         xp: 0,
         claimedTrofeos: []
       });

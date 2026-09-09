@@ -3,6 +3,7 @@ import { Modal, StyleSheet, Text, TouchableOpacity, View, PanResponder } from 'r
 import { MaterialIcons } from '@expo/vector-icons';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { syncSetDoc } from '../utils/offlineSync';
 
 const RECURSOS = [
   { key: 'dinero', titulo: 'Monedas', descripcion: 'Tu saldo para comprar objetos y sorpresas en el Comerciante.', icono: 'monetization-on', color: '#c58b2d', fondo: '#f4e5bb' },
@@ -24,7 +25,7 @@ export const InventarioModal = ({ visible, onClose }) => {
     const ticketRef = doc(db, 'usuarios', uid, 'inventario', 'ticket_ruleta');
     // Los consumibles viven en la subcolección inventario. Se crea vacío una
     // sola vez para que el Ticket ya exista aunque todavía no se haya ganado.
-    setDoc(ticketRef, {
+    syncSetDoc(ticketRef, {
       tipo: 'ticket_ruleta',
       nombre: 'Ticket de Ruleta',
       cantidad: 0,

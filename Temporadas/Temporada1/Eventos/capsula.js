@@ -58,6 +58,7 @@ import TabButtons from '../../../components/TabButtons';
 import RecompensaOverlay from '../../../components/RecompensaOverlay';
 import { db, auth } from '../../../firebaseConfig';
 import { doc, updateDoc, increment, setDoc, onSnapshot } from 'firebase/firestore';
+import { syncSetDoc, syncUpdateDoc } from '../../../utils/offlineSync';
 
 // ── Icono chicle SVG reutilizable ─────────────────────────────────────────────
 const ChicleSvgIcono = (
@@ -458,7 +459,7 @@ export default function Capsula({ navigation, route }) {
       setPasos(pasosActuales);
       setReclamados(reclamadosActuales);
       if (data.chicles == null) {
-        setDoc(ref, { chicles: 1 }, { merge: true });
+        syncSetDoc(ref, { chicles: 1 }, { merge: true }).catch(() => {});
         setChicles(1);
       } else {
         setChicles(data.chicles);
@@ -479,8 +480,8 @@ export default function Capsula({ navigation, route }) {
     if (cpPendiente !== null || pasos >= totalPasos || chicles < 2) return;
     const uid = auth.currentUser?.uid;
     if (uid) {
-      updateDoc(doc(db, 'usuarios', uid), { chicles: increment(-2) }).catch(() => {});
-      updateDoc(doc(db, 'usuarios', uid), { capsula1Pasos: increment(1) }).catch(() => {});
+      syncUpdateDoc(doc(db, 'usuarios', uid), { chicles: increment(-2) }).catch(() => {});
+      syncUpdateDoc(doc(db, 'usuarios', uid), { capsula1Pasos: increment(1) }).catch(() => {});
     }
     pasosRef.current += 1;
     setChicles(v => v - 1);
@@ -496,12 +497,12 @@ export default function Capsula({ navigation, route }) {
       setReclamados(nuevosReclamados);
       const uid = auth.currentUser?.uid;
       if (uid) {
-        setDoc(doc(db, 'usuarios', uid), {
+        syncSetDoc(doc(db, 'usuarios', uid), {
           capsula1Reclamados: nuevosReclamados,
         }, { merge: true }).catch(() => {});
       }
       if (uid) {
-        await setDoc(doc(db, 'Historias', uid), {
+        await syncSetDoc(doc(db, 'Historias', uid), {
           temporada1: { [`nodo${idx}`]: true },
         }, { merge: true }).catch(() => {});
       }

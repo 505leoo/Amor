@@ -4,6 +4,7 @@ import RoomBackground from '../components/RoomBackground';
 import TabButtons from '../components/TabButtons';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
+import { cacheDocument, getCachedDocument, getProjectedDocument, subscribeCachedDocument } from '../utils/offlineSync';
 
 const CONEXIONES_SEASON = 'TEMPORADA 1';
 const DULCES_SEASON = 'TEMPORADA 2';
@@ -19,9 +20,18 @@ const Juegos = memo(({ navigation }) => {
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     if (!uid) return undefined;
-    return onSnapshot(doc(db, 'usuarios', uid), snapshot => {
-      setConexionesLevel(Math.max(1, snapshot.data()?.juegos?.conexiones?.nivel || 1));
+    const gamePath = ['usuarios', uid, 'juegos', 'conexiones'];
+    const aplicarNivel = data => setConexionesLevel(Math.max(1, Number(data?.nivel) || 1));
+    getCachedDocument(uid, gamePath).then(aplicarNivel).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, gamePath, aplicarNivel);
+    const unsubscribe = onSnapshot(doc(db, ...gamePath), snapshot => {
+      const serverData = snapshot.data() || {};
+      getProjectedDocument(uid, gamePath, serverData).then(projected => {
+        cacheDocument(uid, gamePath, projected).catch(() => {});
+        aplicarNivel(projected);
+      }).catch(() => aplicarNivel(serverData));
     }, () => {});
+    return () => { unsubscribe(); quitarCache(); };
   }, []);
 
   if (!checked) return null;
