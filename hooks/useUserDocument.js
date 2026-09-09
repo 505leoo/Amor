@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebaseConfig';
-import { cacheDocument, getCachedDocument, getProjectedDocument, subscribeCachedDocument } from '../utils/offlineSync';
+import { cacheDocument, getCachedDocument, getProjectedDocument, isOfflineModeEnabled, subscribeCachedDocument } from '../utils/offlineSync';
 
 // Un único listener por usuario para toda la app. El caché se conserva mientras
 // la aplicación está abierta, incluso si una pantalla se desmonta y vuelve.
@@ -24,17 +24,27 @@ const startStore = uid => {
   // Hidratar primero desde AsyncStorage. El listener de Firestore puede tardar
   // o fallar por completo cuando la app se abre sin red.
   getCachedDocument(uid, ['usuarios', uid]).then(cached => {
-    if (!cached || store.data) return;
-    store.data = cached;
+    if (!cached) return;
+    if (store.data && !isOfflineModeEnabled()) return;
+    store.data = store.data ? { ...cached, ...store.data } : cached;
     store.loaded = true;
     store.error = null;
     store.listeners.forEach(listener => listener(store));
   }).catch(() => {});
   store.unsubscribe = onSnapshot(doc(db, 'usuarios', uid), snapshot => {
     const nextData = snapshot.data() || {};
+    // Cuando no hay red, Firestore puede entregar un snapshot local vacío o
+    // incompleto. En ese caso la caché propia es la fuente completa y no se
+    // debe reemplazar por un objeto parcial que haga parecer que el usuario
+    // perdió su animalito, monedas o inventario.
+    const aplicarSnapshot = async () => {
+      const cached = await getCachedDocument(uid, ['usuarios', uid]).catch(() => null);
+      const baseData = isOfflineModeEnabled() && cached ? { ...cached, ...nextData } : nextData;
+      return getProjectedDocument(uid, ['usuarios', uid], baseData);
+    };
     // Un snapshot del servidor puede llegar después de una acción offline.
     // Reaplicamos la cola pendiente para que la UI no retroceda visualmente.
-    getProjectedDocument(uid, ['usuarios', uid], nextData).then(projected => {
+    aplicarSnapshot().then(projected => {
       store.data = projected;
       store.loaded = true;
       store.error = null;

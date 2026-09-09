@@ -301,11 +301,20 @@ const Animalitos = ({ navigation, mode }) => {
     getCachedDocument(uid, ['usuarios', uid]).then(cached => aplicarDatosUsuario(cached)).catch(() => {});
     const quitarCache = subscribeCachedDocument(uid, ['usuarios', uid], aplicarDatosUsuario);
     const unsub = onSnapshot(doc(db, 'usuarios', uid), snap => {
-      if (!snap.exists()) return;
-      getProjectedDocument(uid, ['usuarios', uid], snap.data()).then(data => {
+      const aplicarSnapshot = async () => {
+        const cached = await getCachedDocument(uid, ['usuarios', uid]).catch(() => null);
+        if (!snap.exists() && !cached) return null;
+        const snapshotData = snap.exists() ? (snap.data() || {}) : {};
+        const baseData = isOfflineModeEnabled() && cached ? { ...cached, ...snapshotData } : snapshotData;
+        return getProjectedDocument(uid, ['usuarios', uid], baseData);
+      };
+      aplicarSnapshot().then(data => {
+        if (!data) return;
         cacheDocument(uid, ['usuarios', uid], data).catch(() => {});
         aplicarDatosUsuario(data);
-      }).catch(() => aplicarDatosUsuario(snap.data()));
+      }).catch(() => {
+        if (snap.exists()) aplicarDatosUsuario(snap.data());
+      });
     }, () => {});
     return () => { unsub(); quitarCache(); };
   }, []);
@@ -349,6 +358,12 @@ const Animalitos = ({ navigation, mode }) => {
       if (Array.isArray(cached)) aplicarEstadosAnimalitos(cached.map(item => ({ id: item.id, data: item.data })));
     }).catch(() => {});
     const unsub = onSnapshot(collection(db, 'usuarios', uid, 'animalitos'), snapshot => {
+      if (isOfflineModeEnabled() && snapshot.empty) {
+        getCachedDocument(uid, ['usuarios', uid, 'animalitos', '__index__']).then(cached => {
+          if (Array.isArray(cached)) aplicarEstadosAnimalitos(cached.map(item => ({ id: item.id, data: item.data })));
+        }).catch(() => {});
+        return;
+      }
       const lista = snapshot.docs.map(animalDoc => ({ id: animalDoc.id, data: animalDoc.data() || {} }));
       cacheDocument(uid, ['usuarios', uid, 'animalitos', '__index__'], lista).catch(() => {});
       aplicarEstadosAnimalitos(lista);

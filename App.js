@@ -64,6 +64,11 @@ const APP_RUNTIME_VERSION = Updates.runtimeVersion
   || null;
 const UPDATE_ATTEMPT_STORAGE_KEY = '@amor/ota-update-attempt-v1';
 const UPDATE_ATTEMPT_COOLDOWN_MS = 15 * 60 * 1000;
+const esErrorDeRed = error => {
+  const texto = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
+  return ['network', 'offline', 'timeout', 'unavailable', 'connection', 'fetch failed'].some(fragment => texto.includes(fragment));
+};
+const estadoTieneInternet = state => state?.isConnected !== false && state?.isInternetReachable !== false;
 
 const obtenerDatosActualizacion = manifest => {
   const extra = manifest?.extra?.expoClient?.extra || manifest?.extra || {};
@@ -108,7 +113,8 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState('intro');
   const [inicioMontado, setInicioMontado] = useState(false);
   const [screenParams, setScreenParams]   = useState({});
-  const [isConnected, setIsConnected]   = useState(true);
+  const [isConnected, setIsConnected]   = useState(null);
+  const [networkReady, setNetworkReady] = useState(false);
   const [temporadaInicio, setTemporadaInicio] = useState('t1');
   const [tipoAnuncio, setTipoAnuncio] = useState('prevencion');
   const [eventosAnuncio, setEventosAnuncio] = useState(['prevencion', 'lotes']);
@@ -131,8 +137,10 @@ export default function App() {
   }, [estadoActualizacion]);
 
   const comprobarActualizacion = useCallback(async ({ force = false } = {}) => {
-    if (__DEV__ || !Updates.isEnabled || isOfflineModeEnabled()) {
+    if (!networkReady) return;
+    if (__DEV__ || !Updates.isEnabled || !isConnected || isOfflineModeEnabled()) {
       setEstadoActualizacion('unavailable');
+      updateStatusRef.current = 'unavailable';
       return;
     }
 
@@ -205,15 +213,19 @@ export default function App() {
       updateStatusRef.current = 'available';
     } catch (error) {
       console.warn('[Updates] No se pudo comprobar la actualización', error?.message || error);
-      if (!['available', 'downloading'].includes(updateStatusRef.current)) {
+      if (!isConnected || isOfflineModeEnabled() || esErrorDeRed(error)) {
+        updateStatusRef.current = 'unavailable';
+        setEstadoActualizacion('unavailable');
+      } else if (!['available', 'downloading'].includes(updateStatusRef.current)) {
         setEstadoActualizacion('error');
       }
     } finally {
       updateCheckInFlightRef.current = false;
     }
-  }, []);
+  }, [isConnected, networkReady]);
 
   useEffect(() => {
+    if (!networkReady) return undefined;
     comprobarActualizacion({ force: true });
     const retryRapido = setTimeout(() => comprobarActualizacion({ force: true }), 10000);
     const retryPropagacion = setTimeout(() => comprobarActualizacion({ force: true }), 30000);
@@ -229,14 +241,16 @@ export default function App() {
       clearInterval(interval);
       subscription.remove();
     };
-  }, [comprobarActualizacion]);
-
-  useEffect(() => {
-    if (isConnected) comprobarActualizacion({ force: true });
-  }, [comprobarActualizacion, isConnected]);
+  }, [comprobarActualizacion, networkReady]);
 
   const instalarActualizacion = useCallback(async () => {
     if (estadoActualizacion === 'downloading') return;
+    if (!isConnected || isOfflineModeEnabled()) {
+      await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
+      updateStatusRef.current = 'unavailable';
+      setEstadoActualizacion('unavailable');
+      return;
+    }
     setEstadoActualizacion('downloading');
     updateStatusRef.current = 'downloading';
     const candidata = updateCandidateRef.current;
@@ -252,7 +266,10 @@ export default function App() {
       // La OTA puede haber cambiado entre la comprobación inicial y el toque
       // del usuario. Volvemos a validarla para no descargar un candidato
       // atrasado o que ya no esté disponible.
-      const comprobacion = await Updates.checkForUpdateAsync();
+      const comprobacion = await Promise.race([
+        Updates.checkForUpdateAsync(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('update-check-timeout')), 12000)),
+      ]);
       if (!comprobacion?.isAvailable) {
         await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
         updateCandidateRef.current = null;
@@ -260,7 +277,10 @@ export default function App() {
         setEstadoActualizacion('unavailable');
         return;
       }
-      const resultado = await Updates.fetchUpdateAsync();
+      const resultado = await Promise.race([
+        Updates.fetchUpdateAsync(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('update-fetch-timeout')), 45000)),
+      ]);
       console.log('[Updates] Descarga finalizada', {
         isNew: resultado?.isNew,
         updateId: resultado?.manifest?.id || candidata?.id || null,
@@ -276,11 +296,19 @@ export default function App() {
         const entradas = await Updates.readLogEntriesAsync(20);
         console.warn('[Updates] Últimos registros', entradas?.slice?.(-5));
       } catch {}
-      // El error no libera Intro: la persona puede reintentar desde el modal.
-      updateStatusRef.current = 'error';
-      setEstadoActualizacion('error');
+      // Una caída de red no es una actualización pendiente: cerramos el
+      // aviso y dejamos que el chequeo al reconectar la vuelva a detectar.
+      if (!isConnected || isOfflineModeEnabled() || esErrorDeRed(error)) {
+        await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
+        updateStatusRef.current = 'unavailable';
+        setEstadoActualizacion('unavailable');
+      } else {
+        // Otros errores sí dejan el modal visible para poder reintentar.
+        updateStatusRef.current = 'error';
+        setEstadoActualizacion('error');
+      }
     }
-  }, [estadoActualizacion]);
+  }, [estadoActualizacion, isConnected]);
 
   // Toast desactivado temporalmente de forma global. Las pantallas pueden
   // seguir llamando a global.showToast sin mostrar avisos mientras tanto.
@@ -406,8 +434,8 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       await loadOfflineState(currentUser?.uid).catch(() => {});
       if (currentUser && !isOfflineModeEnabled()) flushPendingWrites(currentUser.uid).catch(() => {});
-      const networkState = await NetInfo.fetch().catch(() => ({ isConnected: true }));
-      const sesionSinLinea = isOfflineModeEnabled() || networkState.isConnected === false;
+      const networkState = await NetInfo.fetch().catch(() => ({ isConnected: false, isInternetReachable: false }));
+      const sesionSinLinea = isOfflineModeEnabled() || !estadoTieneInternet(networkState);
       if (currentUser && !sesionSinLinea) {
         // Animalitos se abre a menudo justo después de Inicio. Dejamos el
         // índice de la subcolección preparado mientras hay red para que el
@@ -479,6 +507,7 @@ export default function App() {
         } else getDocFromServer(currentUserDocRef).then(snap => {
           if (snap.exists()) {
             const data = snap.data();
+            cacheDocument(currentUser.uid, ['usuarios', currentUser.uid], data).catch(() => {});
             if (data.pareja) {
               getDoc(doc(db, 'usuarios', data.pareja)).then(partnerSnap => {
                 if (partnerSnap.exists()) AsyncStorage.setItem(`pareja_cache_${currentUser.uid}`, JSON.stringify({ id: partnerSnap.id, ...partnerSnap.data() })).catch(() => {});
@@ -541,11 +570,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const unsub = NetInfo.addEventListener(state => {
-      const nextConnected = state.isConnected !== false;
-      setIsConnected(current => current === nextConnected ? current : nextConnected);
+    let activo = true;
+    NetInfo.fetch().then(state => {
+      if (!activo) return;
+      setIsConnected(estadoTieneInternet(state));
+      setNetworkReady(true);
+    }).catch(() => {
+      if (!activo) return;
+      setIsConnected(false);
+      setNetworkReady(true);
     });
-    return () => unsub();
+    const unsub = NetInfo.addEventListener(state => {
+      const nextConnected = estadoTieneInternet(state);
+      setIsConnected(current => current === nextConnected ? current : nextConnected);
+      setNetworkReady(true);
+    });
+    return () => { activo = false; unsub(); };
   }, []);
 
   useEffect(() => {

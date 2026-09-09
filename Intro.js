@@ -11,7 +11,7 @@ import { CACHE_STATE_KEY, RECURSOS_APP, claveRecurso, recursosPreparados } from 
 
 import { LinearGradient } from 'expo-linear-gradient';
 
-const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, temporada = 't1', updateStatus = 'unavailable', updateVersion = null, onAcceptUpdate }) => {
+const Intro = ({ onComplete, isAuthenticated = false, isConnected = null, temporada = 't1', updateStatus = 'unavailable', updateVersion = null, onAcceptUpdate }) => {
   const temporadaInicial = temporada;
   const fondoTemporada = temporadaInicial;
   const fondoLocal = fondoTemporada === 't2'
@@ -55,7 +55,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
   }, [updateStatus, onComplete]);
 
   const preloadLocalAssets = async () => {
-    if (!isConnectedRef.current || isOfflineModeEnabled()) {
+    if (isConnectedRef.current === false || isOfflineModeEnabled()) {
       if (mountedRef.current) {
         progressWidth.setValue(1);
         setLoadingStatus('Sin conexión · usando recursos incluidos');
@@ -130,7 +130,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
   };
 
   const preloadFirebaseData = async () => {
-    if (!isConnectedRef.current || isOfflineModeEnabled()) return;
+    if (isConnectedRef.current === false || isOfflineModeEnabled()) return;
     try {
       const preloadPromises = [
         getDocs(query(collection(db, 'stickers'), limit(5))).catch(() => null),
@@ -198,8 +198,9 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
       
       setLoadError(null);
       const networkState = await NetInfo.fetch().catch(() => null);
-      const hayConexion = isConnectedRef.current
+      const hayConexion = isConnectedRef.current !== false
         && networkState?.isConnected !== false
+        && networkState?.isInternetReachable !== false
         && !isOfflineModeEnabled();
       if (hayConexion) {
         setLoadingStatus('Preparando recursos…');

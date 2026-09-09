@@ -48,6 +48,7 @@ const cacheKey = (uid, path) => `${CACHE_PREFIX}${uid}/${pathKey(path)}`;
 const statusKey = uid => `${STATUS_PREFIX}${uid}`;
 const deadLetterKey = uid => `${DEAD_LETTER_PREFIX}${uid}`;
 const isOffline = () => modeEnabled || !online;
+const estadoTieneInternet = state => state?.isConnected !== false && state?.isInternetReachable !== false;
 
 const makeId = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 const isSentinel = value => value && typeof value === 'object' && typeof value._methodName === 'string';
@@ -320,8 +321,8 @@ export const loadOfflineState = async uid => {
   modeEnabled = false;
   await AsyncStorage.removeItem(MODE_KEY).catch(() => {});
   await NetInfo.fetch()
-    .then(state => { online = state.isConnected !== false; })
-    .catch(() => {});
+    .then(state => { online = estadoTieneInternet(state); })
+    .catch(() => { online = false; });
   const currentUid = uidFor(uid);
   if (currentUid) {
     const savedStatus = await readJson(statusKey(currentUid));
@@ -400,7 +401,7 @@ export const flushPendingWrites = async uid => {
 export const startOfflineSync = uid => {
   if (!netInfoUnsubscribe) {
     netInfoUnsubscribe = NetInfo.addEventListener(state => {
-      online = state.isConnected !== false;
+      online = estadoTieneInternet(state);
       const currentUid = auth.currentUser?.uid;
       notifyStatus(currentUid);
       if (online && currentUid && !modeEnabled) flushPendingWrites(currentUid).catch(() => {});
