@@ -2,7 +2,7 @@
   "expo": {
     "name": "Amor",
     "slug": "Amor",
-    "version": "1.1.55",
+    "version": "1.1.56",
     "orientation": "landscape",
     "icon": "./assets/16.png",
     "userInterfaceStyle": "light",
@@ -95,8 +95,8 @@
         "projectId": "3e224fbe-d6f2-48c1-8903-61bf13953cf2"
       },
       "expo-navigation-bar": {},
-      "updateVersion": "1.1.55",
-      "updateDescription": "Mejoras en el modo sin conexión."
+      "updateVersion": "1.1.56",
+      "updateDescription": "Mejoras leves."
     },
     "owner": "505leoo"
   }

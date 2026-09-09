@@ -63,7 +63,6 @@ const APP_RUNTIME_VERSION = Updates.runtimeVersion
   || require('./app.json').expo?.runtimeVersion
   || null;
 const UPDATE_ATTEMPT_STORAGE_KEY = '@amor/ota-update-attempt-v1';
-const UPDATE_ATTEMPT_COOLDOWN_MS = 15 * 60 * 1000;
 const esErrorDeRed = error => {
   const texto = `${error?.code || ''} ${error?.message || ''}`.toLowerCase();
   return ['network', 'offline', 'timeout', 'unavailable', 'connection', 'fetch failed'].some(fragment => texto.includes(fragment));
@@ -108,6 +107,11 @@ const OfflineBanner = () => {
 };
 
 export default function App() {
+  const updatesInfo = Updates.useUpdates();
+  const updatePending = updatesInfo.isUpdatePending === true;
+  const downloadedUpdate = updatesInfo.downloadedUpdate;
+  const downloadedUpdateRef = useRef(downloadedUpdate);
+  downloadedUpdateRef.current = downloadedUpdate;
   const [loading, setLoading]           = useState(true);
   const [authChecked, setAuthChecked]   = useState(false);
   const [currentScreen, setCurrentScreen] = useState('intro');
@@ -137,6 +141,19 @@ export default function App() {
   }, [estadoActualizacion]);
 
   const comprobarActualizacion = useCallback(async ({ force = false } = {}) => {
+    const pending = downloadedUpdateRef.current;
+    const pendingManifest = pending?.manifest;
+    const pendingData = pendingManifest ? obtenerDatosActualizacion(pendingManifest) : null;
+    const pendingKey = pending?.updateId || pendingData?.id || null;
+    const currentUpdateId = Updates.updateId || null;
+    if (updatePending && pendingKey && pendingKey !== currentUpdateId) {
+      updateCandidateRef.current = { clave: pendingKey, id: pendingData.id || pendingKey, version: pendingData.version, pending: true };
+      setVersionActualizacion(pendingData.version);
+      setDescripcionActualizacion(typeof pendingData.description === 'string' ? pendingData.description.trim() : null);
+      updateStatusRef.current = 'available';
+      setEstadoActualizacion('available');
+      return;
+    }
     if (!networkReady) return;
     if (__DEV__ || !Updates.isEnabled || !isConnected || isOfflineModeEnabled()) {
       setEstadoActualizacion('unavailable');
@@ -173,12 +190,6 @@ export default function App() {
       const claveActual = Updates.updateId
         || datosActuales.id
         || (datosActuales.version ? `version:${datosActuales.version}` : null);
-      const intentoGuardado = await AsyncStorage.getItem(UPDATE_ATTEMPT_STORAGE_KEY)
-        .then(valor => {
-          try { return valor ? JSON.parse(valor) : null; } catch { return null; }
-        })
-        .catch(() => null);
-
       console.log('[Updates] Actualización disponible', {
         id: candidata.id,
         version,
@@ -189,19 +200,6 @@ export default function App() {
       // abrir el aviso aunque el servidor haya respondido con datos atrasados.
       if (claveCandidata && claveActual && claveCandidata === claveActual) {
         await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
-        setEstadoActualizacion('unavailable');
-        return;
-      }
-
-      // Evita el bucle cuando una actualización se descarga pero el runtime la
-      // rechaza al reiniciar y vuelve al bundle anterior. Una versión nueva
-      // genera una clave distinta y vuelve a mostrarse normalmente.
-      if (claveCandidata && intentoGuardado?.clave === claveCandidata
-        && ahora - Number(intentoGuardado.intentoEn || 0) < UPDATE_ATTEMPT_COOLDOWN_MS) {
-        console.warn('[Updates] Aviso omitido temporalmente para evitar un bucle', { clave: claveCandidata });
-        setVersionActualizacion(version);
-        setDescripcionActualizacion(typeof description === 'string' ? description.trim() : null);
-        updateStatusRef.current = 'unavailable';
         setEstadoActualizacion('unavailable');
         return;
       }
@@ -222,7 +220,7 @@ export default function App() {
     } finally {
       updateCheckInFlightRef.current = false;
     }
-  }, [isConnected, networkReady]);
+  }, [downloadedUpdate?.updateId, isConnected, networkReady, updatePending]);
 
   useEffect(() => {
     if (!networkReady) return undefined;
@@ -245,7 +243,7 @@ export default function App() {
 
   const instalarActualizacion = useCallback(async () => {
     if (estadoActualizacion === 'downloading') return;
-    if (!isConnected || isOfflineModeEnabled()) {
+    if ((!isConnected || isOfflineModeEnabled()) && !updatePending) {
       await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
       updateStatusRef.current = 'unavailable';
       setEstadoActualizacion('unavailable');
@@ -263,6 +261,11 @@ export default function App() {
       })).catch(() => {});
     }
     try {
+      if (updatePending) {
+        await Updates.reloadAsync();
+        await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
+        return;
+      }
       // La OTA puede haber cambiado entre la comprobación inicial y el toque
       // del usuario. Volvemos a validarla para no descargar un candidato
       // atrasado o que ya no esté disponible.
@@ -285,11 +288,19 @@ export default function App() {
         isNew: resultado?.isNew,
         updateId: resultado?.manifest?.id || candidata?.id || null,
       });
-      if (!resultado?.isNew) throw new Error('update-not-downloaded');
-      await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
-      // No agregamos lógica después: Expo reinicia el runtime de forma
-      // asíncrona inmediatamente después de aceptar esta llamada.
+      if (!resultado?.isNew) {
+        await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
+        updateCandidateRef.current = null;
+        updateStatusRef.current = 'unavailable';
+        setEstadoActualizacion('unavailable');
+        return;
+      }
+      // Expo reinicia el runtime de forma asíncrona inmediatamente después
+      // de aceptar esta llamada.
       await Updates.reloadAsync();
+      // Si el runtime resolviera la promesa sin reiniciar inmediatamente,
+      // evitamos dejar una marca de intento vieja en el siguiente chequeo.
+      await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
     } catch (error) {
       console.warn('[Updates] No se pudo instalar la actualización', error?.message || error);
       try {
@@ -308,7 +319,7 @@ export default function App() {
         setEstadoActualizacion('error');
       }
     }
-  }, [estadoActualizacion, isConnected]);
+  }, [estadoActualizacion, isConnected, updatePending]);
 
   // Toast desactivado temporalmente de forma global. Las pantallas pueden
   // seguir llamando a global.showToast sin mostrar avisos mientras tanto.
@@ -640,6 +651,8 @@ export default function App() {
               <Intro
                 updateStatus={estadoActualizacion}
                 updateVersion={versionActualizacion}
+                updateProgress={updatesInfo.downloadProgress}
+                updatePending={updatePending}
                 onAcceptUpdate={instalarActualizacion}
                 onComplete={() => {
                 if (!userRef.current) {
@@ -749,6 +762,7 @@ export default function App() {
               status={estadoActualizacion}
               version={versionActualizacion}
               description={descripcionActualizacion}
+              progress={updatesInfo.downloadProgress}
               onAccept={instalarActualizacion}
             />
           )}

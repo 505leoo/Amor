@@ -11,7 +11,7 @@ import { CACHE_STATE_KEY, RECURSOS_APP, claveRecurso, recursosPreparados } from 
 
 import { LinearGradient } from 'expo-linear-gradient';
 
-const Intro = ({ onComplete, isAuthenticated = false, isConnected = null, temporada = 't1', updateStatus = 'unavailable', updateVersion = null, onAcceptUpdate }) => {
+const Intro = ({ onComplete, isAuthenticated = false, isConnected = null, temporada = 't1', updateStatus = 'unavailable', updateVersion = null, updateProgress = null, updatePending = false, onAcceptUpdate }) => {
   const temporadaInicial = temporada;
   const fondoTemporada = temporadaInicial;
   const fondoLocal = fondoTemporada === 't2'
@@ -35,8 +35,30 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = null, tempor
   const [loadingStatus, setLoadingStatus] = useState('');
   const [loadError, setLoadError] = useState(null);
   const [retryNonce, setRetryNonce] = useState(0);
+  const [updateElapsedSeconds, setUpdateElapsedSeconds] = useState(0);
   const mountedRef = useRef(true);
   const isConnectedRef = useRef(isConnected);
+  const updateSweep = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (updateStatus !== 'downloading') {
+      updateSweep.stopAnimation();
+      updateSweep.setValue(0);
+      setUpdateElapsedSeconds(0);
+      return undefined;
+    }
+    const startedAt = Date.now();
+    const refreshElapsed = () => setUpdateElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000));
+    refreshElapsed();
+    const timer = setInterval(refreshElapsed, 1000);
+    const animation = Animated.loop(Animated.timing(updateSweep, { toValue: 1, duration: 1100, useNativeDriver: true }));
+    animation.start();
+    return () => {
+      clearInterval(timer);
+      animation.stop();
+      updateSweep.stopAnimation();
+    };
+  }, [updateStatus, updateSweep]);
 
   useEffect(() => {
     isConnectedRef.current = isConnected;
@@ -236,6 +258,31 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = null, tempor
     return undefined;
   }, [isAuthenticated, isConnected, retryNonce]);
 
+  const progresoOTA = Number.isFinite(Number(updateProgress))
+    ? Math.max(0, Math.min(1, Number(updateProgress)))
+    : null;
+  const updateStage = updatePending && updateStatus !== 'error'
+    ? (updateStatus === 'downloading' ? 'Aplicando actualización' : 'Descarga lista')
+    : updateStatus === 'error'
+    ? 'No se pudo completar'
+    : updateStatus === 'downloading'
+      ? (progresoOTA !== null ? `Descargando · ${Math.round(progresoOTA * 100)}%` : `Descargando · ${updateElapsedSeconds}s`)
+      : 'Actualización encontrada';
+  const updateTitle = updatePending && updateStatus !== 'error'
+    ? (updateStatus === 'downloading' ? 'Aplicando la mejora' : 'Lista para reiniciar')
+    : updateStatus === 'error'
+    ? 'No pudimos aplicarla'
+    : updateStatus === 'downloading'
+      ? 'Descargando mejoras'
+      : 'Hay una mejora lista';
+  const updateDescription = updatePending && updateStatus !== 'error'
+    ? 'La descarga ya está en el dispositivo. Solo falta reiniciar la app.'
+    : updateStatus === 'error'
+    ? 'Revisá tu conexión y volvé a intentarlo.'
+    : updateStatus === 'downloading'
+      ? (progresoOTA !== null && progresoOTA >= 0.99 ? 'Terminando la descarga y preparando el reinicio…' : 'La app sigue trabajando. Puede tardar un poquito según tu conexión.')
+      : 'Encontramos una versión nueva para tu rinconcito.';
+
   return (
     <Animated.View style={styles.container}> 
       <StatusBar hidden={true} />
@@ -285,23 +332,40 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = null, tempor
         <View style={styles.updateOverlay}>
           <View style={styles.updateCard}>
             <View style={styles.updateSparkle}><Text style={styles.updateSparkleText}>✦</Text></View>
-            <Text style={styles.updateEyebrow}>{updateStatus === 'error' ? 'NO PUDIMOS TERMINAR' : 'UNA SORPRESA PARA USTEDES'}</Text>
-            <Text style={styles.updateTitle}>{updateStatus === 'error' ? 'La actualización quedó pendiente' : '¡Hay una nueva versión!'}</Text>
+            <Text style={styles.updateEyebrow}>{updateStage.toUpperCase()}</Text>
+            <Text style={styles.updateTitle}>{updateTitle}</Text>
             {updateVersion && <View style={styles.updateVersionBadge}><Text style={styles.updateVersionText}>VERSIÓN {updateVersion}</Text></View>}
-            <Text style={styles.updateDescription}>{updateStatus === 'error' ? 'No se pudo aplicar todavía. Revisá tu conexión e intentá nuevamente.' : 'Preparamos nuevas mejoras con mucho cariño para que su rinconcito se sienta más bonito, cómodo y especial. ¿Quieren descubrirlas ahora?'}</Text>
+            <Text style={styles.updateDescription}>{updateDescription}</Text>
+            <View style={styles.updateProgressBox}>
+              <View style={styles.updateProgressHeader}>
+                <Text style={styles.updateProgressLabel}>ESTADO</Text>
+                <Text style={styles.updateProgressValue}>{updateStage}</Text>
+              </View>
+              <View style={styles.updateProgressTrack}>
+                {updatePending && updateStatus !== 'error' && updateStatus !== 'downloading' ? (
+                  <View style={[styles.updateProgressFill, { width: '100%' }]} />
+                ) : updateStatus === 'downloading' && progresoOTA !== null ? (
+                  <View style={[styles.updateProgressFill, { width: `${Math.max(4, progresoOTA * 100)}%` }]} />
+                ) : updateStatus === 'downloading' ? (
+                  <Animated.View style={[styles.updateProgressIndeterminate, { transform: [{ translateX: updateSweep.interpolate({ inputRange: [0, 1], outputRange: [-58, 178] }) }] }]} />
+                ) : (
+                  <View style={[styles.updateProgressFill, { width: updateStatus === 'error' ? '100%' : '12%' }]} />
+                )}
+              </View>
+            </View>
             {updateStatus === 'downloading' ? (
               <View style={styles.updateLoading}>
                 <ActivityIndicator color="#fff8dc" size="small" />
-                <Text style={styles.updateLoadingText}>Preparando la actualización...</Text>
+                <Text style={styles.updateLoadingText}>{updatePending ? 'Preparando reinicio…' : progresoOTA !== null ? `${Math.round(progresoOTA * 100)}% completado` : `Llevamos ${updateElapsedSeconds}s`}</Text>
               </View>
             ) : (
               <View style={styles.updateActions}>
                 <TouchableOpacity style={styles.updateNowButton} onPress={onAcceptUpdate} activeOpacity={0.85}>
-                  <Text style={styles.updateNowText}>{updateStatus === 'error' ? 'Reintentar' : 'Actualizar ahora'}</Text>
+                  <Text style={styles.updateNowText}>{updateStatus === 'error' ? 'Reintentar' : updatePending ? 'Reiniciar ahora' : 'Actualizar ahora'}</Text>
                 </TouchableOpacity>
               </View>
             )}
-            <Text style={styles.updateHint}>La app se abrirá de nuevo al terminar.</Text>
+            <Text style={styles.updateHint}>{updateStatus === 'error' ? 'No se perdió nada de tu cuenta.' : 'La app se abrirá de nuevo al terminar.'}</Text>
           </View>
         </View>
       </Modal>
@@ -418,20 +482,27 @@ const styles = StyleSheet.create({
   retryButton: { position: 'absolute', bottom: 43, paddingHorizontal: 18, paddingVertical: 9, borderRadius: 12, backgroundColor: 'rgba(96,53,47,0.82)', borderWidth: 1, borderColor: 'rgba(255,248,220,0.65)' },
   retryText: { color: '#fff8dc', fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
   updateOverlay: { flex: 1, backgroundColor: 'rgba(46, 25, 27, 0.72)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  updateCard: { width: '86%', maxWidth: 430, alignItems: 'center', paddingHorizontal: 28, paddingTop: 24, paddingBottom: 19, borderRadius: 24, backgroundColor: '#fff7e8', borderWidth: 3, borderColor: '#e8b77d', shadowColor: '#351b19', shadowOffset: { width: 0, height: 9 }, shadowOpacity: 0.45, shadowRadius: 15, elevation: 24 },
-  updateSparkle: { width: 43, height: 43, marginTop: -47, marginBottom: 10, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#df7f75', borderWidth: 3, borderColor: '#ffe9bd' },
-  updateSparkleText: { color: '#fff8dc', fontSize: 23, fontWeight: '900' },
-  updateEyebrow: { color: '#b26b62', fontSize: 8, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
-  updateTitle: { color: '#75483e', fontSize: 22, fontWeight: '900', textAlign: 'center' },
-  updateVersionBadge: { marginTop: 8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, backgroundColor: '#f5dfbd', borderWidth: 1, borderColor: '#e3bd86' },
-  updateVersionText: { color: '#a25f56', fontSize: 8, fontWeight: '900', letterSpacing: 1.1 },
-  updateDescription: { maxWidth: 350, color: '#8b685d', fontSize: 11, lineHeight: 17, fontWeight: '600', textAlign: 'center', marginTop: 9 },
-  updateActions: { width: '100%', flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 18 },
-  updateNowButton: { minWidth: 151, height: 39, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: '#dc7b71', borderWidth: 1, borderColor: '#bd625b', shadowColor: '#9c514b', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 4, elevation: 4 },
-  updateNowText: { color: '#fff9e9', fontSize: 11, fontWeight: '900' },
-  updateLoading: { height: 39, minWidth: 245, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 18, borderRadius: 13, backgroundColor: '#dc7b71' },
-  updateLoadingText: { color: '#fff9e9', fontSize: 10, fontWeight: '800' },
-  updateHint: { color: '#aa8879', fontSize: 7.5, fontWeight: '700', marginTop: 11 },
+  updateCard: { width: '82%', maxWidth: 370, alignItems: 'center', paddingHorizontal: 21, paddingTop: 18, paddingBottom: 14, borderRadius: 20, backgroundColor: '#fff7e8', borderWidth: 2, borderColor: '#e8b77d', shadowColor: '#351b19', shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 20 },
+  updateSparkle: { width: 35, height: 35, marginTop: -38, marginBottom: 7, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#df7f75', borderWidth: 2, borderColor: '#ffe9bd' },
+  updateSparkleText: { color: '#fff8dc', fontSize: 19, fontWeight: '900' },
+  updateEyebrow: { color: '#b26b62', fontSize: 7, fontWeight: '900', letterSpacing: 1.2, marginBottom: 4 },
+  updateTitle: { color: '#75483e', fontSize: 18, fontWeight: '900', textAlign: 'center' },
+  updateVersionBadge: { marginTop: 6, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, backgroundColor: '#f5dfbd', borderWidth: 1, borderColor: '#e3bd86' },
+  updateVersionText: { color: '#a25f56', fontSize: 7, fontWeight: '900', letterSpacing: 1 },
+  updateDescription: { maxWidth: 310, color: '#8b685d', fontSize: 9.5, lineHeight: 14, fontWeight: '600', textAlign: 'center', marginTop: 7 },
+  updateProgressBox: { width: '100%', marginTop: 11, padding: 9, borderRadius: 11, backgroundColor: 'rgba(245,223,189,0.42)', borderWidth: 1, borderColor: 'rgba(227,189,134,0.65)' },
+  updateProgressHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  updateProgressLabel: { color: '#b26b62', fontSize: 6.5, fontWeight: '900', letterSpacing: 1 },
+  updateProgressValue: { maxWidth: '72%', color: '#75483e', fontSize: 7.5, fontWeight: '800', textAlign: 'right' },
+  updateProgressTrack: { height: 6, overflow: 'hidden', borderRadius: 4, backgroundColor: 'rgba(178,107,98,0.18)' },
+  updateProgressFill: { height: '100%', borderRadius: 4, backgroundColor: '#dc7b71' },
+  updateProgressIndeterminate: { width: 58, height: '100%', borderRadius: 4, backgroundColor: '#dc7b71' },
+  updateActions: { width: '100%', flexDirection: 'row', justifyContent: 'center', gap: 10, marginTop: 12 },
+  updateNowButton: { minWidth: 138, height: 35, alignItems: 'center', justifyContent: 'center', borderRadius: 11, backgroundColor: '#dc7b71', borderWidth: 1, borderColor: '#bd625b', shadowColor: '#9c514b', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3, elevation: 3 },
+  updateNowText: { color: '#fff9e9', fontSize: 10, fontWeight: '900' },
+  updateLoading: { height: 31, minWidth: 190, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 11, borderRadius: 10, backgroundColor: '#dc7b71' },
+  updateLoadingText: { color: '#fff9e9', fontSize: 8.5, fontWeight: '800' },
+  updateHint: { color: '#aa8879', fontSize: 7, fontWeight: '700', marginTop: 8 },
 
 });
 
