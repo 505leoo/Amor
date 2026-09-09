@@ -157,13 +157,25 @@ async function run() {
     // Optional: push the current branch unless --no-push is provided
     const noPush = process.argv.includes('--no-push');
     if (!noPush) {
-      try {
-        console.log(`Pushing commit (git push)...`);
-        execSync('git push', { stdio: 'inherit' });
-        
-      } catch (pushErr) {
-        console.error('git push failed:', pushErr.message);
-        process.exit(1);
+      let pushSucceeded = false;
+      const pushCommands = [
+        'git push',
+        'git -c http.version=HTTP/1.1 push',
+      ];
+      for (const pushCommand of pushCommands) {
+        try {
+          console.log(`Pushing commit (${pushCommand})...`);
+          execSync(pushCommand, { stdio: 'inherit' });
+          pushSucceeded = true;
+          break;
+        } catch (pushErr) {
+          console.warn(`git push no disponible todavía: ${pushErr.message}`);
+        }
+      }
+      if (!pushSucceeded) {
+        // GitHub puede tener un timeout sin que eso impida publicar la OTA.
+        // El commit queda local y se puede enviar en la próxima ejecución.
+        console.warn('No se pudo subir el commit a GitHub después de reintentar. Continuando con la publicación OTA.');
       }
     } else {
       console.log('Skipping git push (--no-push)');
