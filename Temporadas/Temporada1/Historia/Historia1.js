@@ -8,12 +8,12 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { syncSetDoc } from '../../../utils/offlineSync';
 
 const NODOS = [
-  { id: 1, titulo: 'El Primer Encuentro', descripcion: 'El comienzo de todo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia1.png'), recompensa: '✨ Recuerdo desbloqueado', mision: '¿En qué lugar se conocieron por primera vez?', respuesta: 'parque', completado: true },
-  { id: 2, titulo: 'La Primera Sonrisa',  descripcion: 'Ese momento que lo cambió todo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia2.png'), recompensa: '💌 Carta especial', mision: '¿Cuál fue la primera canción que escucharon juntos?', respuesta: 'amor', completado: false },
-  { id: 3, titulo: 'Noches de Lluvia',    descripcion: 'Cuando el mundo se detuvo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia3.png'), recompensa: '🌙 Momento secreto', mision: '¿Qué película vieron esa noche?', respuesta: 'titanic', completado: false },
-  { id: 4, titulo: 'El Regalo',           descripcion: 'Algo que nunca olvidarás.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia4.png'), recompensa: '🎁 Sorpresa desbloqueada', mision: '¿Qué color tenía el lazo del regalo?', respuesta: 'rojo', completado: false },
-  { id: 5, titulo: 'Bajo las Estrellas',  descripcion: 'Una noche para siempre.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia5.png'), recompensa: '⭐ Constelación especial', mision: '¿Cuántas estrellas contaron esa noche?', respuesta: 'tres', completado: false },
-  { id: 6, titulo: 'Para Siempre',        descripcion: 'El final que es un comienzo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia6.png'), recompensa: '💖 Final desbloqueado', mision: '¿Qué palabra dijeron al mismo tiempo?', respuesta: 'siempre', completado: false },
+  { id: 1, titulo: 'El Primer Encuentro', descripcion: 'El comienzo de todo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia1.webp'), recompensa: '✨ Recuerdo desbloqueado', mision: '¿En qué lugar se conocieron por primera vez?', respuesta: 'parque', completado: true },
+  { id: 2, titulo: 'La Primera Sonrisa',  descripcion: 'Ese momento que lo cambió todo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia2.webp'), recompensa: '💌 Carta especial', mision: '¿Cuál fue la primera canción que escucharon juntos?', respuesta: 'amor', completado: false },
+  { id: 3, titulo: 'Noches de Lluvia',    descripcion: 'Cuando el mundo se detuvo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia3.webp'), recompensa: '🌙 Momento secreto', mision: '¿Qué película vieron esa noche?', respuesta: 'titanic', completado: false },
+  { id: 4, titulo: 'El Regalo',           descripcion: 'Algo que nunca olvidarás.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia4.webp'), recompensa: '🎁 Sorpresa desbloqueada', mision: '¿Qué color tenía el lazo del regalo?', respuesta: 'rojo', completado: false },
+  { id: 5, titulo: 'Bajo las Estrellas',  descripcion: 'Una noche para siempre.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia5.webp'), recompensa: '⭐ Constelación especial', mision: '¿Cuántas estrellas contaron esa noche?', respuesta: 'tres', completado: false },
+  { id: 6, titulo: 'Para Siempre',        descripcion: 'El final que es un comienzo.', imagen: require('../../../assets/temporadas/libro/Temporada1/Historia/historia6.webp'), recompensa: '💖 Final desbloqueado', mision: '¿Qué palabra dijeron al mismo tiempo?', respuesta: 'siempre', completado: false },
 ];
 
 function CuadritoActual({ style, children }) {
@@ -95,7 +95,7 @@ export default function Historia1({ navigation }) {
   return (
     <View style={s.container}>
       <StatusBar hidden />
-      <Image source={require('../../../assets/temporadas/libro/Temporada1/fondo1.png')} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} contentFit="cover" cachePolicy="memory" />
+      <Image source={require('../../../assets/temporadas/libro/Temporada1/fondo1.webp')} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} contentFit="cover" cachePolicy="memory" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
       <TabButtons onExit={() => navigation?.navigate?.('temporada1')} customAddButton={<View />} />
       <TouchableOpacity style={s.libroBtn} onPress={() => navigation?.navigate?.('librotemp1')}>

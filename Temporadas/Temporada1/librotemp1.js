@@ -7,12 +7,12 @@ import TabButtons from '../../components/TabButtons';
 import { syncSetDoc } from '../../utils/offlineSync';
 
 const IMAGENES = [
-  require('../../assets/temporadas/libro/Temporada1/Historia/historia1.png'),
-  require('../../assets/temporadas/libro/Temporada1/Historia/historia2.png'),
-  require('../../assets/temporadas/libro/Temporada1/Historia/historia3.png'),
-  require('../../assets/temporadas/libro/Temporada1/Historia/historia4.png'),
-  require('../../assets/temporadas/libro/Temporada1/Historia/historia5.png'),
-  require('../../assets/temporadas/libro/Temporada1/Historia/historia6.png'),
+  require('../../assets/temporadas/libro/Temporada1/Historia/historia1.webp'),
+  require('../../assets/temporadas/libro/Temporada1/Historia/historia2.webp'),
+  require('../../assets/temporadas/libro/Temporada1/Historia/historia3.webp'),
+  require('../../assets/temporadas/libro/Temporada1/Historia/historia4.webp'),
+  require('../../assets/temporadas/libro/Temporada1/Historia/historia5.webp'),
+  require('../../assets/temporadas/libro/Temporada1/Historia/historia6.webp'),
 ];
 
 const POR_PAGINA = 4;
@@ -81,16 +81,16 @@ export default function LibroTemp1({ navigation, route }) {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <Image source={require('../../assets/temporadas/libro/Temporada1/fondo1.png')} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} contentFit="cover" cachePolicy="memory" />
+      <Image source={require('../../assets/temporadas/libro/Temporada1/fondo1.webp')} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} contentFit="cover" cachePolicy="memory" />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.4)' }]} />
       <TabButtons onExit={() => navigation?.navigate?.(destinoSalida, destinoSalida === 'capsula1' ? { from: salidaCapsula === 'main' ? 'main' : undefined } : undefined)} customAddButton={<View />} />
-      <Image source={require('../../assets/temporadas/libro/coleccion1.png')} style={styles.coleccion} contentFit="contain" cachePolicy="memory" />
+      <Image source={require('../../assets/temporadas/libro/coleccion1.webp')} style={styles.coleccion} contentFit="contain" cachePolicy="memory" />
       {esPagina2 && (
         <View style={styles.regaloWrap}>
           {todasCompletas ? (
             <>
               <View style={styles.regaloMarco}>
-                <Image source={require('../../assets/Animalitos/Halcon/halcon1.png')} style={styles.regaloImg} contentFit="contain" cachePolicy="memory" />
+                <Image source={require('../../assets/Animalitos/Halcon/halcon1.webp')} style={styles.regaloImg} contentFit="contain" cachePolicy="memory" />
               </View>
               {halconDesbloqueado
                 ? <View style={styles.regaloBadge}><Text style={styles.regaloBadgeText}>✓ obtenido</Text></View>
@@ -101,7 +101,7 @@ export default function LibroTemp1({ navigation, route }) {
             </>
           ) : (
             <View style={styles.rewardRow}>
-              <Image source={halconDesbloqueado ? require('../../assets/temporadas/rewardopen.png') : require('../../assets/temporadas/reward.png')} style={styles.rewardImg} contentFit="contain" cachePolicy="memory" />
+              <Image source={halconDesbloqueado ? require('../../assets/temporadas/rewardopen.webp') : require('../../assets/temporadas/reward.webp')} style={styles.rewardImg} contentFit="contain" cachePolicy="memory" />
               <Text style={styles.rewardTexto}>{halconDesbloqueado ? `¡Lo lograste!\n¡Halcón es tuyo!` : `Completa la historia\npara reclamar`}</Text>
             </View>
           )}

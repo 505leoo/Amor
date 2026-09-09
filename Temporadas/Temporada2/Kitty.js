@@ -361,7 +361,7 @@ const VideoItemWithPlayer = ({ item, gestion, activoId, setActivoId, onEliminar,
     <View style={[styles.videoCard, featured && styles.featuredVideoCard, theme && { borderColor: theme.borde }]}>
       <View style={[styles.video, { backgroundColor: theme?.fondo || '#ffe8f0', justifyContent: 'center', alignItems: 'center' }]}>
         {featured
-          ? <Image source={require('../../assets/temporadas/libro/Temporada2/logokitty.png')} style={styles.featuredLogo} contentFit="contain" />
+          ? <Image source={require('../../assets/temporadas/libro/Temporada2/logokitty.webp')} style={styles.featuredLogo} contentFit="contain" />
           : <><MaterialIcons name="videocam" size={34} color="#df83a6" /><Text style={{ color: '#a85b79', fontSize: 8, fontWeight: '900', marginTop: 4 }}>VIDEÍTO</Text></>}
         <View style={styles.videoSparkles}><Text style={styles.videoSparkleText}>✦</Text><Text style={styles.videoSparkleText}>♡</Text></View>
       </View>

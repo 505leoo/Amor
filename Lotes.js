@@ -8,15 +8,15 @@ import { auth, db } from './firebaseConfig';
 import TabButtons from './components/TabButtons';
 import RecompensaOverlay from './components/RecompensaOverlay';
 
-const ICONO_ARDILLA = require('./assets/inicio/iconos/icono-ardilla-bellota-v2.png');
-const ICONO_AJOLOTE = require('./assets/inicio/iconos/icono-ajolote-caramelo.png');
-const AJOLOTE_BASE = require('./assets/Animalitos/Ajolote/ajolote1.png');
-const AJOLOTE_TRAJE_1 = require('./assets/Animalitos/Ajolote/skins/ajolotet1.png');
-const AJOLOTE_TRAJE_2 = require('./assets/Animalitos/Ajolote/skins/ajolotet2.png');
-const ICONO_ERIZO = require('./assets/inicio/iconos/icono-erizo-dulce-medianoche.png');
-const ERIZO_BASE = require('./assets/Animalitos/Erizo/erizo1.png');
-const ERIZO_TRAJE_1 = require('./assets/Animalitos/Erizo/skins/erizot1.png');
-const ERIZO_TRAJE_2 = require('./assets/Animalitos/Erizo/skins/erizot2.png');
+const ICONO_ARDILLA = require('./assets/inicio/iconos/icono-ardilla-bellota-v2.webp');
+const ICONO_AJOLOTE = require('./assets/inicio/iconos/icono-ajolote-caramelo.webp');
+const AJOLOTE_BASE = require('./assets/Animalitos/Ajolote/ajolote1.webp');
+const AJOLOTE_TRAJE_1 = require('./assets/Animalitos/Ajolote/skins/ajolotet1.webp');
+const AJOLOTE_TRAJE_2 = require('./assets/Animalitos/Ajolote/skins/ajolotet2.webp');
+const ICONO_ERIZO = require('./assets/inicio/iconos/icono-erizo-dulce-medianoche.webp');
+const ERIZO_BASE = require('./assets/Animalitos/Erizo/erizo1.webp');
+const ERIZO_TRAJE_1 = require('./assets/Animalitos/Erizo/skins/erizot1.webp');
+const ERIZO_TRAJE_2 = require('./assets/Animalitos/Erizo/skins/erizot2.webp');
 
 const LOTES = {
   ardilla: {
@@ -24,16 +24,16 @@ const LOTES = {
     edicion: 'EDICIÓN DORADA', titulo: 'Bosque Dorado', descripcion: 'Una colección especial de Ardilla',
     gradient: ['#fff3bd', '#e6a844', '#a95c1e'], spinGradient: ['#ffd86f', '#d88722'],
     legacyUnlockField: 'ardillaDesbloqueada', premioPrincipalId: 'ardillat2', ordenCuadricula: ['icono', 'monedas', 'ardillat1', 'universales', 'personaje', 'cartas'],
-    personaje: require('./assets/Animalitos/Ardilla/ardilla1.png'),
+    personaje: require('./assets/Animalitos/Ardilla/ardilla1.webp'),
     icono: ICONO_ARDILLA,
     premios: [
       { id: 'monedas', tipo: 'dinero', cantidad: 30, nombre: 'Monedas', iconoTexto: '🪙', tamano: 'small', peso: 57 },
       { id: 'universales', tipo: 'cartasAnimalitos', cantidad: 2, nombre: 'Cartas universales', tamano: 'small', peso: 28 },
       { id: 'cartas', tipo: 'cartasAnimal', cantidad: 3, nombre: 'Cartas de Ardilla', tamano: 'small', peso: 14 },
       { id: 'icono', tipo: 'icono', nombre: 'Icono exclusivo', imagen: ICONO_ARDILLA, tamano: 'medium', peso: 0.5, unico: true },
-      { id: 'personaje', tipo: 'animal', nombre: 'Ardilla', imagen: require('./assets/Animalitos/Ardilla/ardilla1.png'), tamano: 'character', peso: 0.25, unico: true },
-      { id: 'ardillat1', tipo: 'skin', skinId: 'ardillat1', nombre: 'Bellota Dorada', imagen: require('./assets/Animalitos/Ardilla/skins/ardillat1.png'), tamano: 'large', peso: 0.15, unico: true },
-      { id: 'ardillat2', tipo: 'skin', skinId: 'ardillat2', nombre: 'Guardiana', imagen: require('./assets/Animalitos/Ardilla/skins/ardillat2.png'), tamano: 'large', peso: 0.1, unico: true },
+      { id: 'personaje', tipo: 'animal', nombre: 'Ardilla', imagen: require('./assets/Animalitos/Ardilla/ardilla1.webp'), tamano: 'character', peso: 0.25, unico: true },
+      { id: 'ardillat1', tipo: 'skin', skinId: 'ardillat1', nombre: 'Bellota Dorada', imagen: require('./assets/Animalitos/Ardilla/skins/ardillat1.webp'), tamano: 'large', peso: 0.15, unico: true },
+      { id: 'ardillat2', tipo: 'skin', skinId: 'ardillat2', nombre: 'Guardiana', imagen: require('./assets/Animalitos/Ardilla/skins/ardillat2.webp'), tamano: 'large', peso: 0.1, unico: true },
     ],
   },
   ajolote: {

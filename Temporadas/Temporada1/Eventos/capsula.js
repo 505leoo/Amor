@@ -518,7 +518,7 @@ export default function Capsula({ navigation, route }) {
     <View style={s.container}>
       <StatusBar hidden />
       <ExpoImage
-        source={require('../../../assets/temporadas/libro/Temporada1/fondo1.png')}
+        source={require('../../../assets/temporadas/libro/Temporada1/fondo1.webp')}
         style={StyleSheet.absoluteFill}
         contentFit="cover" cachePolicy="memory"
       />

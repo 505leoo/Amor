@@ -12,7 +12,7 @@ import { resolverAvatarUsuario } from '../data/iconosLocales';
 const { width } = Dimensions.get('window');
 
 const PIN_LENGTH = 6;
-const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.webp');
 
 const getUserName = user => String(
   user?.datosCompletos?.nombre || user?.nombre || user?.displayName || ''
@@ -89,7 +89,7 @@ const PinDots = ({ length, filled }) => (
 
 export default function Login({ navigation, temporada = 't1' }) {
   const temporadaActual = temporada;
-  const fondoLocal = temporadaActual === 't2' ? require('../assets/temporadas/libro/Temporada2/fondo2.png') : require('../assets/temporadas/libro/Temporada1/fondo1.png');
+  const fondoLocal = temporadaActual === 't2' ? require('../assets/temporadas/libro/Temporada2/fondo2.webp') : require('../assets/temporadas/libro/Temporada1/fondo1.webp');
   const gradientColors = ['transparent', 'transparent', 'transparent'];
 
   const [users, setUsers] = useState([]);

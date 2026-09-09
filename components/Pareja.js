@@ -37,7 +37,7 @@ const getUsuariosCacheados = async () => {
   }
   return usuariosRequest;
 };
-const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.webp');
 // La actividad se publica cada 45 segundos. La etiqueta "Conectado/a" solo se
 // mantiene durante 2 minutos; después pasa a mostrar el tiempo real.
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;

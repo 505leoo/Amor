@@ -354,7 +354,7 @@ const DulcesGame = memo(({ navigation }) => {
     <View style={styles.container}>
       <StatusBar hidden />
       <RoomBackground />
-      <Image source={require('../../assets/juegos/conexion.png')} style={styles.beachBackground} contentFit="cover" />
+      <Image source={require('../../assets/juegos/conexion.webp')} style={styles.beachBackground} contentFit="cover" />
       <View pointerEvents="none" style={styles.tint} />
 
       {status !== 'lobby' && <View style={styles.navLayer}><TabButtons onExit={leaveToGames} customAddButton={<View />} /></View>}

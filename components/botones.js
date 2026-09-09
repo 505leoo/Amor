@@ -26,8 +26,8 @@ const Libro = ({ onPress, opacity, source }) => (
 // Repisa izquierda: temporadas + animalitos
 export const LibrosRepisa = ({ onPressTemporadas, onPressAnimalitos }) => (
   <View style={{ position: 'absolute', bottom: 0, left: 18, zIndex: 3, flexDirection: 'row', alignItems: 'flex-end', gap: 14 }}>
-    <Libro onPress={onPressTemporadas} source={require('../assets/temporadas/libro/libro1.png')} />
-    <Libro onPress={onPressAnimalitos} source={require('../assets/temporadas/libro/libro3.png')} opacity={0.82} />
+    <Libro onPress={onPressTemporadas} source={require('../assets/temporadas/libro/libro1.webp')} />
+    <Libro onPress={onPressAnimalitos} source={require('../assets/temporadas/libro/libro3.webp')} opacity={0.82} />
   </View>
 );
 

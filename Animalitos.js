@@ -922,7 +922,7 @@ const Animalitos = ({ navigation, mode }) => {
       <View style={s.libroWrap}>
         {seleccionado ? (
           <>
-            <Image source={require('./assets/temporadas/libro/libroanimal2.png')} style={s.libro} contentFit="contain" cachePolicy="memory-disk" priority="high" transition={0} />
+            <Image source={require('./assets/temporadas/libro/libroanimal2.webp')} style={s.libro} contentFit="contain" cachePolicy="memory-disk" priority="high" transition={0} />
             <Image source={seleccionado.imagen} style={s.animalDetalle} contentFit="contain" cachePolicy="memory" />
             <View style={s.rutaNivelAnimal}><Text style={s.rutaNivelTexto}>Nivel {estadoAnimal(seleccionado.id).nivel}</Text></View>
             <ScrollView style={s.rutaScroll} contentContainerStyle={s.rutaContenido} showsVerticalScrollIndicator={false}>
@@ -1017,7 +1017,7 @@ const Animalitos = ({ navigation, mode }) => {
             return <View style={s.previewTarjeta}>
             <View style={[s.previewIcono, previewRecompensa.tipo === 'diamantes' && s.previewIconoDiamante, previewRecompensa.tipo === 'skin' && s.previewIconoTraje]}>
               {previewRecompensa.tipo === 'skin'
-                ? <Image source={require('./assets/Animalitos/Halcon/skins/halcont1.png')} style={s.previewTrajeImagen} contentFit="contain" cachePolicy="memory-disk" />
+                ? <Image source={require('./assets/Animalitos/Halcon/skins/halcont1.webp')} style={s.previewTrajeImagen} contentFit="contain" cachePolicy="memory-disk" />
                 : iconoLocalPremio
                   ? <Image source={iconoLocalPremio} style={s.previewIconoSubido} contentFit="cover" cachePolicy="memory-disk" />
                 : iconoPremio

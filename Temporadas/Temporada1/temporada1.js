@@ -12,7 +12,7 @@ const Temporada1 = ({ navigation }) => {
   return (
     <View style={styles.container}>
       <StatusBar hidden />
-      <Image source={require('../../assets/temporadas/libro/Temporada1/fondo1.png')} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} contentFit="cover" cachePolicy="memory" />
+      <Image source={require('../../assets/temporadas/libro/Temporada1/fondo1.webp')} style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} contentFit="cover" cachePolicy="memory" />
       <TabButtons onExit={() => navigation?.navigate?.('temporadas')} customAddButton={<View />} />
       <TouchableOpacity style={styles.comercianteBtn} activeOpacity={0.75} onPress={() => navigation?.navigate?.('comerciante', { temporada: 't1' })}>
         <View style={styles.comercianteIcon}><MaterialIcons name="storefront" size={19} color="#f4fff0" /></View>

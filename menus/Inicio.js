@@ -37,7 +37,7 @@ const NOOP = () => {};
 // de JS/GPU a gestos, alimentación y navegación. Las animaciones de acción
 // (alimentar, arrastrar y feedback) siguen activas.
 const ANIMACIONES_AMBIENTALES = false;
-const HALCON_IMAGE = require('../assets/Animalitos/Halcon/halcon1.png');
+const HALCON_IMAGE = require('../assets/Animalitos/Halcon/halcon1.webp');
 
 const fechaDeActividad = valor => {
   if (!valor) return null;
@@ -56,7 +56,7 @@ const nombreComponente = valor => ({
   animalitos: 'Animalitos', temporadas: 'Temporadas', buzon: 'Buzón',
 }[String(valor || '').toLowerCase()] || 'Amor');
 const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
-const JUGAR_IMAGE = require('../assets/inicio/jugar.png');
+const JUGAR_IMAGE = require('../assets/inicio/jugar.webp');
 const selectEstadoInicio = data => ({
   animalito: data?.animalito || null,
   halconDesbloqueado: Boolean(data?.halconDesbloqueado),
@@ -354,7 +354,7 @@ const s = StyleSheet.create({
 });
 
 // Cálculo de tiempo restante fuera del componente para evitar re-renders
-const REGALO_DIARIO_IMAGE = require('../assets/inicio/regalodiario.png');
+const REGALO_DIARIO_IMAGE = require('../assets/inicio/regalodiario.webp');
 
 const getRegaloTime = (nowMs = Date.now()) => {
   const now = new Date(nowMs);

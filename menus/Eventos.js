@@ -5,12 +5,12 @@ import { useTemporadaActual } from '../hooks/useTemporadaActual';
 
 const EVENTOS_POR_TEMPORADA = {
   t1: {
-    evento: { id: 'chicles', categoria: 'EVENTOS', titulo: 'CHICLES', destino: 'capsula1', descripcion: 'Completá el camino compartiendo chicles.', imagen: require('../assets/inicio/eventos/eventochicle.png') },
+    evento: { id: 'chicles', categoria: 'EVENTOS', titulo: 'CHICLES', destino: 'capsula1', descripcion: 'Completá el camino compartiendo chicles.', imagen: require('../assets/inicio/eventos/eventochicle.webp') },
   },
   t2: {
-    historia: { id: 'rutaAurora', categoria: 'EVENTO DE HISTORIA', titulo: 'RUTAS', destino: 'rutas', descripcion: 'Acompañá a Aurora durante su día y guardá cada momento como un recuerdo.', imagen: require('../assets/inicio/eventos/eventorutas.png'), tema: 'blanco' },
-    evento: { id: 'paleta', categoria: 'EVENTOS', titulo: 'GLOBOS', destino: 'paleta', descripcion: 'Una aventura entre globos te espera. Completa sus desafíos y consigue recompensas.', imagen: require('../assets/inicio/eventos/eventoglobo.png'), tema: 'carmesi' },
-    secundario: { id: 'kitty', categoria: 'EVENTO SECUNDARIO', titulo: 'VIDEITOS', destino: 'kitty', descripcion: 'Mirá videitos de Hello Kitty y sus amigos, preparados para compartir un ratito lindo.', imagen: require('../assets/inicio/eventos/eventokitty.png'), tema: 'blanco' },
+    historia: { id: 'rutaAurora', categoria: 'EVENTO DE HISTORIA', titulo: 'RUTAS', destino: 'rutas', descripcion: 'Acompañá a Aurora durante su día y guardá cada momento como un recuerdo.', imagen: require('../assets/inicio/eventos/eventorutas.webp'), tema: 'blanco' },
+    evento: { id: 'paleta', categoria: 'EVENTOS', titulo: 'GLOBOS', destino: 'paleta', descripcion: 'Una aventura entre globos te espera. Completa sus desafíos y consigue recompensas.', imagen: require('../assets/inicio/eventos/eventoglobo.webp'), tema: 'carmesi' },
+    secundario: { id: 'kitty', categoria: 'EVENTO SECUNDARIO', titulo: 'VIDEITOS', destino: 'kitty', descripcion: 'Mirá videitos de Hello Kitty y sus amigos, preparados para compartir un ratito lindo.', imagen: require('../assets/inicio/eventos/eventokitty.webp'), tema: 'blanco' },
   },
 };
 const obtenerEventosDeTemporada = temporada => { const c = EVENTOS_POR_TEMPORADA[temporada] || EVENTOS_POR_TEMPORADA.t1; return [c.historia && { ...c.historia, esHistoria: true }, c.evento && { ...c.evento, esHistoria: false }, c.secundario && { ...c.secundario, esHistoria: false }].filter(Boolean); };

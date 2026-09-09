@@ -469,7 +469,7 @@ export default function Paleta({ navigation, route }) {
       <TabButtons onExit={() => navigation?.navigate?.(destinoSalida)} customAddButton={<View />} chicles={paletas} chicleIcono={<Text style={{ fontSize: 12 }}>🎈</Text>} />
       
       <ExpoImage
-        source={require('../../../assets/temporadas/libro/Temporada2/fondo2.png')}
+        source={require('../../../assets/temporadas/libro/Temporada2/fondo2.webp')}
         style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
         contentFit="cover"
         cachePolicy="memory"

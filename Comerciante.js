@@ -20,7 +20,7 @@ const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 const COMERCIO_W = Math.min(SCREEN_W * 0.58, SCREEN_H * 0.45);
 const TIENDA_H = Math.min(SCREEN_H * 0.78, 460);
 const TIENDA_W = TIENDA_H / 1.43;
-const COMERCIO_IMAGE = require('./assets/inicio/comercio.png');
+const COMERCIO_IMAGE = require('./assets/inicio/comercio.webp');
 const CARTAS_POR_ANIMAL = ANIMALITOS.map(animal => ({
   ...animal,
   color: animal.comercio?.color || animal.colorRareza,

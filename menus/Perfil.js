@@ -19,7 +19,7 @@ import { resolverAvatarUsuario } from '../data/iconosLocales';
 import { RachaCountdown, RachaSegmentedBar } from '../components/RachaVisual';
 import { PUNTOS_POR_DIA_RACHA, useRacha, dayKeyFor } from '../RachaContext';
 
-const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.webp');
 
 const GAME_DETAILS = {
   conexiones: { nombre: 'Hilito', icono: 'all-inclusive', color: '#8064ee' },

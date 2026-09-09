@@ -1,10 +1,10 @@
 export const ICONOS_LOCALES = {
-  ardilla_bellota: require('../assets/inicio/iconos/icono-ardilla-bellota-v2.png'),
-  ajolote_caramelo: require('../assets/inicio/iconos/icono-ajolote-caramelo.png'),
-  erizo_dulce_medianoche: require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.png'),
-  pezglobo_perla_abisal: require('../assets/inicio/iconos/icono-pezglobo-perla-abisal.png'),
-  gato_ovillo_dorado: require('../assets/inicio/iconos/icono-gato-ovillo-dorado.png'),
-  mono_selva_dorada: require('../assets/inicio/iconos/icono-mono-selva-dorada.png'),
+  ardilla_bellota: require('../assets/inicio/iconos/icono-ardilla-bellota-v2.webp'),
+  ajolote_caramelo: require('../assets/inicio/iconos/icono-ajolote-caramelo.webp'),
+  erizo_dulce_medianoche: require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.webp'),
+  pezglobo_perla_abisal: require('../assets/inicio/iconos/icono-pezglobo-perla-abisal.webp'),
+  gato_ovillo_dorado: require('../assets/inicio/iconos/icono-gato-ovillo-dorado.webp'),
+  mono_selva_dorada: require('../assets/inicio/iconos/icono-mono-selva-dorada.webp'),
 };
 
 export const obtenerIconoLocal = id => (id ? ICONOS_LOCALES[id] || null : null);

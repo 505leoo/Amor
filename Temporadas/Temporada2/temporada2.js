@@ -13,7 +13,7 @@ const Temporada2 = ({ navigation }) => {
   <View style={styles.container}>
     <StatusBar hidden />
     <Image
-      source={require('../../assets/temporadas/libro/Temporada2/fondo2.png')}
+      source={require('../../assets/temporadas/libro/Temporada2/fondo2.webp')}
       style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
       contentFit="cover"
       cachePolicy="memory"

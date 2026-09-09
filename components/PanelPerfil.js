@@ -9,7 +9,7 @@ import { ProfileFrame } from '../menus/Perfil';
 import { resolverAvatarUsuario } from '../data/iconosLocales';
 import { useRacha } from '../RachaContext';
 
-const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.jpg');
+const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.webp');
 const resolverAvatar = data => resolverAvatarUsuario(data, ICONO_DEFAULT);
 const numeroSeguro = value => {
   const parsed = Number(value);

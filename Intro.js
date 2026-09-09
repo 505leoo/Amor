@@ -15,8 +15,8 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = null, tempor
   const temporadaInicial = temporada;
   const fondoTemporada = temporadaInicial;
   const fondoLocal = fondoTemporada === 't2'
-    ? require('./assets/temporadas/libro/Temporada2/fondo2.png')
-    : require('./assets/temporadas/libro/Temporada1/fondo1.png');
+    ? require('./assets/temporadas/libro/Temporada2/fondo2.webp')
+    : require('./assets/temporadas/libro/Temporada1/fondo1.webp');
 
   useEffect(() => {
     console.log('[Intro] Fondo local seleccionado', fondoTemporada === 't2' ? 'fondo2.png' : 'fondo1.png');

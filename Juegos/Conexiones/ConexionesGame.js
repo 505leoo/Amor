@@ -1050,7 +1050,7 @@ export default memo(function ConexionesGame({ navigation }) {
     <View style={styles.container}>
       <StatusBar hidden />
       <RoomBackground />
-      <Image source={require('../../assets/juegos/conexion.png')} style={styles.beachBackground} resizeMode="cover" />
+      <Image source={require('../../assets/juegos/conexion.webp')} style={styles.beachBackground} resizeMode="cover" />
       <View style={styles.tint} />
       {status !== 'lobby' && <View style={styles.navLayer}>
         <TabButtons onExit={() => navigation?.navigate('main')} customAddButton={<View />} />

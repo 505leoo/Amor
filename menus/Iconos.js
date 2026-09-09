@@ -21,14 +21,14 @@ const ICONO_DEFAULT = {
   id: ICONO_DEFAULT_ID,
   nombre: 'icono1',
   url: null,
-  source: require('../assets/inicio/iconos/icono1.jpg'),
+  source: require('../assets/inicio/iconos/icono1.webp'),
 };
 const ICONO_ARDILLA = {
   id: 'ardilla_bellota',
   nombre: 'ardilla_bellota',
   url: null,
   local: true,
-  source: require('../assets/inicio/iconos/icono-ardilla-bellota-v2.png'),
+  source: require('../assets/inicio/iconos/icono-ardilla-bellota-v2.webp'),
   seccion: 'animales',
   temporada: 't1',
 };
@@ -37,7 +37,7 @@ const ICONO_AJOLOTE = {
   nombre: 'ajolote_caramelo',
   url: null,
   local: true,
-  source: require('../assets/inicio/iconos/icono-ajolote-caramelo.png'),
+  source: require('../assets/inicio/iconos/icono-ajolote-caramelo.webp'),
   seccion: 'animales',
   temporada: 't2',
 };
@@ -46,7 +46,7 @@ const ICONO_ERIZO = {
   nombre: 'erizo_dulce_medianoche',
   url: null,
   local: true,
-  source: require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.png'),
+  source: require('../assets/inicio/iconos/icono-erizo-dulce-medianoche.webp'),
   seccion: 'animales',
   temporada: 't2',
 };
@@ -55,7 +55,7 @@ const ICONO_PEZGLOBO = {
   nombre: 'pezglobo_perla_abisal',
   url: null,
   local: true,
-  source: require('../assets/inicio/iconos/icono-pezglobo-perla-abisal.png'),
+  source: require('../assets/inicio/iconos/icono-pezglobo-perla-abisal.webp'),
   seccion: 'animales',
   temporada: 't2',
 };
@@ -64,7 +64,7 @@ const ICONO_GATO = {
   nombre: 'gato_ovillo_dorado',
   url: null,
   local: true,
-  source: require('../assets/inicio/iconos/icono-gato-ovillo-dorado.png'),
+  source: require('../assets/inicio/iconos/icono-gato-ovillo-dorado.webp'),
   seccion: 'animales',
   temporada: 't2',
 };
@@ -73,7 +73,7 @@ const ICONO_MONO = {
   nombre: 'mono_selva_dorada',
   url: null,
   local: true,
-  source: require('../assets/inicio/iconos/icono-mono-selva-dorada.png'),
+  source: require('../assets/inicio/iconos/icono-mono-selva-dorada.webp'),
   seccion: 'animales',
 };
 

@@ -9,14 +9,14 @@ import { db, auth } from '../firebaseConfig';
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 const TEMPORADAS = [
-  { id: 1, titulo: 'Amanecer Dorado',   desc: 'El inicio de una nueva historia.',        logo: require('../assets/temporadas/libro/Temporada1/logo1.png'), style: { left: 195, top: '22%' } },
-  { id: 2, titulo: 'Dulces Sorpresas',  desc: 'Hay algo que queremos celebrar contigo.', logo: require('../assets/temporadas/libro/Temporada2/logo1.png'), style: { left: 295, top: '24%' } },
-  { id: 3, logo: require('../assets/temporadas/libro/Temporada1/logo1.png'), style: { left: 210, top: '53%' } },
-  { id: 4, logo: require('../assets/temporadas/libro/Temporada1/logo1.png'), style: { left: 305, top: '55%' } },
-  { id: 6, logo: require('../assets/temporadas/libro/Temporada2/logo1.png'), style: { right: 151, top: '22%' } },
-  { id: 5, logo: require('../assets/temporadas/libro/Temporada1/logo1.png'), style: { right: 245, top: '24%' } },
-  { id: 8, logo: require('../assets/temporadas/libro/Temporada1/logo1.png'), style: { right: 140, top: '53%' } },
-  { id: 7, logo: require('../assets/temporadas/libro/Temporada1/logo1.png'), style: { right: 235, top: '53%' } },
+  { id: 1, titulo: 'Amanecer Dorado',   desc: 'El inicio de una nueva historia.',        logo: require('../assets/temporadas/libro/Temporada1/logo1.webp'), style: { left: 195, top: '22%' } },
+  { id: 2, titulo: 'Dulces Sorpresas',  desc: 'Hay algo que queremos celebrar contigo.', logo: require('../assets/temporadas/libro/Temporada2/logo1.webp'), style: { left: 295, top: '24%' } },
+  { id: 3, logo: require('../assets/temporadas/libro/Temporada1/logo1.webp'), style: { left: 210, top: '53%' } },
+  { id: 4, logo: require('../assets/temporadas/libro/Temporada1/logo1.webp'), style: { left: 305, top: '55%' } },
+  { id: 6, logo: require('../assets/temporadas/libro/Temporada2/logo1.webp'), style: { right: 151, top: '22%' } },
+  { id: 5, logo: require('../assets/temporadas/libro/Temporada1/logo1.webp'), style: { right: 245, top: '24%' } },
+  { id: 8, logo: require('../assets/temporadas/libro/Temporada1/logo1.webp'), style: { right: 140, top: '53%' } },
+  { id: 7, logo: require('../assets/temporadas/libro/Temporada1/logo1.webp'), style: { right: 235, top: '53%' } },
 ];
 
 const DISPONIBLES = new Set([1, 2]);
@@ -58,7 +58,7 @@ const Temporadas = ({ navigation }) => {
       )}
 
       <View style={s.imageWrap}>
-        <ExpoImage source={require('../assets/temporadas/libro/libro2.png')} style={s.image} contentFit="contain" contentPosition="center" cachePolicy="memory-disk" />
+        <ExpoImage source={require('../assets/temporadas/libro/libro2.webp')} style={s.image} contentFit="contain" contentPosition="center" cachePolicy="memory-disk" />
       </View>
 
       {TEMPORADAS.map(t => {

@@ -18,7 +18,15 @@
       "url": "https://u.expo.dev/3e224fbe-d6f2-48c1-8903-61bf13953cf2"
     },
     "assetBundlePatterns": [
-      "**/*"
+      "assets/16.png",
+      "assets/notifications.png",
+      "assets/Animalitos/**/*",
+      "assets/inicio/**/*.webp",
+      "assets/juegos/**/*.webp",
+      "assets/Lottie/**/*",
+      "assets/sounds/**/*",
+      "assets/temporadas/**/*.webp",
+      "assets/temporadas/**/*.svg"
     ],
     "fonts": [
       "./fonts/Omori.ttf",

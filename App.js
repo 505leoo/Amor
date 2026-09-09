@@ -407,19 +407,19 @@ export default function App() {
   const preloadImages = useCallback(async () => {
     try {
       // Precargar solo la más importante
-      await ExpoImage.prefetch(require('./assets/temporadas/libro/panel1.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
-      await ExpoImage.prefetch(require('./assets/inicio/pareja.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
-      await ExpoImage.prefetch(require('./assets/inicio/jugar.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
-      await ExpoImage.prefetch(require('./assets/inicio/inicio.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
-      await ExpoImage.prefetch(require('./assets/inicio/regalodiario.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
-      await ExpoImage.prefetch(require('./assets/inicio/eventos/eventochicle.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
-      await ExpoImage.prefetch(require('./assets/temporadas/libro/libroanimal.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
-      await ExpoImage.prefetch(require('./assets/temporadas/libro/libroanimal2.png'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/temporadas/libro/panel1.webp'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/pareja.webp'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/jugar.webp'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/inicio.webp'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/regalodiario.webp'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/inicio/eventos/eventochicle.webp'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/temporadas/libro/libroanimal.webp'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
+      await ExpoImage.prefetch(require('./assets/temporadas/libro/libroanimal2.webp'), { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {});
       // Precargar las skins del Halcón para que el selector no muestre imágenes tarde.
       [
-        require('./assets/Animalitos/Halcon/halcon1.png'),
-        require('./assets/Animalitos/Halcon/skins/halcont1.png'),
-        require('./assets/Animalitos/Halcon/skins/halcont2.png'),
+        require('./assets/Animalitos/Halcon/halcon1.webp'),
+        require('./assets/Animalitos/Halcon/skins/halcont1.webp'),
+        require('./assets/Animalitos/Halcon/skins/halcont2.webp'),
       ].forEach(source => ExpoImage.prefetch(source, { cachePolicy: 'memory-disk', priority: 'high' }).catch(() => {}));
       
       // Cargar stickers en background sin bloquear. En modo sin línea los
@@ -479,8 +479,8 @@ export default function App() {
 
       // Decodificar el fondo antes de montar Intro evita un frame vacio/parpadeo.
       const fondoInicio = temporadaSeleccionada === 't2'
-        ? require('./assets/temporadas/libro/Temporada2/fondo2.png')
-        : require('./assets/temporadas/libro/Temporada1/fondo1.png');
+        ? require('./assets/temporadas/libro/Temporada2/fondo2.webp')
+        : require('./assets/temporadas/libro/Temporada1/fondo1.webp');
       await Asset.loadAsync(fondoInicio).catch(error => {
         console.warn('[App] No se pudo precargar el fondo de inicio', error?.message || error);
       });

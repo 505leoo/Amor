@@ -162,7 +162,7 @@ const STEPS = ['correo', 'pin', 'nombre', 'foto', 'genero'];
 
 export default function Register({ navigation, temporada = 't1' }) {
   const temporadaActual = temporada;
-  const fondoLocal = temporadaActual === 't2' ? require('../assets/temporadas/libro/Temporada2/fondo2.png') : require('../assets/temporadas/libro/Temporada1/fondo1.png');
+  const fondoLocal = temporadaActual === 't2' ? require('../assets/temporadas/libro/Temporada2/fondo2.webp') : require('../assets/temporadas/libro/Temporada1/fondo1.webp');
   const gradientColors = ['transparent', 'transparent', 'transparent'];
 
   const [step, setStep] = useState(0); // 0=correo, 1=pin, 2=nombre, 3=genero

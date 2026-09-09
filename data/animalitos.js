@@ -10,7 +10,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en objetivos diarios.',
     legacyUnlockField: 'halconDesbloqueado',
     comercio: { color: '#a9722f', fondo: '#f3e5c8', borde: '#c69a5b' },
-    imagen: require('../assets/Animalitos/Halcon/halcon1.png'),
+    imagen: require('../assets/Animalitos/Halcon/halcon1.webp'),
   },
   {
     id: 'ardilla',
@@ -24,7 +24,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de monedas obtenidas en eventos.',
     legacyUnlockField: 'ardillaDesbloqueada',
     comercio: { color: '#9a68c4', fondo: '#eee0f7', borde: '#b58ad5' },
-    imagen: require('../assets/Animalitos/Ardilla/ardilla1.png'),
+    imagen: require('../assets/Animalitos/Ardilla/ardilla1.webp'),
   },
   {
     id: 'ajolote',
@@ -38,7 +38,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de monedas obtenidas en eventos de temporada.',
     legacyUnlockField: 'ajoloteDesbloqueado',
     comercio: { color: '#c85f91', fondo: '#f9deea', borde: '#df91b5' },
-    imagen: require('../assets/Animalitos/Ajolote/ajolote1.png'),
+    imagen: require('../assets/Animalitos/Ajolote/ajolote1.webp'),
   },
   {
     id: 'erizo',
@@ -52,7 +52,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en juegos.',
     legacyUnlockField: 'erizoDesbloqueado',
     comercio: { color: '#6f4d93', fondo: '#eee5f7', borde: '#a886c3' },
-    imagen: require('../assets/Animalitos/Erizo/erizo1.png'),
+    imagen: require('../assets/Animalitos/Erizo/erizo1.webp'),
   },
   {
     id: 'loro',
@@ -66,7 +66,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de cartas universales obtenidas en juegos.',
     legacyUnlockField: 'loroDesbloqueado',
     comercio: { color: '#c96a55', fondo: '#fae2cf', borde: '#dc9972' },
-    imagen: require('../assets/Animalitos/Loro/loro1.png'),
+    imagen: require('../assets/Animalitos/Loro/loro1.webp'),
   },
   {
     id: 'pezglobo',
@@ -80,7 +80,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de diamantes obtenidos en eventos de temporada.',
     legacyUnlockField: 'pezgloboDesbloqueado',
     comercio: { color: '#5578b8', fondo: '#dfeaf7', borde: '#87a7d1' },
-    imagen: require('../assets/Animalitos/PezGlobo/pezglobo1.png'),
+    imagen: require('../assets/Animalitos/PezGlobo/pezglobo1.webp'),
   },
   {
     id: 'gato',
@@ -94,7 +94,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en juegos.',
     legacyUnlockField: 'gatoDesbloqueado',
     comercio: { color: '#7188a4', fondo: '#e7edf3', borde: '#9cadbf' },
-    imagen: require('../assets/Animalitos/Gato/gato1.png'),
+    imagen: require('../assets/Animalitos/Gato/gato1.webp'),
   },
   {
     id: 'mono',
@@ -108,7 +108,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de monedas obtenidas en juegos.',
     legacyUnlockField: 'monoDesbloqueado',
     comercio: { color: '#9d6a36', fondo: '#f3e3c7', borde: '#c79a62' },
-    imagen: require('../assets/Animalitos/Mono/mono1.png'),
+    imagen: require('../assets/Animalitos/Mono/mono1.webp'),
   },
   {
     id: 'buho',
@@ -122,7 +122,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en conversaciones.',
     legacyUnlockField: 'buhoDesbloqueado',
     comercio: { color: '#8064aa', fondo: '#ece5f6', borde: '#a994c7' },
-    imagen: require('../assets/Animalitos/Buho/buho1.png'),
+    imagen: require('../assets/Animalitos/Buho/buho1.webp'),
   },
   {
     id: 'murcielago',
@@ -136,7 +136,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de monedas obtenidas en juegos nocturnos.',
     legacyUnlockField: 'murcielagoDesbloqueado',
     comercio: { color: '#665184', fondo: '#e8e1f2', borde: '#9b86b5' },
-    imagen: require('../assets/Animalitos/Murcielago/murcielago1.png'),
+    imagen: require('../assets/Animalitos/Murcielago/murcielago1.webp'),
   },
   {
     id: 'tortuga',
@@ -150,7 +150,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de cartas obtenidas en actividades.',
     legacyUnlockField: 'tortugaDesbloqueada',
     comercio: { color: '#4c9c91', fondo: '#dff0e9', borde: '#83b9a9' },
-    imagen: require('../assets/Animalitos/Tortuga/tortuga1.png'),
+    imagen: require('../assets/Animalitos/Tortuga/tortuga1.webp'),
   },
   {
     id: 'pulpo',
@@ -164,7 +164,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de diamantes obtenidos en eventos.',
     legacyUnlockField: 'pulpoDesbloqueado',
     comercio: { color: '#a05bb1', fondo: '#f0e1f4', borde: '#c18bca' },
-    imagen: require('../assets/Animalitos/Pulpo/pulpo1.png'),
+    imagen: require('../assets/Animalitos/Pulpo/pulpo1.webp'),
   },
   {
     id: 'zorro',
@@ -178,7 +178,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en actividades diarias.',
     legacyUnlockField: 'zorroDesbloqueado',
     comercio: { color: '#d4773c', fondo: '#f8e1d0', borde: '#df9a68' },
-    imagen: require('../assets/Animalitos/Zorro/zorro1.png'),
+    imagen: require('../assets/Animalitos/Zorro/zorro1.webp'),
   },
   {
     id: 'delfin',
@@ -192,7 +192,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en actividades.',
     legacyUnlockField: 'delfinDesbloqueado',
     comercio: { color: '#4b9fc4', fondo: '#dff0f6', borde: '#82bfd3' },
-    imagen: require('../assets/Animalitos/Delfin/delfin1.png'),
+    imagen: require('../assets/Animalitos/Delfin/delfin1.webp'),
   },
   {
     id: 'colibri',
@@ -206,7 +206,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en actividades diarias.',
     legacyUnlockField: 'colibriDesbloqueado',
     comercio: { color: '#3d9b9a', fondo: '#dff1ed', borde: '#83c1b4' },
-    imagen: require('../assets/Animalitos/Colibri/colibri1.png'),
+    imagen: require('../assets/Animalitos/Colibri/colibri1.webp'),
   },
   {
     id: 'mariposa',
@@ -220,7 +220,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de monedas obtenidas en eventos.',
     legacyUnlockField: 'mariposaDesbloqueada',
     comercio: { color: '#a66fc2', fondo: '#eee2f7', borde: '#c19ada' },
-    imagen: require('../assets/Animalitos/Mariposa/mariposa1.png'),
+    imagen: require('../assets/Animalitos/Mariposa/mariposa1.webp'),
   },
   {
     id: 'abeja',
@@ -234,7 +234,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de cartas obtenidas en juegos.',
     legacyUnlockField: 'abejaDesbloqueada',
     comercio: { color: '#c69a28', fondo: '#f8efc9', borde: '#dfbf5f' },
-    imagen: require('../assets/Animalitos/Abeja/abeja1.png'),
+    imagen: require('../assets/Animalitos/Abeja/abeja1.webp'),
   },
   {
     id: 'ballena',
@@ -248,7 +248,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de diamantes obtenidos en eventos.',
     legacyUnlockField: 'ballenaDesbloqueada',
     comercio: { color: '#4d77b8', fondo: '#e0e9f7', borde: '#86a5d3' },
-    imagen: require('../assets/Animalitos/Ballena/ballena1.png'),
+    imagen: require('../assets/Animalitos/Ballena/ballena1.webp'),
   },
   {
     id: 'cangrejo',
@@ -262,7 +262,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en juegos.',
     legacyUnlockField: 'cangrejoDesbloqueado',
     comercio: { color: '#d56555', fondo: '#fae1dc', borde: '#e29a8d' },
-    imagen: require('../assets/Animalitos/Cangrejo/cangrejo1.png'),
+    imagen: require('../assets/Animalitos/Cangrejo/cangrejo1.webp'),
   },
   {
     id: 'caballitodemar',
@@ -276,7 +276,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de monedas obtenidas en actividades.',
     legacyUnlockField: 'caballitodemarDesbloqueado',
     comercio: { color: '#42a6ad', fondo: '#ddf0ed', borde: '#82c2bd' },
-    imagen: require('../assets/Animalitos/CaballitoMar/caballitodemar1.png'),
+    imagen: require('../assets/Animalitos/CaballitoMar/caballitodemar1.webp'),
   },
   {
     id: 'conejo',
@@ -290,7 +290,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de EXP obtenida en objetivos diarios.',
     legacyUnlockField: 'conejoDesbloqueado',
     comercio: { color: '#8c8b91', fondo: '#ecebed', borde: '#b8b5bd' },
-    imagen: require('../assets/Animalitos/Conejo/conejo1.png'),
+    imagen: require('../assets/Animalitos/Conejo/conejo1.webp'),
   },
   {
     id: 'oso',
@@ -304,7 +304,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de monedas obtenidas en juegos.',
     legacyUnlockField: 'osoDesbloqueado',
     comercio: { color: '#a87542', fondo: '#f1e3d3', borde: '#c9a37b' },
-    imagen: require('../assets/Animalitos/Oso/oso1.png'),
+    imagen: require('../assets/Animalitos/Oso/oso1.webp'),
   },
   {
     id: 'panda',
@@ -318,7 +318,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de cartas universales obtenidas en juegos.',
     legacyUnlockField: 'pandaDesbloqueado',
     comercio: { color: '#606878', fondo: '#e8ebef', borde: '#9ca4b2' },
-    imagen: require('../assets/Animalitos/Panda/panda1.png'),
+    imagen: require('../assets/Animalitos/Panda/panda1.webp'),
   },
   {
     id: 'mapache',
@@ -332,7 +332,7 @@ export const ANIMALITOS = [
     habilidadTexto: '+10% de diamantes obtenidos en actividades.',
     legacyUnlockField: 'mapacheDesbloqueado',
     comercio: { color: '#71818e', fondo: '#e5eaed', borde: '#9eafb8' },
-    imagen: require('../assets/Animalitos/Mapache/mapache1.png'),
+    imagen: require('../assets/Animalitos/Mapache/mapache1.webp'),
   },
 ];
 
@@ -358,30 +358,30 @@ export const TEMATICAS_SKINS = {
 };
 
 export const SKINS = [
-  { id: 'halcon_default', storageId: 'default', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Original', tipo: 'Aire', rareza: 'Común', colorRareza: '#78a950', fondoRareza: '#e7f0d7', imagen: require('../assets/Animalitos/Halcon/halcon1.png') },
-  { id: 'halcont1', storageId: 'halcont1', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Traje especial', tipo: 'Aire', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('../assets/Animalitos/Halcon/skins/halcont1.png') },
-  { id: 'halcont2', storageId: 'halcont2', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Traje celeste', tipo: 'Aire', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', comercioPrecio: 2000, imagen: require('../assets/Animalitos/Halcon/skins/halcont2.png') },
-  { id: 'ardilla_default', storageId: 'default', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Original', tipo: 'Tierra', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', imagen: require('../assets/Animalitos/Ardilla/ardilla1.png') },
-  { id: 'ardillat1', storageId: 'ardillat1', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Bellota Dorada', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('../assets/Animalitos/Ardilla/skins/ardillat1.png') },
-  { id: 'ardillat2', storageId: 'ardillat2', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Guardiana del Bosque', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae7bd', comercioPrecio: 2400, imagen: require('../assets/Animalitos/Ardilla/skins/ardillat2.png') },
-  { id: 'ajolote_default', storageId: 'default', animalId: 'ajolote', animalNombre: 'Ajolote', nombre: 'Original', tipo: 'Agua', rareza: 'Épico', colorRareza: '#d86f9d', fondoRareza: '#f9deea', imagen: require('../assets/Animalitos/Ajolote/ajolote1.png') },
-  { id: 'ajolotet1', storageId: 'ajolotet1', animalId: 'ajolote', animalNombre: 'Ajolote', nombre: 'Algodón de Azúcar', tipo: 'Agua', rareza: 'Épico', colorRareza: '#b477cf', fondoRareza: '#f2e3fa', imagen: require('../assets/Animalitos/Ajolote/skins/ajolotet1.png') },
-  { id: 'ajolotet2', storageId: 'ajolotet2', animalId: 'ajolote', animalNombre: 'Ajolote', nombre: 'Guardián de Caramelo', tipo: 'Agua', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae3c2', comercioPrecio: 2800, imagen: require('../assets/Animalitos/Ajolote/skins/ajolotet2.png') },
-  { id: 'erizo_default', storageId: 'default', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Original', tipo: 'Tierra', rareza: 'Raro', colorRareza: '#7655a4', fondoRareza: '#eee5f7', imagen: require('../assets/Animalitos/Erizo/erizo1.png') },
-  { id: 'erizot1', storageId: 'erizot1', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Cupcake de Arándanos', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#8f62bd', fondoRareza: '#efe3fa', imagen: require('../assets/Animalitos/Erizo/skins/erizot1.png') },
-  { id: 'erizot2', storageId: 'erizot2', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Maestro Chocolatero', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#c4862e', fondoRareza: '#f6e2c5', imagen: require('../assets/Animalitos/Erizo/skins/erizot2.png') },
-  { id: 'loro_default', storageId: 'default', animalId: 'loro', animalNombre: 'Loro', nombre: 'Original', tipo: 'Aire', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae7bd', imagen: require('../assets/Animalitos/Loro/loro1.png') },
-  { id: 'lorot1', storageId: 'lorot1', animalId: 'loro', animalNombre: 'Loro', nombre: 'Piñata Tropical', tipo: 'Aire', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('../assets/Animalitos/Loro/skins/lorot1.png') },
-  { id: 'lorot2', storageId: 'lorot2', animalId: 'loro', animalNombre: 'Loro', nombre: 'Capitán Piruleta', tipo: 'Aire', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae3c2', comercioPrecio: 3200, imagen: require('../assets/Animalitos/Loro/skins/lorot2.png') },
-  { id: 'pezglobo_default', storageId: 'default', animalId: 'pezglobo', animalNombre: 'Pez Globo', nombre: 'Original', tipo: 'Agua', rareza: 'Épico', colorRareza: '#5f70c7', fondoRareza: '#e2e7f7', imagen: require('../assets/Animalitos/PezGlobo/pezglobo1.png') },
-  { id: 'pezglobot1', storageId: 'pezglobot1', animalId: 'pezglobo', animalNombre: 'Pez Globo', nombre: 'Arrecife de Caramelo', tipo: 'Agua', rareza: 'Épico', colorRareza: '#b56cc3', fondoRareza: '#f4e1f6', imagen: require('../assets/Animalitos/PezGlobo/skins/pezglobot1.png') },
-  { id: 'pezglobot2', storageId: 'pezglobot2', animalId: 'pezglobo', animalNombre: 'Pez Globo', nombre: 'Guardián Abisal', tipo: 'Agua', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#dce9f6', comercioPrecio: 3400, imagen: require('../assets/Animalitos/PezGlobo/skins/pezglobot2.png') },
-  { id: 'gato_default', storageId: 'default', animalId: 'gato', animalNombre: 'Gato', nombre: 'Original', tipo: 'Tierra', rareza: 'Raro', colorRareza: '#6f89ad', fondoRareza: '#e7edf3', imagen: require('../assets/Animalitos/Gato/gato1.png') },
-  { id: 'gatot1', storageId: 'gatot1', animalId: 'gato', animalNombre: 'Gato', nombre: 'Nube de Fresa', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#c5659c', fondoRareza: '#f8e0ec', imagen: require('../assets/Animalitos/Gato/skins/gatot1.png') },
-  { id: 'gatot2', storageId: 'gatot2', animalId: 'gato', animalNombre: 'Gato', nombre: 'Guardián Lunar', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#dfe7f7', comercioPrecio: 3600, imagen: require('../assets/Animalitos/Gato/skins/gatot2.png') },
-  { id: 'mono_default', storageId: 'default', animalId: 'mono', animalNombre: 'Mono', nombre: 'Original', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#b77a35', fondoRareza: '#f3e3c7', imagen: require('../assets/Animalitos/Mono/mono1.png') },
-  { id: 'monot1', storageId: 'monot1', animalId: 'mono', animalNombre: 'Mono', nombre: 'Banana Tropical', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#d69b28', fondoRareza: '#fff0b7', imagen: require('../assets/Animalitos/Mono/skins/monot1.png') },
-  { id: 'monot2', storageId: 'monot2', animalId: 'mono', animalNombre: 'Mono', nombre: 'Árbol Ancestral', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#638b4c', fondoRareza: '#e2eed4', comercioPrecio: 3800, imagen: require('../assets/Animalitos/Mono/skins/monot2.png') },
+  { id: 'halcon_default', storageId: 'default', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Original', tipo: 'Aire', rareza: 'Común', colorRareza: '#78a950', fondoRareza: '#e7f0d7', imagen: require('../assets/Animalitos/Halcon/halcon1.webp') },
+  { id: 'halcont1', storageId: 'halcont1', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Traje especial', tipo: 'Aire', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('../assets/Animalitos/Halcon/skins/halcont1.webp') },
+  { id: 'halcont2', storageId: 'halcont2', animalId: 'halcon', animalNombre: 'Halcón', nombre: 'Traje celeste', tipo: 'Aire', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', comercioPrecio: 2000, imagen: require('../assets/Animalitos/Halcon/skins/halcont2.webp') },
+  { id: 'ardilla_default', storageId: 'default', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Original', tipo: 'Tierra', rareza: 'Raro', colorRareza: '#5799cf', fondoRareza: '#dcecf7', imagen: require('../assets/Animalitos/Ardilla/ardilla1.webp') },
+  { id: 'ardillat1', storageId: 'ardillat1', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Bellota Dorada', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('../assets/Animalitos/Ardilla/skins/ardillat1.webp') },
+  { id: 'ardillat2', storageId: 'ardillat2', animalId: 'ardilla', animalNombre: 'Ardilla', nombre: 'Guardiana del Bosque', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae7bd', comercioPrecio: 2400, imagen: require('../assets/Animalitos/Ardilla/skins/ardillat2.webp') },
+  { id: 'ajolote_default', storageId: 'default', animalId: 'ajolote', animalNombre: 'Ajolote', nombre: 'Original', tipo: 'Agua', rareza: 'Épico', colorRareza: '#d86f9d', fondoRareza: '#f9deea', imagen: require('../assets/Animalitos/Ajolote/ajolote1.webp') },
+  { id: 'ajolotet1', storageId: 'ajolotet1', animalId: 'ajolote', animalNombre: 'Ajolote', nombre: 'Algodón de Azúcar', tipo: 'Agua', rareza: 'Épico', colorRareza: '#b477cf', fondoRareza: '#f2e3fa', imagen: require('../assets/Animalitos/Ajolote/skins/ajolotet1.webp') },
+  { id: 'ajolotet2', storageId: 'ajolotet2', animalId: 'ajolote', animalNombre: 'Ajolote', nombre: 'Guardián de Caramelo', tipo: 'Agua', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae3c2', comercioPrecio: 2800, imagen: require('../assets/Animalitos/Ajolote/skins/ajolotet2.webp') },
+  { id: 'erizo_default', storageId: 'default', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Original', tipo: 'Tierra', rareza: 'Raro', colorRareza: '#7655a4', fondoRareza: '#eee5f7', imagen: require('../assets/Animalitos/Erizo/erizo1.webp') },
+  { id: 'erizot1', storageId: 'erizot1', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Cupcake de Arándanos', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#8f62bd', fondoRareza: '#efe3fa', imagen: require('../assets/Animalitos/Erizo/skins/erizot1.webp') },
+  { id: 'erizot2', storageId: 'erizot2', animalId: 'erizo', animalNombre: 'Erizo', nombre: 'Maestro Chocolatero', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#c4862e', fondoRareza: '#f6e2c5', imagen: require('../assets/Animalitos/Erizo/skins/erizot2.webp') },
+  { id: 'loro_default', storageId: 'default', animalId: 'loro', animalNombre: 'Loro', nombre: 'Original', tipo: 'Aire', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae7bd', imagen: require('../assets/Animalitos/Loro/loro1.webp') },
+  { id: 'lorot1', storageId: 'lorot1', animalId: 'loro', animalNombre: 'Loro', nombre: 'Piñata Tropical', tipo: 'Aire', rareza: 'Épico', colorRareza: '#9a68c4', fondoRareza: '#eee0f7', imagen: require('../assets/Animalitos/Loro/skins/lorot1.webp') },
+  { id: 'lorot2', storageId: 'lorot2', animalId: 'loro', animalNombre: 'Loro', nombre: 'Capitán Piruleta', tipo: 'Aire', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#fae3c2', comercioPrecio: 3200, imagen: require('../assets/Animalitos/Loro/skins/lorot2.webp') },
+  { id: 'pezglobo_default', storageId: 'default', animalId: 'pezglobo', animalNombre: 'Pez Globo', nombre: 'Original', tipo: 'Agua', rareza: 'Épico', colorRareza: '#5f70c7', fondoRareza: '#e2e7f7', imagen: require('../assets/Animalitos/PezGlobo/pezglobo1.webp') },
+  { id: 'pezglobot1', storageId: 'pezglobot1', animalId: 'pezglobo', animalNombre: 'Pez Globo', nombre: 'Arrecife de Caramelo', tipo: 'Agua', rareza: 'Épico', colorRareza: '#b56cc3', fondoRareza: '#f4e1f6', imagen: require('../assets/Animalitos/PezGlobo/skins/pezglobot1.webp') },
+  { id: 'pezglobot2', storageId: 'pezglobot2', animalId: 'pezglobo', animalNombre: 'Pez Globo', nombre: 'Guardián Abisal', tipo: 'Agua', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#dce9f6', comercioPrecio: 3400, imagen: require('../assets/Animalitos/PezGlobo/skins/pezglobot2.webp') },
+  { id: 'gato_default', storageId: 'default', animalId: 'gato', animalNombre: 'Gato', nombre: 'Original', tipo: 'Tierra', rareza: 'Raro', colorRareza: '#6f89ad', fondoRareza: '#e7edf3', imagen: require('../assets/Animalitos/Gato/gato1.webp') },
+  { id: 'gatot1', storageId: 'gatot1', animalId: 'gato', animalNombre: 'Gato', nombre: 'Nube de Fresa', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#c5659c', fondoRareza: '#f8e0ec', imagen: require('../assets/Animalitos/Gato/skins/gatot1.webp') },
+  { id: 'gatot2', storageId: 'gatot2', animalId: 'gato', animalNombre: 'Gato', nombre: 'Guardián Lunar', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#d48a2c', fondoRareza: '#dfe7f7', comercioPrecio: 3600, imagen: require('../assets/Animalitos/Gato/skins/gatot2.webp') },
+  { id: 'mono_default', storageId: 'default', animalId: 'mono', animalNombre: 'Mono', nombre: 'Original', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#b77a35', fondoRareza: '#f3e3c7', imagen: require('../assets/Animalitos/Mono/mono1.webp') },
+  { id: 'monot1', storageId: 'monot1', animalId: 'mono', animalNombre: 'Mono', nombre: 'Banana Tropical', tipo: 'Tierra', rareza: 'Épico', colorRareza: '#d69b28', fondoRareza: '#fff0b7', imagen: require('../assets/Animalitos/Mono/skins/monot1.webp') },
+  { id: 'monot2', storageId: 'monot2', animalId: 'mono', animalNombre: 'Mono', nombre: 'Árbol Ancestral', tipo: 'Tierra', rareza: 'Legendario', colorRareza: '#638b4c', fondoRareza: '#e2eed4', comercioPrecio: 3800, imagen: require('../assets/Animalitos/Mono/skins/monot2.webp') },
 ].map(skin => {
   const tematica = /guardi[aá]n/i.test(skin.nombre) ? 'Guardianes' : (TEMATICAS_POR_SKIN[skin.id] || 'Originales');
   return { ...skin, tematica, tematicas: [tematica] };
