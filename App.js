@@ -249,18 +249,34 @@ export default function App() {
       })).catch(() => {});
     }
     try {
+      // La OTA puede haber cambiado entre la comprobación inicial y el toque
+      // del usuario. Volvemos a validarla para no descargar un candidato
+      // atrasado o que ya no esté disponible.
+      const comprobacion = await Updates.checkForUpdateAsync();
+      if (!comprobacion?.isAvailable) {
+        await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
+        updateCandidateRef.current = null;
+        updateStatusRef.current = 'unavailable';
+        setEstadoActualizacion('unavailable');
+        return;
+      }
       const resultado = await Updates.fetchUpdateAsync();
       console.log('[Updates] Descarga finalizada', {
         isNew: resultado?.isNew,
         updateId: resultado?.manifest?.id || candidata?.id || null,
       });
       if (!resultado?.isNew) throw new Error('update-not-downloaded');
+      await AsyncStorage.removeItem(UPDATE_ATTEMPT_STORAGE_KEY).catch(() => {});
+      // No agregamos lógica después: Expo reinicia el runtime de forma
+      // asíncrona inmediatamente después de aceptar esta llamada.
       await Updates.reloadAsync();
     } catch (error) {
       console.warn('[Updates] No se pudo instalar la actualización', error?.message || error);
-      // No volvemos a ponerla en "available": eso reabre el modal y crea el
-      // bucle. El intento queda guardado para que el próximo arranque continúe
-      // normalmente y pueda reintentar después del período de seguridad.
+      try {
+        const entradas = await Updates.readLogEntriesAsync(20);
+        console.warn('[Updates] Últimos registros', entradas?.slice?.(-5));
+      } catch {}
+      // El error no libera Intro: la persona puede reintentar desde el modal.
       updateStatusRef.current = 'error';
       setEstadoActualizacion('error');
     }

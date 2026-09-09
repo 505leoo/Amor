@@ -48,7 +48,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
 
   useEffect(() => {
     updateStatusRef.current = updateStatus;
-    if (sequenceFinishedRef.current && ['unavailable', 'error'].includes(updateStatus) && !completedRef.current) {
+    if (sequenceFinishedRef.current && updateStatus === 'unavailable' && !completedRef.current) {
       completedRef.current = true;
       onComplete();
     }
@@ -225,7 +225,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
       if (mountedRef.current) setLoadingStatus('Preparando interfaz…');
       await new Promise(resolve => setTimeout(resolve, 220));
       sequenceFinishedRef.current = true;
-      if (!completedRef.current && ['unavailable', 'error'].includes(updateStatusRef.current)) {
+      if (!completedRef.current && updateStatusRef.current === 'unavailable') {
         completedRef.current = true;
         onComplete();
       }
@@ -280,14 +280,14 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
           <Text style={styles.retryText}>REINTENTAR</Text>
         </TouchableOpacity>}
       </LinearGradient>
-      <Modal visible={updateStatus === 'available' || updateStatus === 'downloading'} transparent animationType="fade" statusBarTranslucent>
+      <Modal visible={updateStatus === 'available' || updateStatus === 'downloading' || updateStatus === 'error'} transparent animationType="fade" statusBarTranslucent>
         <View style={styles.updateOverlay}>
           <View style={styles.updateCard}>
             <View style={styles.updateSparkle}><Text style={styles.updateSparkleText}>✦</Text></View>
-            <Text style={styles.updateEyebrow}>UNA SORPRESA PARA USTEDES</Text>
-            <Text style={styles.updateTitle}>¡Hay una nueva versión!</Text>
+            <Text style={styles.updateEyebrow}>{updateStatus === 'error' ? 'NO PUDIMOS TERMINAR' : 'UNA SORPRESA PARA USTEDES'}</Text>
+            <Text style={styles.updateTitle}>{updateStatus === 'error' ? 'La actualización quedó pendiente' : '¡Hay una nueva versión!'}</Text>
             {updateVersion && <View style={styles.updateVersionBadge}><Text style={styles.updateVersionText}>VERSIÓN {updateVersion}</Text></View>}
-            <Text style={styles.updateDescription}>Preparamos nuevas mejoras con mucho cariño para que su rinconcito se sienta más bonito, cómodo y especial. ¿Quieren descubrirlas ahora?</Text>
+            <Text style={styles.updateDescription}>{updateStatus === 'error' ? 'No se pudo aplicar todavía. Revisá tu conexión e intentá nuevamente.' : 'Preparamos nuevas mejoras con mucho cariño para que su rinconcito se sienta más bonito, cómodo y especial. ¿Quieren descubrirlas ahora?'}</Text>
             {updateStatus === 'downloading' ? (
               <View style={styles.updateLoading}>
                 <ActivityIndicator color="#fff8dc" size="small" />
@@ -296,7 +296,7 @@ const Intro = ({ onComplete, isAuthenticated = false, isConnected = true, tempor
             ) : (
               <View style={styles.updateActions}>
                 <TouchableOpacity style={styles.updateNowButton} onPress={onAcceptUpdate} activeOpacity={0.85}>
-                  <Text style={styles.updateNowText}>Actualizar ahora</Text>
+                  <Text style={styles.updateNowText}>{updateStatus === 'error' ? 'Reintentar' : 'Actualizar ahora'}</Text>
                 </TouchableOpacity>
               </View>
             )}

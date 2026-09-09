@@ -3,7 +3,7 @@ import { ActivityIndicator, Modal, StyleSheet, Text, TouchableOpacity, View } fr
 import { LinearGradient } from 'expo-linear-gradient';
 
 export default function UpdateModal({ status, version, description, onAccept }) {
-  const visible = status === 'available' || status === 'downloading';
+  const visible = status === 'available' || status === 'downloading' || status === 'error';
 
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent onRequestClose={() => {}}>
@@ -11,11 +11,11 @@ export default function UpdateModal({ status, version, description, onAccept }) 
         <LinearGradient colors={['#fffaf0', '#fff0d4']} style={styles.card}>
           <View style={styles.glow} />
           <Text style={styles.sparkle}>✦</Text>
-          <Text style={styles.eyebrow}>UNA SORPRESA PARA USTEDES</Text>
-          <Text style={styles.title}>¡Hay una nueva versión!</Text>
+          <Text style={styles.eyebrow}>{status === 'error' ? 'NO PUDIMOS TERMINAR' : 'UNA SORPRESA PARA USTEDES'}</Text>
+          <Text style={styles.title}>{status === 'error' ? 'La actualización quedó pendiente' : '¡Hay una nueva versión!'}</Text>
           {!!version && <View style={styles.badge}><Text style={styles.badgeText}>VERSIÓN {version}</Text></View>}
           <Text style={styles.description}>
-            {description || 'Preparamos nuevas mejoras con mucho cariño para que su rinconcito se sienta más bonito, cómodo y especial.'}
+            {status === 'error' ? 'No se pudo aplicar todavía. Revisá tu conexión e intentá nuevamente.' : (description || 'Preparamos nuevas mejoras con mucho cariño para que su rinconcito se sienta más bonito, cómodo y especial.')}
           </Text>
           {status === 'downloading' ? (
             <View style={styles.loading}>
@@ -25,7 +25,7 @@ export default function UpdateModal({ status, version, description, onAccept }) 
           ) : (
             <View style={styles.actions}>
               <TouchableOpacity style={styles.nowButton} onPress={onAccept} activeOpacity={0.85}>
-                <Text style={styles.nowText}>Actualizar ahora</Text>
+                <Text style={styles.nowText}>{status === 'error' ? 'Reintentar' : 'Actualizar ahora'}</Text>
               </TouchableOpacity>
             </View>
           )}
