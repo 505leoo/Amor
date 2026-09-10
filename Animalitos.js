@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Pressable, Image as RNImage, ScrollView, FlatList, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, TouchableOpacity, Pressable, Image as RNImage, ScrollView, FlatList, Modal, Animated, TextInput, PanResponder } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import { collection, doc, getDocs, onSnapshot, runTransaction, setDoc } from 'firebase/firestore';
@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ANIMALITOS, SKINS, TEMATICAS_SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 import { obtenerIconoLocal } from './data/iconosLocales';
 import { cacheDocument, getCachedDocument, getProjectedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncSetDoc } from './utils/offlineSync';
+import { getCachedUserData } from './hooks/useUserDocument';
 
 // Los animalitos son assets locales del bundle. Usamos el Image nativo para
 // que FlatList no dependa de la caché de expo-image ni de una resolución de
@@ -23,11 +24,83 @@ const Image = ({ source, style, contentFit = 'contain', cachePolicy: _cachePolic
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
 const COSTO_MEJORA = nivel => 120 * nivel;
 const EXP_POR_MEJORA = nivel => 15 + (5 * nivel);
+const MAX_APODO = 18;
+const normalizarApodo = valor => String(valor || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_APODO);
+const ICONOS_APODO = [
+  { id: 'favorite', color: '#d96d88', etiqueta: 'Corazón' }, { id: 'star', color: '#d9a63d', etiqueta: 'Estrella' },
+  { id: 'pets', color: '#a87353', etiqueta: 'Patitas' }, { id: 'local-florist', color: '#80a865', etiqueta: 'Flor' },
+  { id: 'cake', color: '#d6829a', etiqueta: 'Dulce' }, { id: 'auto-awesome', color: '#9b75bc', etiqueta: 'Brillos' },
+  { id: 'water-drop', color: '#5c9fbd', etiqueta: 'Gota' }, { id: 'diamond', color: '#5eafc3', etiqueta: 'Diamante' },
+  { id: 'bolt', color: '#dfaa3b', etiqueta: 'Rayo' }, { id: 'eco', color: '#6eaa77', etiqueta: 'Hoja' },
+];
+const iconoApodoSeguro = valor => ICONOS_APODO.some(icono => icono.id === valor) ? valor : null;
 const PALETA_RAREZA = {
   Común: { fondo: '#dcebd5', brillo: '#f5fae9', acento: '#6f9e55', texto: '#35572f' },
   Raro: { fondo: '#dcebf4', brillo: '#f5fbff', acento: '#4f87b8', texto: '#294f70' },
   Épico: { fondo: '#eadcf3', brillo: '#fbf3ff', acento: '#9160b7', texto: '#583672' },
   Legendario: { fondo: '#f5e2bd', brillo: '#fff8e6', acento: '#c4862e', texto: '#704815' },
+};
+
+const ApodoAnimalModal = ({ visible, animal, apodo, iconoApodo, guardando, onClose, onSave }) => {
+  const [borrador, setBorrador] = useState('');
+  const [iconoSeleccionado, setIconoSeleccionado] = useState(null);
+
+  useEffect(() => {
+    if (visible) {
+      setBorrador(apodo || '');
+      setIconoSeleccionado(iconoApodoSeguro(iconoApodo));
+    }
+  }, [visible, apodo, iconoApodo]);
+
+  if (!animal) return null;
+  const nombre = normalizarApodo(borrador);
+  const iconoActual = ICONOS_APODO.find(icono => icono.id === iconoSeleccionado);
+  const tema = PALETA_RAREZA[animal.rareza] || PALETA_RAREZA.Común;
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <View style={s.apodoModalFondo}>
+        <Pressable style={s.apodoModalCerrarFondo} onPress={onClose} />
+        <View style={s.apodoModalTarjeta}>
+          <View style={[s.apodoModalIcono, { backgroundColor: tema.fondo, borderColor: tema.acento }]}>
+            <RNImage source={animal.imagen} style={s.apodoModalImagen} resizeMode="contain" />
+          </View>
+          <Text style={s.apodoModalEyebrow}>UN NOMBRE ESPECIAL</Text>
+          <Text style={s.apodoModalTitulo}>¿Cómo quieres llamarlo?</Text>
+          <Text style={s.apodoModalSubtitulo}>{animal.nombre} merece un apodo tan único como su historia.</Text>
+          <View style={s.apodoInputWrap}>
+            <View style={s.apodoInputIcono}>{iconoActual && <MaterialIcons name={iconoActual.id} size={15} color={iconoActual.color} />}</View>
+            <TextInput
+              value={borrador}
+              onChangeText={valor => setBorrador(valor.slice(0, MAX_APODO))}
+              placeholder={animal.nombre}
+              placeholderTextColor="#b7a28b"
+              style={s.apodoInput}
+              maxLength={MAX_APODO}
+              autoCapitalize="sentences"
+              autoCorrect
+              selectTextOnFocus
+              returnKeyType="done"
+            />
+            <Text style={s.apodoContador}>{nombre.length}/{MAX_APODO}</Text>
+          </View>
+          <Text style={s.apodoIconosTitulo}>ELIGE UN DETALLE PARA SU NOMBRE</Text>
+          <View style={s.apodoIconosLista}>
+            <TouchableOpacity onPress={() => setIconoSeleccionado(null)} style={[s.apodoIconoOpcion, !iconoSeleccionado && s.apodoIconoOpcionActiva]} accessibilityLabel="Sin icono" activeOpacity={0.8}>
+              <MaterialIcons name="close" size={16} color={!iconoSeleccionado ? '#845f44' : '#b7a28b'} />
+            </TouchableOpacity>
+            {ICONOS_APODO.map(icono => <TouchableOpacity key={icono.id} onPress={() => setIconoSeleccionado(icono.id)} style={[s.apodoIconoOpcion, iconoSeleccionado === icono.id && [s.apodoIconoOpcionActiva, { borderColor: icono.color }]]} accessibilityLabel={icono.etiqueta} activeOpacity={0.8}>
+              <MaterialIcons name={icono.id} size={17} color={icono.color} />
+            </TouchableOpacity>)}
+          </View>
+          <Text style={s.apodoAyuda}>Déjalo vacío para volver a usar su nombre original.</Text>
+          <View style={s.apodoAcciones}>
+            <TouchableOpacity style={s.apodoCancelar} onPress={onClose} disabled={guardando} activeOpacity={0.8}><Text style={s.apodoCancelarTexto}>Ahora no</Text></TouchableOpacity>
+            <TouchableOpacity style={s.apodoGuardar} onPress={() => onSave(nombre, iconoSeleccionado)} disabled={guardando} activeOpacity={0.8}><MaterialIcons name={guardando ? 'hourglass-top' : 'check'} size={14} color="#fff8e9" /><Text style={s.apodoGuardarTexto}>{guardando ? 'Guardar cambios' : 'Guardar apodo'}</Text></TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
 };
 const proyectarMejoras = ({ nivel, cartasPropias, cartasUniversales }, dineroDisponible) => {
   let nivelSimulado = Math.max(1, Number(nivel) || 1);
@@ -234,8 +307,22 @@ const Animalitos = ({ navigation, mode }) => {
   const [ordenCatalogo, setOrdenCatalogo] = useState('rareza');
   const [recordatorioCerrado, setRecordatorioCerrado] = useState(false);
   const [llamadaMejoraActiva, setLlamadaMejoraActiva] = useState(false);
+  const [apodoEditando, setApodoEditando] = useState(null);
+  const [guardandoApodo, setGuardandoApodo] = useState(false);
 
   const loadingRef = useRef(null);
+  const listaSimpleRef = useRef(null);
+  const desplazamientoListaRef = useRef(0);
+  const inicioGestoLateralRef = useRef(0);
+  const gestoLateralesLista = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, gesto) => Math.abs(gesto.dy) > 3 && Math.abs(gesto.dy) > Math.abs(gesto.dx),
+    onMoveShouldSetPanResponderCapture: (_, gesto) => Math.abs(gesto.dy) > 3 && Math.abs(gesto.dy) > Math.abs(gesto.dx),
+    onPanResponderGrant: () => { inicioGestoLateralRef.current = desplazamientoListaRef.current; },
+    onPanResponderMove: (_, gesto) => {
+      listaSimpleRef.current?.scrollToOffset({ offset: Math.max(0, inicioGestoLateralRef.current - gesto.dy), animated: false });
+    },
+  })).current;
   const opacidadLista = useRef(new Animated.Value(0)).current;
   const salidaListaRef = useRef(false);
   const limpiezaArdillaRef = useRef(false);
@@ -270,6 +357,30 @@ const Animalitos = ({ navigation, mode }) => {
         Animated.timing(llamadaMejora, { toValue: 0, duration: 330, useNativeDriver: false }),
       ]), { iterations: 3 }),
     ]).start(() => setLlamadaMejoraActiva(false));
+  };
+
+  const apodoDeAnimal = id => normalizarApodo(animalesEstado?.[id]?.apodo);
+  const iconoDeAnimal = id => iconoApodoSeguro(animalesEstado?.[id]?.iconoApodo);
+  const guardarApodo = async (apodo, iconoApodo) => {
+    const id = apodoEditando;
+    const uid = auth.currentUser?.uid;
+    if (!id || !uid || !desbloqueados.includes(id) || guardandoApodo) return;
+    const nombre = normalizarApodo(apodo);
+    const icono = iconoApodoSeguro(iconoApodo);
+    const apodoAnterior = normalizarApodo(animalesEstado?.[id]?.apodo);
+    const iconoAnterior = iconoApodoSeguro(animalesEstado?.[id]?.iconoApodo);
+    setGuardandoApodo(true);
+    setAnimalesEstado(prev => ({ ...prev, [id]: { ...(prev[id] || {}), apodo: nombre, iconoApodo: icono } }));
+    try {
+      await syncSetDoc(doc(db, 'usuarios', uid, 'animalitos', id), { apodo: nombre, iconoApodo: icono }, { merge: true });
+      setApodoEditando(null);
+      global.showToast?.({ text1: nombre ? `Ahora se llama ${nombre}` : 'Apodo eliminado', text2: icono ? 'Su icono especial también fue guardado.' : undefined, type: 'success' });
+    } catch (error) {
+      setAnimalesEstado(prev => ({ ...prev, [id]: { ...(prev[id] || {}), apodo: apodoAnterior, iconoApodo: iconoAnterior } }));
+      global.showToast?.({ text1: 'No se pudo guardar el apodo', text2: error?.message || 'Inténtalo de nuevo.', type: 'error' });
+    } finally {
+      setGuardandoApodo(false);
+    }
   };
 
   useEffect(() => {
@@ -597,6 +708,7 @@ const Animalitos = ({ navigation, mode }) => {
         <View style={s.animalitosSimple}>
           <View style={s.animalitosSimpleBody}>
             {!seleccionado && <Animated.View style={s.animalitosListFade}><FlatList
+              ref={listaSimpleRef}
               data={listaSimple}
               keyExtractor={(item, index) => item?.id || `animal-simple-${index}`}
               numColumns={4}
@@ -606,6 +718,8 @@ const Animalitos = ({ navigation, mode }) => {
               showsVerticalScrollIndicator={false}
               overScrollMode="never"
               bounces={false}
+              scrollEventThrottle={16}
+              onScroll={event => { desplazamientoListaRef.current = event.nativeEvent.contentOffset.y; }}
               renderItem={({ item, index }) => {
               const bloqueado = Boolean(item?.bloqueado);
               const esEjemplo = false;
@@ -622,16 +736,22 @@ const Animalitos = ({ navigation, mode }) => {
                       <MaterialIcons name="style" size={10} color="#ffe6a1" /><Text style={s.catalogCardProgressText}>{estadoItem.totalCartas}/{requeridasItem}</Text>
                     </View>
                     <Image source={item.imagen} style={s.animalitoSimpleImage} contentFit="contain" cachePolicy="memory-disk" />
-                    <Text style={s.catalogCardName} numberOfLines={1}>{item.nombre.toUpperCase()}</Text>
+                    <View style={s.catalogCardNameRow}>
+                      {iconoDeAnimal(item.id) && <MaterialIcons name={iconoDeAnimal(item.id)} size={13} color={tema.texto} style={s.catalogCardNameIcon} />}
+                      <Text style={s.catalogCardName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{(apodoDeAnimal(item.id) || item.nombre).toUpperCase()}</Text>
+                    </View>
                     <LinearGradient colors={[tema.acento, tema.texto]} style={s.catalogCardFooter}>
                       <Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text>
                       <Text style={s.catalogCardMissing} numberOfLines={1}>{faltantesItem ? `Faltan ${faltantesItem} cartas` : 'Cartas completas'}</Text>
                     </LinearGradient>
                     <View style={[s.catalogCardLevel, { backgroundColor: tema.acento, borderColor: tema.brillo }]} accessibilityLabel={`Nivel ${estadoItem.nivel}`}><Text style={s.catalogCardLevelLabel}>NV.</Text><Text style={s.catalogCardLevelNumber}>{estadoItem.nivel}</Text></View>
-                  </> : item && bloqueado ? <><LinearGradient colors={['#d9d8d4', '#b9b7b3']} style={s.animalitoSimpleCardGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>BLOQ.</Text></View><Image source={item.imagen} style={s.animalitoSimpleImageLocked} contentFit="contain" cachePolicy="memory" /><Text style={s.catalogCardName} numberOfLines={1}>{item.nombre.toUpperCase()}</Text><LinearGradient colors={['#777773', '#555552']} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>VER DETALLES</Text></LinearGradient><View style={[s.catalogCardLevel, s.catalogCardLevelLocked]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : item?.proximo ? <><LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleExampleGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>PRÓX.</Text></View><View style={[s.animalitoSimpleExampleIcon, { backgroundColor: tema.acento }]}><Text style={s.animalitoSimpleExampleEmoji}>{item.icono}</Text></View><Text style={[s.animalitoSimpleExampleName, { color: tema.texto }]} numberOfLines={1}>{item.nombre.toUpperCase()}</Text><LinearGradient colors={[tema.acento, tema.texto]} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>PRÓXIMAMENTE</Text></LinearGradient><View style={[s.catalogCardLevel, { backgroundColor: tema.acento, borderColor: tema.brillo }]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : <Text style={s.animalitoSimpleLock}>🔒</Text>}
+                  </> : item && bloqueado ? <><LinearGradient colors={['#d9d8d4', '#b9b7b3']} style={s.animalitoSimpleCardGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>BLOQ.</Text></View><Image source={item.imagen} style={s.animalitoSimpleImageLocked} contentFit="contain" cachePolicy="memory" /><View style={s.catalogCardNameRow}><Text style={s.catalogCardName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{(apodoDeAnimal(item.id) || item.nombre).toUpperCase()}</Text></View><LinearGradient colors={['#777773', '#555552']} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>VER DETALLES</Text></LinearGradient><View style={[s.catalogCardLevel, s.catalogCardLevelLocked]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : item?.proximo ? <><LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleExampleGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>PRÓX.</Text></View><View style={[s.animalitoSimpleExampleIcon, { backgroundColor: tema.acento }]}><Text style={s.animalitoSimpleExampleEmoji}>{item.icono}</Text></View><Text style={[s.animalitoSimpleExampleName, { color: tema.texto }]} numberOfLines={1}>{item.nombre.toUpperCase()}</Text><LinearGradient colors={[tema.acento, tema.texto]} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>PRÓXIMAMENTE</Text></LinearGradient><View style={[s.catalogCardLevel, { backgroundColor: tema.acento, borderColor: tema.brillo }]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : <Text style={s.animalitoSimpleLock}>🔒</Text>}
                 </TouchableOpacity>;
               }}
-            /></Animated.View>}
+            />
+            <View style={[s.animalitosScrollLateral, s.animalitosScrollLateralIzquierdo]} {...gestoLateralesLista.panHandlers} />
+            <View style={[s.animalitosScrollLateral, s.animalitosScrollLateralDerecho]} {...gestoLateralesLista.panHandlers} />
+            </Animated.View>}
 
             {seleccionado && <AnimalitoShowcase
               key={animalMostrado.id}
@@ -643,6 +763,9 @@ const Animalitos = ({ navigation, mode }) => {
               desbloqueado={animalDesbloqueado}
               confirmar={mejoraPendiente === animalMostrado.id}
               equipado={equipado === animalMostrado.id}
+              apodo={apodoDeAnimal(animalMostrado.id)}
+              iconoApodo={iconoDeAnimal(animalMostrado.id)}
+              onEditarApodo={() => setApodoEditando(animalMostrado.id)}
               skinEquipada={skinsEquipadas?.[animalMostrado.id] || 'default'}
               equipando={equipandoShowcase}
               onCartas={() => navigation?.navigate?.('comerciante')}
@@ -654,23 +777,28 @@ const Animalitos = ({ navigation, mode }) => {
                 if (!uid || !skin || skin.bloqueado || equipandoShowcaseRef.current) return;
                 equipandoShowcaseRef.current = true;
                 setEquipandoShowcase(true);
+                const userRef = doc(db, 'usuarios', uid);
+                const petRef = doc(db, 'usuarios', uid, 'animalitos', skin.animalId);
+                const seleccion = { animalito: skin.animalId, skin: skin.storageId };
+
+                // La pantalla Inicio debe reflejar la elección de inmediato.
+                // La comprobación de Firestore continúa después, sin frenar al
+                // usuario ni mostrar durante un instante el compañero anterior.
+                setEquipado(skin.animalId);
+                setEquipadaSkin(skin.storageId);
+                setSkinsEquipadas(prev => ({ ...prev, [skin.animalId]: skin.storageId }));
+                AsyncStorage.setItem(`skin_${uid}`, skin.storageId).catch(() => {});
+                const usuarioEnMemoria = getCachedUserData(uid) || {};
+                await Promise.all([
+                  cacheDocument(uid, userRef.path, { ...usuarioEnMemoria, ...seleccion }),
+                  cacheDocument(uid, petRef.path, { ...(animalesEstado?.[skin.animalId] || {}), skin: skin.storageId }),
+                ]).catch(() => {});
+                navigation?.navigate?.('main');
+
                 try {
-                  const userRef = doc(db, 'usuarios', uid);
-                  const petRef = doc(db, 'usuarios', uid, 'animalitos', skin.animalId);
                   if (isOfflineModeEnabled()) {
-                    const [usuario, pet] = await Promise.all([
-                      getCachedDocument(uid, userRef.path),
-                      getCachedDocument(uid, petRef.path),
-                    ]);
-                    const usuarioLocal = usuario || {};
-                    const petLocal = pet || animalesEstado?.[skin.animalId] || {};
-                    if (!animalitoEstaDesbloqueado(fichaAnimalMostrado, usuarioLocal, petLocal)) throw new Error('Animalito bloqueado');
-                    const desbloqueada = skin.storageId === 'default' || petLocal.skin === skin.storageId
-                      || (usuarioLocal.animalito === skin.animalId && usuarioLocal.skin === skin.storageId)
-                      || petLocal.skinsDesbloqueadas?.[skin.storageId] || usuarioLocal.skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId];
-                    if (!desbloqueada) throw new Error('Traje bloqueado');
                     await syncSetDoc(petRef, { skin: skin.storageId }, { merge: true });
-                    await syncSetDoc(userRef, { animalito: skin.animalId, skin: skin.storageId }, { merge: true });
+                    await syncSetDoc(userRef, seleccion, { merge: true });
                   } else {
                     await runTransaction(db, async transaction => {
                       const userSnap = await transaction.get(userRef);
@@ -686,12 +814,15 @@ const Animalitos = ({ navigation, mode }) => {
                       transaction.set(userRef, { animalito: skin.animalId, skin: skin.storageId }, { merge: true });
                     });
                   }
-                  setEquipado(skin.animalId);
-                  setEquipadaSkin(skin.storageId);
-                  setSkinsEquipadas(prev => ({ ...prev, [skin.animalId]: skin.storageId }));
-                  AsyncStorage.setItem(`skin_${uid}`, skin.storageId).catch(() => {});
                 } catch (error) {
-                  global.showToast?.({ text1: 'No se pudo equipar el compañero', type: 'error' });
+                  // Si la red se perdió después de entrar a Inicio, la cola
+                  // local conserva la elección y la sincroniza al reconectar.
+                  try {
+                    await syncSetDoc(petRef, { skin: skin.storageId }, { merge: true });
+                    await syncSetDoc(userRef, seleccion, { merge: true });
+                  } catch {
+                    global.showToast?.({ text1: 'El cambio se guardará al reconectar', type: 'info' });
+                  }
                 } finally {
                   equipandoShowcaseRef.current = false;
                   setEquipandoShowcase(false);
@@ -715,6 +846,15 @@ const Animalitos = ({ navigation, mode }) => {
             </View>
           </View>
         </Modal>
+        <ApodoAnimalModal
+          visible={Boolean(apodoEditando)}
+          animal={ANIMALITOS.find(item => item.id === apodoEditando)}
+          apodo={apodoDeAnimal(apodoEditando)}
+          iconoApodo={iconoDeAnimal(apodoEditando)}
+          guardando={guardandoApodo}
+          onClose={() => !guardandoApodo && setApodoEditando(null)}
+          onSave={guardarApodo}
+        />
         <Loading ref={loadingRef} />
       </View>
     );
@@ -1052,6 +1192,9 @@ const s = StyleSheet.create({
   animalitosSimpleBody: { flex: 1, width: '100%', alignItems: 'center' },
   animalitosListFade: { flex: 1, width: '100%', alignItems: 'center' },
   animalitosSimpleList: { width: '86%', maxWidth: 540, maxHeight: '100%', alignSelf: 'center', flexGrow: 0, flexShrink: 1 },
+  animalitosScrollLateral: { position: 'absolute', top: 0, bottom: 0, width: '10%', zIndex: 10 },
+  animalitosScrollLateralIzquierdo: { left: 0 },
+  animalitosScrollLateralDerecho: { right: 0 },
   animalitosSimpleListContent: { paddingTop: 6, paddingBottom: 7 },
   animalitosSimpleRow: { justifyContent: 'center' },
   animalitoSimpleSquare: { width: '21.5%', marginHorizontal: '1.15%', marginBottom: 6, aspectRatio: 1.05, position: 'relative', overflow: 'hidden', alignItems: 'center', justifyContent: 'center', borderRadius: 2, backgroundColor: 'rgba(255,252,237,0.82)', borderWidth: 1.5, borderColor: '#493d49', shadowColor: '#302631', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 2, elevation: 3 },
@@ -1070,7 +1213,9 @@ const s = StyleSheet.create({
   catalogCardProgress: { position: 'absolute', top: 0, left: 0, right: 0, height: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 3, backgroundColor: '#393340', overflow: 'hidden', zIndex: 4 },
   catalogCardProgressFill: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   catalogCardProgressText: { color: '#fff0bc', fontSize: 7, fontWeight: '900', fontVariant: ['tabular-nums'] },
-  catalogCardName: { position: 'absolute', right: 6, bottom: '29%', maxWidth: '79%', color: '#fffdf5', fontFamily: 'Delius', fontSize: 9, fontWeight: '900', textAlign: 'right', textShadowColor: '#342936', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2, zIndex: 3 },
+  catalogCardNameRow: { position: 'absolute', left: 2, right: 8, bottom: '29%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, zIndex: 6, elevation: 6 },
+  catalogCardNameIcon: { textShadowColor: 'rgba(255,250,230,0.92)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
+  catalogCardName: { flexShrink: 1, minWidth: 0, paddingRight: 2, color: '#fffdf5', fontFamily: 'Delius', fontSize: 8.3, fontWeight: '900', textAlign: 'right', textShadowColor: '#342936', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 2 },
   catalogCardFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '26%', paddingLeft: 32, paddingRight: 3, justifyContent: 'center', borderTopWidth: 1.5, borderTopColor: '#493d49', zIndex: 3 },
   catalogCardRarityText: { color: '#fff9e9', fontSize: 6.2, fontWeight: '900', fontFamily: 'Delius' },
   catalogCardMissing: { color: 'rgba(255,249,233,0.85)', fontSize: 5, marginTop: 1, fontWeight: '700' },
@@ -1422,6 +1567,28 @@ const s = StyleSheet.create({
   tematicaSkinAnimal: { color: '#8a705b', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
   tematicaSkinNombre: { marginTop: 1, color: '#553a29', fontFamily: 'Delius', fontSize: 10, lineHeight: 12, fontWeight: '900' },
   tematicaSkinRareza: { marginTop: 2, color: '#9d7654', fontFamily: 'Delius', fontSize: 7, fontWeight: '800' },
+  apodoModalFondo: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(39,27,20,0.64)' },
+  apodoModalCerrarFondo: { ...StyleSheet.absoluteFillObject },
+  apodoModalTarjeta: { width: 340, maxWidth: '92%', alignItems: 'center', paddingHorizontal: 15, paddingTop: 12, paddingBottom: 11, borderRadius: 18, backgroundColor: '#fff3d5', borderWidth: 2.5, borderColor: '#a8753c', shadowColor: '#160e08', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.42, shadowRadius: 13, elevation: 22 },
+  apodoModalIcono: { width: 58, height: 58, alignItems: 'center', justifyContent: 'center', borderRadius: 18, borderWidth: 1.5, overflow: 'hidden' },
+  apodoModalImagen: { width: 60, height: 60 },
+  apodoModalEyebrow: { marginTop: 6, color: '#a06e29', fontFamily: 'Delius', fontSize: 6.2, fontWeight: '900', letterSpacing: 1.1 },
+  apodoModalTitulo: { marginTop: 1, color: '#5b3c24', fontFamily: 'Delius', fontSize: 15, fontWeight: '900', textAlign: 'center' },
+  apodoModalSubtitulo: { maxWidth: 270, marginTop: 2, color: '#87684f', fontFamily: 'Delius', fontSize: 7.4, lineHeight: 10, fontWeight: '700', textAlign: 'center' },
+  apodoInputWrap: { width: '100%', height: 34, flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 9, paddingHorizontal: 9, borderRadius: 10, backgroundColor: '#fffaf0', borderWidth: 1.2, borderColor: '#d8b77a' },
+  apodoInputIcono: { width: 15, alignItems: 'center', justifyContent: 'center' },
+  apodoInput: { flex: 1, minWidth: 0, padding: 0, color: '#5b3c24', fontFamily: 'Delius', fontSize: 11, fontWeight: '800' },
+  apodoContador: { color: '#b29268', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' },
+  apodoIconosTitulo: { alignSelf: 'flex-start', marginTop: 8, color: '#a06e29', fontFamily: 'Delius', fontSize: 5.8, fontWeight: '900', letterSpacing: 0.65 },
+  apodoIconosLista: { width: '100%', flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 3, marginTop: 4 },
+  apodoIconoOpcion: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#fffaf0', borderWidth: 1, borderColor: '#e5d0a8' },
+  apodoIconoOpcionActiva: { backgroundColor: '#f9e9c8', borderWidth: 1.6, borderColor: '#b98449', shadowColor: '#b47d3e', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
+  apodoAyuda: { alignSelf: 'flex-start', marginTop: 4, color: '#a68a6d', fontFamily: 'Delius', fontSize: 5.8, fontWeight: '700' },
+  apodoAcciones: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 7, marginTop: 9 },
+  apodoCancelar: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 9 },
+  apodoCancelarTexto: { color: '#92765b', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900' },
+  apodoGuardar: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 9, backgroundColor: '#6f9e55', borderWidth: 1, borderColor: '#4e7b3e' },
+  apodoGuardarTexto: { color: '#fff8e9', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900' },
 });
 
 export default Animalitos;

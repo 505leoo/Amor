@@ -147,7 +147,7 @@ export const RachaSegmentedBar = ({ points = 0, dailyPoints, dailyMaxPoints = PU
   </View>;
 };
 
-export const RachaProgressToast = ({ visible, fromPoints = 0, toPoints = 3, onHide }) => {
+export const RachaProgressToast = ({ visible, fromPoints = 0, toPoints = 3, toast, onHide }) => {
   const entrance = useRef(new Animated.Value(0)).current;
   const progress = useRef(new Animated.Value(0)).current;
   const onHideRef = useRef(onHide);
@@ -180,10 +180,27 @@ export const RachaProgressToast = ({ visible, fromPoints = 0, toPoints = 3, onHi
 
   if (!visible) return null;
   const delta = safeToPoints - safeFromPoints;
-  const textoCambio = delta < 0 ? `Se descontaron ${Math.abs(delta)} puntos` : `¡Sumaste! +${delta} puntos`;
+  const esObjetivo = toast?.kind === 'objective';
+  const meta = Math.max(1, Number(toast?.goal) || 1);
+  const avance = Math.min(meta, Math.max(0, Number(toast?.progress) || 0));
+  const todosCompletos = Boolean(toast?.dayCompleted);
+  const textoCambio = esObjetivo
+    ? todosCompletos
+      ? `¡Excelente! ${toast?.completedObjectives || 4}/${toast?.totalObjectives || 4} objetivos`
+      : toast?.completed
+        ? `${toast?.objectiveTitle || 'Objetivo'} completado`
+        : `${toast?.objectiveTitle || 'Objetivo'} · ${avance}/${meta}`
+    : delta < 0 ? `Se descontaron ${Math.abs(delta)} puntos` : `¡Sumaste! +${delta} puntos`;
+  const subtitulo = esObjetivo
+    ? todosCompletos
+      ? `+${toast?.pointsEarned || 0} objetivos + ${toast?.dayBonus || 0} bonus del día`
+      : toast?.completed
+        ? `¡Misión lista! +${toast?.pointsEarned || 0} puntos para tu racha`
+        : `Un paso guardado. Te faltan ${Math.max(0, meta - avance)} para completar esta misión.`
+    : 'RACHA ACUMULADA';
   return <Animated.View pointerEvents="none" style={[toastStyles.wrap, { opacity: entrance, transform: [{ translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) }, { scale: entrance.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] }]}>
     <LinearGradient colors={['#785b60', '#a07470']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={toastStyles.card}>
-      <View style={toastStyles.topRow}><View style={toastStyles.spark}><Text style={toastStyles.sparkText}>{delta < 0 ? '↓' : '✦'}</Text></View><View style={toastStyles.copy}><Text style={toastStyles.kicker}>RACHA ACUMULADA</Text><Text style={toastStyles.title}>{textoCambio}</Text></View><Text style={toastStyles.score}>{safeToPoints} pts</Text></View>
+      <View style={toastStyles.topRow}><View style={toastStyles.spark}><Text style={toastStyles.sparkText}>{delta < 0 ? '↓' : todosCompletos ? '★' : '✦'}</Text></View><View style={toastStyles.copy}><Text style={toastStyles.kicker}>{subtitulo}</Text><Text style={toastStyles.title}>{textoCambio}</Text></View><Text style={toastStyles.score}>{safeToPoints} pts</Text></View>
       <View style={toastStyles.track}><Animated.View style={[toastStyles.fill, { width: progress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}><LinearGradient colors={['#f4cf88', '#d98d73']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} /></Animated.View></View>
     </LinearGradient>
   </Animated.View>;
@@ -195,6 +212,7 @@ export const RachaGlobalToast = () => {
     visible={Boolean(toast)}
     fromPoints={toast?.fromPoints || 0}
     toPoints={toast?.toPoints || 0}
+    toast={toast}
     onHide={ocultarToast}
   />;
 };
@@ -257,9 +275,9 @@ export const RachaCompletionRitual = () => {
   const outcome = ritual.outcome || (Number(ritual.streakDays) > Number(ritual.previousStreakDays) ? 'subio' : Number(ritual.streakDays) < Number(ritual.previousStreakDays) ? 'bajo' : 'igual');
   const completedObjectives = Math.max(0, Number(ritual.completedObjectives ?? ritual.objetivosCompletados) || (ritual.dayCompleted ? OBJETIVO_IDS.length : 0));
   const totalObjectives = Math.max(1, Number(ritual.totalObjectives ?? ritual.totalObjetivos) || OBJETIVO_IDS.length);
-  const ritualTitle = ritual.dayCompleted ? '¡Día completado!' : outcome === 'subio' ? 'Tu racha subió' : outcome === 'bajo' ? 'Tu racha bajó' : 'Tu racha se mantuvo';
+  const ritualTitle = ritual.dayCompleted ? '¡Excelente!' : outcome === 'subio' ? 'Tu racha subió' : outcome === 'bajo' ? 'Tu racha bajó' : 'Tu racha se mantuvo';
   const ritualCopy = ritual.dayCompleted
-    ? `Completaste ${completedObjectives}/${totalObjectives} objetivos y tu racha subió a ${ritual.streakDays} días. Volvé mañana para mantenerla viva.`
+    ? `Completaste los ${completedObjectives}/${totalObjectives} objetivos del día y tu racha subió a ${ritual.streakDays} días. Volvé mañana para mantenerla viva.`
     : outcome === 'subio'
       ? 'Cuidaste tu día y encendiste una nueva llama. Volvé mañana para mantenerla viva.'
       : outcome === 'bajo'
@@ -299,6 +317,12 @@ export const RachaVisualModal = ({ visible, onClose }) => {
   const totalPoints = puntosAcumulados(Math.max(Number(day?.puntosTotales) || 0, Number(racha?.puntosTotales) || 0, streakDays * PUNTOS_POR_DIA_RACHA));
   const objetivosDiarios = useMemo(() => construirObjetivosDiarios(day), [day]);
   const completedObjectives = objetivosDiarios.filter(objetivo => objetivo.completado).length;
+  const calificacionDia = completedObjectives >= objetivosDiarios.length ? 'EXCELENTE' : completedObjectives >= 2 ? 'Vas muy bien' : completedObjectives === 1 ? 'Un paso más' : 'Tu día empieza aquí';
+  const mensajeDia = completedObjectives >= objetivosDiarios.length
+    ? '¡Excelente! Completaste los 4 objetivos de hoy.'
+    : completedObjectives >= 2
+      ? 'Con 2 o 3 objetivos tu racha se mantiene estable.'
+      : 'Completá al menos 2 objetivos para cuidar tu racha.';
   return <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
     <View style={modalStyles.backdrop}>
       <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
@@ -309,7 +333,7 @@ export const RachaVisualModal = ({ visible, onClose }) => {
         <View style={modalStyles.contentRow}>
           <View style={modalStyles.summaryColumn}>
             <View style={modalStyles.hero}><View style={modalStyles.flame}><Text style={modalStyles.flameText}>🔥</Text></View><View><Text style={modalStyles.heroNumber}>{streakDays} {streakDays === 1 ? 'día' : 'días'}</Text><Text style={modalStyles.heroCaption}>{totalPoints} puntos acumulados</Text></View></View>
-            <View style={modalStyles.progressCard}><View style={modalStyles.progressHeader}><Text style={modalStyles.progressTitle}>AVANCE DE HOY · {completedObjectives}/{objetivosDiarios.length}</Text><Text style={modalStyles.progressScore}>{dailyPoints}/{dailyMaxPoints} pts</Text></View><RachaSegmentedBar points={totalPoints} dailyPoints={dailyPoints} dailyMaxPoints={dailyMaxPoints} /></View>
+            <View style={modalStyles.progressCard}><View style={modalStyles.progressHeader}><Text style={[modalStyles.progressTitle, completedObjectives >= objetivosDiarios.length && modalStyles.progressTitleExcellent]}>{calificacionDia.toUpperCase()} · {completedObjectives}/{objetivosDiarios.length}</Text><Text style={modalStyles.progressScore}>{dailyPoints}/{dailyMaxPoints} pts</Text></View><RachaSegmentedBar points={totalPoints} dailyPoints={dailyPoints} dailyMaxPoints={dailyMaxPoints} /></View>
           </View>
           <View style={modalStyles.missionsColumn}>
             <Text style={modalStyles.missionsTitle}>OBJETIVOS DIARIOS</Text>
@@ -323,7 +347,7 @@ export const RachaVisualModal = ({ visible, onClose }) => {
             ))}
           </View>
         </View>
-        <View style={modalStyles.infoStrip}><View style={modalStyles.infoIcon}><MaterialIcons name="auto-awesome" size={13} color="#fffaf0" /></View><Text style={modalStyles.infoText}>Completá tus objetivos para mantener viva la racha.</Text></View>
+        <View style={[modalStyles.infoStrip, completedObjectives >= objetivosDiarios.length && modalStyles.infoStripExcellent]}><View style={[modalStyles.infoIcon, completedObjectives >= objetivosDiarios.length && modalStyles.infoIconExcellent]}><MaterialIcons name={completedObjectives >= objetivosDiarios.length ? 'emoji-events' : 'auto-awesome'} size={13} color="#fffaf0" /></View><Text style={modalStyles.infoText}>{mensajeDia}</Text></View>
       </LinearGradient>
     </View>
   </Modal>;
@@ -351,10 +375,10 @@ const ritualStyles = StyleSheet.create({
 
 const modalStyles = StyleSheet.create({
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 18, backgroundColor: 'rgba(29,16,18,0.9)' },
-  card: { width: '100%', maxWidth: 650, overflow: 'hidden', borderRadius: 22, borderWidth: 1.4, borderColor: '#d3b989', padding: 16, shadowColor: '#17120d', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.55, shadowRadius: 22, elevation: 20 }, glowOne: { position: 'absolute', top: -85, right: -40, width: 210, height: 210, borderRadius: 105, backgroundColor: 'rgba(134,176,202,0.20)' }, glowTwo: { position: 'absolute', bottom: -110, left: -55, width: 205, height: 205, borderRadius: 103, backgroundColor: 'rgba(228,175,108,0.19)' },
-  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }, eyebrow: { color: '#6c5038', fontFamily: 'Delius', fontSize: 8, fontWeight: '900', letterSpacing: 1.15 }, day: { marginTop: 3, color: '#8a7865', fontFamily: 'Delius', fontSize: 7 }, close: { width: 29, height: 29, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: 'rgba(111,142,157,0.15)', borderWidth: 1, borderColor: 'rgba(94,124,140,0.36)' }, countdownHolder: { marginTop: 7 },
-  contentRow: { flexDirection: 'row', gap: 14, marginTop: 9 }, summaryColumn: { flex: 1.04 }, missionsColumn: { flex: 0.96 }, hero: { flexDirection: 'row', alignItems: 'center', marginTop: 4 }, flame: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 28, backgroundColor: '#e8bc70', borderWidth: 3, borderColor: '#fff8dd', shadowColor: '#b7803d', shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }, flameText: { fontSize: 28 }, heroNumber: { marginLeft: 10, color: '#4e3d30', fontFamily: 'Delius', fontSize: 25, fontWeight: '900' }, heroCaption: { width: 195, marginLeft: 10, color: '#7b6958', fontFamily: 'Delius', fontSize: 6.5, lineHeight: 9 },
-  progressCard: { marginTop: 10, padding: 10, borderRadius: 12, backgroundColor: 'rgba(255,252,244,0.62)', borderWidth: 1, borderColor: 'rgba(173,143,100,0.38)' }, progressHeader: { flexDirection: 'row', justifyContent: 'space-between' }, progressTitle: { color: '#745d46', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.7 }, progressScore: { color: '#a2634e', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900' },
+  card: { width: '100%', maxWidth: 610, overflow: 'hidden', borderRadius: 20, borderWidth: 1.4, borderColor: '#d3b989', padding: 12, shadowColor: '#17120d', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.55, shadowRadius: 22, elevation: 20 }, glowOne: { position: 'absolute', top: -85, right: -40, width: 210, height: 210, borderRadius: 105, backgroundColor: 'rgba(134,176,202,0.20)' }, glowTwo: { position: 'absolute', bottom: -110, left: -55, width: 205, height: 205, borderRadius: 103, backgroundColor: 'rgba(228,175,108,0.19)' },
+  header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }, eyebrow: { color: '#6c5038', fontFamily: 'Delius', fontSize: 7.2, fontWeight: '900', letterSpacing: 1.15 }, day: { marginTop: 2, color: '#8a7865', fontFamily: 'Delius', fontSize: 6.2 }, close: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 13, backgroundColor: 'rgba(111,142,157,0.15)', borderWidth: 1, borderColor: 'rgba(94,124,140,0.36)' }, countdownHolder: { marginTop: 4 },
+  contentRow: { flexDirection: 'row', gap: 10, marginTop: 5 }, summaryColumn: { flex: 1.04 }, missionsColumn: { flex: 0.96 }, hero: { flexDirection: 'row', alignItems: 'center', marginTop: 2 }, flame: { width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24, backgroundColor: '#e8bc70', borderWidth: 3, borderColor: '#fff8dd', shadowColor: '#b7803d', shadowOpacity: 0.35, shadowRadius: 10, elevation: 6 }, flameText: { fontSize: 23 }, heroNumber: { marginLeft: 8, color: '#4e3d30', fontFamily: 'Delius', fontSize: 21, fontWeight: '900' }, heroCaption: { width: 175, marginLeft: 8, color: '#7b6958', fontFamily: 'Delius', fontSize: 5.9, lineHeight: 8 },
+  progressCard: { marginTop: 6, padding: 7, borderRadius: 10, backgroundColor: 'rgba(255,252,244,0.62)', borderWidth: 1, borderColor: 'rgba(173,143,100,0.38)' }, progressHeader: { flexDirection: 'row', justifyContent: 'space-between' }, progressTitle: { color: '#745d46', fontFamily: 'Delius', fontSize: 5.9, fontWeight: '900', letterSpacing: 0.7 }, progressTitleExcellent: { color: '#63855d' }, progressScore: { color: '#a2634e', fontFamily: 'Delius', fontSize: 6.7, fontWeight: '900' },
   missionsTitle: { color: '#745d46', fontFamily: 'Delius', fontSize: 6.5, fontWeight: '900', letterSpacing: 0.85 }, conductaIntro: { marginTop: 2, color: '#9a806e', fontFamily: 'Delius', fontSize: 5.7, lineHeight: 8 }, conductaEvent: { flexDirection: 'row', alignItems: 'center', minHeight: 35, marginTop: 5, paddingHorizontal: 7, paddingVertical: 5, borderRadius: 10, borderWidth: 1 }, conductaEventPositive: { backgroundColor: 'rgba(220,238,209,0.56)', borderColor: 'rgba(109,152,89,0.32)' }, conductaEventNegative: { backgroundColor: 'rgba(187,101,99,0.10)', borderColor: 'rgba(166,87,88,0.30)' }, conductaEventNeutral: { backgroundColor: 'rgba(255,252,244,0.54)', borderColor: 'rgba(173,143,100,0.28)' }, conductaEventIcon: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }, conductaIconPositive: { backgroundColor: '#8aa579' }, conductaIconNegative: { backgroundColor: '#b46b67' }, conductaEventCopy: { flex: 1, marginLeft: 6 }, conductaEventText: { color: '#594937', fontFamily: 'Delius', fontSize: 6.1, lineHeight: 8, fontWeight: '800' }, conductaEventTime: { marginTop: 1, color: '#a58b79', fontFamily: 'Delius', fontSize: 4.7, fontWeight: '700' }, conductaEventDelta: { marginLeft: 4, color: '#678b5e', fontFamily: 'Delius', fontSize: 9, fontWeight: '900' }, conductaEventDeltaNegative: { color: '#a45659' }, mission: { flexDirection: 'row', alignItems: 'center', minHeight: 41, marginTop: 5, paddingHorizontal: 8, borderRadius: 10, backgroundColor: 'rgba(255,252,244,0.58)', borderWidth: 1, borderColor: 'rgba(173,143,100,0.34)' }, missionDone: { backgroundColor: 'rgba(220,238,209,0.72)', borderColor: 'rgba(109,152,89,0.58)' }, missionIcon: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }, gameIcon: { backgroundColor: '#769ab0' }, petIcon: { backgroundColor: '#ba8758' }, storeIcon: { backgroundColor: '#8eaa78' }, missionCopy: { flex: 1, marginLeft: 7 }, missionName: { color: '#594937', fontFamily: 'Delius', fontSize: 7, fontWeight: '900' }, missionDetail: { marginTop: 1, color: '#8a7764', fontFamily: 'Delius', fontSize: 5.8 }, points: { color: '#9b6a2d', fontFamily: 'Delius', fontSize: 11, fontWeight: '900' }, missionPointsDone: { color: '#648b67' },
-  infoStrip: { flexDirection: 'row', alignItems: 'center', marginTop: 10, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 10, backgroundColor: 'rgba(169,102,91,0.11)', borderWidth: 1, borderColor: 'rgba(157,92,82,0.25)' }, infoIcon: { width: 23, height: 23, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#a66c68' }, infoText: { flex: 1, marginLeft: 7, color: '#6e5b47', fontFamily: 'Delius', fontSize: 6.2, lineHeight: 8.5 },
+  infoStrip: { flexDirection: 'row', alignItems: 'center', marginTop: 6, paddingHorizontal: 7, paddingVertical: 5, borderRadius: 9, backgroundColor: 'rgba(169,102,91,0.11)', borderWidth: 1, borderColor: 'rgba(157,92,82,0.25)' }, infoStripExcellent: { backgroundColor: 'rgba(112,157,91,0.14)', borderColor: 'rgba(88,133,76,0.32)' }, infoIcon: { width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#a66c68' }, infoIconExcellent: { backgroundColor: '#7da06c' }, infoText: { flex: 1, marginLeft: 6, color: '#6e5b47', fontFamily: 'Delius', fontSize: 5.8, lineHeight: 7.8 },
 });

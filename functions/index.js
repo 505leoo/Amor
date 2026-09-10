@@ -33,8 +33,10 @@ const RACHA_OFFSET_HORAS = 4;
 const META_RACHA_DIARIA = 10;
 const PUNTOS_POR_DIA_RACHA = 10;
 const BONUS_DIA_RACHA = 5;
-const PENALIZACION_DIA_SIN_AVANCE = 3;
-const PENALIZACION_AVANCE_ESTANCADO = 5;
+// Completar 2 o 3 objetivos mantiene el día estable. Solo 0 o 1 objetivo
+// reciben un descuento al cierre de la jornada.
+const PENALIZACION_DIA_SIN_OBJETIVOS = 5;
+const PENALIZACION_DIA_UNICO_OBJETIVO = 3;
 const MAX_CONDUCTA_EVENTOS = 24;
 const BITACORA_INTERVALO_MS = 10 * 60 * 1000;
 // Mantenerlo alineado con data/alimentos.js: la saciedad completa tarda
@@ -236,6 +238,7 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
     const ajustes = [];
     let ultimoDiaCerrado = null;
     let huboDiaCompletado = false;
+    let objetivosUltimoDia = 0;
     snapshots.forEach((snapshot, index) => {
       const datos = snapshot.exists ? snapshot.data() || {} : {};
       if (snapshot.exists || tieneHistorial || puntosConducta !== 0) {
@@ -247,11 +250,11 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
         puntosConductaSeguro(datos.puntosDia !== undefined ? datos.puntosDia : datos.puntos) : puntosConducta;
       const inicioDia = datos.puntosDiaInicio !== undefined ?
         puntosConductaSeguro(datos.puntosDiaInicio) : puntos;
-      const incremento = puntos - inicioDia;
       const tuvoDescuidado = Boolean(datos.penalizacionesHambre && Object.keys(datos.penalizacionesHambre).length);
-      const debePenalizar = incremento <= 0 && !tuvoDescuidado;
-      const penalizacionNominal = puntos >= META_RACHA_DIARIA ? PENALIZACION_AVANCE_ESTANCADO : PENALIZACION_DIA_SIN_AVANCE;
-      const penalizacion = debePenalizar ? penalizacionNominal : 0;
+      const objetivosCompletados = OBJETIVO_IDS.filter((id) => Boolean(datos.objetivos && datos.objetivos[id] && datos.objetivos[id].completado)).length;
+      if (ultimoDiaCerrado === dias[index]) objetivosUltimoDia = objetivosCompletados;
+      const penalizacion = tuvoDescuidado ? 0 : objetivosCompletados === 0 ?
+        PENALIZACION_DIA_SIN_OBJETIVOS : objetivosCompletados === 1 ? PENALIZACION_DIA_UNICO_OBJETIVO : 0;
       puntosConducta = puntos - penalizacion;
       if (!penalizacion) return;
       const puntosTotalesAntes = puntosTotales;
@@ -261,7 +264,7 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
       const evento = conductaEvent(
           `cierre-${dias[index]}`,
           -penalizacion,
-          `-${penalizacion} puntos por cerrar el día sin avanzar`,
+          objetivosCompletados === 0 ? `-${penalizacion} puntos por no completar objetivos hoy` : `-${penalizacion} puntos por completar solo 1 objetivo hoy`,
           "negativa",
       );
       const bitacora = appendConductaEventThrottled(
@@ -275,6 +278,8 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
         puntosDia: puntosConducta,
         puntosDiaInicio: inicioDia,
         puntosTotales,
+        objetivosCompletados,
+        calificacionDia: objetivosCompletados >= OBJETIVO_IDS.length ? "excelente" : objetivosCompletados >= 2 ? "bien" : "riesgo",
         eventos: bitacora.events,
         ultimaBitacoraEnMs: bitacora.ultimaBitacoraEnMs,
         penalizacionCierre: penalizacion,
@@ -283,21 +288,6 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
       ajustes.push({fecha: dias[index], puntos, puntosDia: puntosConducta, penalizacion, puntosTotalesAntes, puntosTotales, anterior, nuevo: diasConsecutivos});
     });
     const ultimoAjuste = ajustes.length ? ajustes[ajustes.length - 1] : null;
-    tx.set(userRef, {
-      rachaDiaria: {
-        ...racha,
-        puntosTotales,
-        diasConsecutivos,
-        puntosConducta,
-        ultimaFechaEvaluada: hastaDia,
-        ...(ultimoAjuste ? {
-          ultimoAjuste: {
-            ...ultimoAjuste,
-            aplicadoEn: admin.firestore.FieldValue.serverTimestamp(),
-          },
-        } : {}),
-      },
-    }, {merge: true});
     const bajo = diasConsecutivos < diasConsecutivosAntesProceso;
     const subio = diasConsecutivos > diasConsecutivosAntesProceso || (!bajo && huboDiaCompletado && ultimoDiaCerrado === ultimaCompleta);
     const cierre = ultimoDiaCerrado ? {
@@ -308,7 +298,25 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
       streakDays: diasConsecutivos,
       outcome: bajo ? "bajo" : subio ? "subio" : "igual",
       dayCompleted: huboDiaCompletado,
+      completedObjectives: objetivosUltimoDia,
+      totalObjectives: OBJETIVO_IDS.length,
     } : null;
+    tx.set(userRef, {
+      rachaDiaria: {
+        ...racha,
+        puntosTotales,
+        diasConsecutivos,
+        puntosConducta,
+        ultimaFechaEvaluada: hastaDia,
+        ...(cierre ? {ultimoCierreRitual: cierre} : {}),
+        ...(ultimoAjuste ? {
+          ultimoAjuste: {
+            ...ultimoAjuste,
+            aplicadoEn: admin.firestore.FieldValue.serverTimestamp(),
+          },
+        } : {}),
+      },
+    }, {merge: true});
     return {ajuste: ultimoAjuste, cierre, puntosTotales, diasConsecutivos};
   });
 };
@@ -842,6 +850,10 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
       nuevoDiaCompletado,
       nuevaRacha: diasConsecutivos > diasAntes,
       hitosGanados: hitosGanados.map(([cantidad, puntos]) => ({cantidad, puntos})),
+      cantidadObjetivo: cantidadNueva,
+      metaObjetivo: objective.meta || 1,
+      objetivoCompletado,
+      puntosObjetivo: puntosAplicados,
       bitacoraRegistrada: bitacora.registrada,
       objetivosCompletados: OBJETIVO_IDS.filter((id) => objetivos[id] && objetivos[id].completado).length,
       totalObjetivos: OBJETIVO_IDS.length,

@@ -19,7 +19,7 @@ export const ThemeMark = ({ tematica }) => {
 };
 
 // A scene on the room background, not a dialog: only the information has cards.
-export default function AnimalitoShowcase({ animal, skins, tema, estado, necesarias, costo, puedeMejorar, mejorando, confirmar, equipado, skinEquipada, equipando, desbloqueado = false, onEquipar, onMejorar, onCartas, tematicas = [], onVerTematica, children }) {
+export default function AnimalitoShowcase({ animal, skins, tema, estado, necesarias, costo, puedeMejorar, mejorando, confirmar, equipado, skinEquipada, equipando, desbloqueado = false, apodo = '', iconoApodo, onEditarApodo, onEquipar, onMejorar, onCartas, tematicas = [], onVerTematica, children }) {
   const [skinId, setSkinId] = useState(skinEquipada);
   const [width, setWidth] = useState(700);
   const index = Math.max(0, skins.findIndex(skin => skin.storageId === skinId));
@@ -34,7 +34,14 @@ export default function AnimalitoShowcase({ animal, skins, tema, estado, necesar
       <View style={[s.infoColumn, compacto && s.infoColumnCompact]}>
       <View style={[s.info, compacto && s.infoCompact]}>
         <Text style={[s.eyebrow, { color: tema.texto }]}>TU COMPAÑERO</Text>
-        <Text style={s.name}>{animal.nombre}</Text>
+        <View style={s.nameRow}>
+          {iconoApodo && <View style={[s.nicknameMark, { backgroundColor: tema.fondo }]}><MaterialIcons name={iconoApodo} size={13} color={tema.acento} /></View>}
+          <View style={s.nameCopy}>
+            <Text style={s.name} numberOfLines={1}>{apodo || animal.nombre}</Text>
+            {apodo && <Text style={s.speciesName} numberOfLines={1}>{animal.nombre}</Text>}
+          </View>
+          {desbloqueado && onEditarApodo && <TouchableOpacity style={s.nicknameButton} onPress={onEditarApodo} accessibilityLabel="Cambiar apodo" hitSlop={6} activeOpacity={0.8}><MaterialIcons name="edit" size={13} color="#765f4e" /></TouchableOpacity>}
+        </View>
         <View style={[s.rarity, { backgroundColor: tema.fondo }]}><View style={[s.dot, { backgroundColor: tema.acento }]} /><Text style={[s.rarityText, { color: tema.texto }]}>{animal.rareza}</Text></View>
         <Text style={s.ability}>{animal.habilidad}</Text>
         <Text style={s.description}>{animal.habilidadTexto || 'Un compañero especial que crece con tus cuidados.'}</Text>
@@ -72,8 +79,8 @@ export default function AnimalitoShowcase({ animal, skins, tema, estado, necesar
       </View>
     </View>
     <View style={s.equipArea}>
-      <TouchableOpacity onPress={() => onEquipar(skin)} disabled={!desbloqueado || !skin || skin.bloqueado || usando || equipando} style={[s.equip, { backgroundColor: tema.texto }, (!desbloqueado || skin?.bloqueado || usando || equipando) && s.disabled]}>
-        <MaterialIcons name={!desbloqueado || skin?.bloqueado ? 'lock-outline' : usando ? 'check' : 'pets'} size={15} color="#fffaf1" /><Text style={s.buttonText}>{equipando ? 'Equipando…' : !desbloqueado ? 'Animalito bloqueado' : skin?.bloqueado ? 'Traje bloqueado' : usando ? 'Equipado' : 'Equipar compañero'}</Text>
+      <TouchableOpacity onPress={() => onEquipar(skin)} disabled={!desbloqueado || !skin || skin.bloqueado || equipando} style={[s.equip, { backgroundColor: usando ? '#978477' : tema.texto }, usando && s.equipActual, (!desbloqueado || skin?.bloqueado || equipando) && s.disabled]}>
+        <MaterialIcons name={!desbloqueado || skin?.bloqueado ? 'lock-outline' : 'pets'} size={15} color="#fffaf1" /><Text style={s.buttonText}>{equipando ? 'Equipando…' : !desbloqueado ? 'Animalito bloqueado' : skin?.bloqueado ? 'Traje bloqueado' : 'Equipar'}</Text>
       </TouchableOpacity>
     </View>
     </View>
@@ -84,7 +91,7 @@ const s = StyleSheet.create({
   root: { flex: 1, width: '100%' }, content: { paddingHorizontal: 8, paddingTop: 16, paddingBottom: 12 },
   scene: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: 18 }, sceneCompact: { flexWrap: 'wrap', gap: 10 },
   infoColumn: { width: '23%', maxWidth: 200, alignItems: 'stretch' }, infoColumnCompact: { width: '46%', maxWidth: undefined }, info: { width: '100%', padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,250,239,0.88)' }, infoCompact: { width: '100%', maxWidth: undefined },
-  eyebrow: { color: '#93816e', fontSize: 7, fontWeight: '800', letterSpacing: 1 }, name: { fontFamily: 'Delius', fontSize: 24, color: '#493d35', marginTop: 5, fontWeight: '900' },
+  eyebrow: { color: '#93816e', fontSize: 7, fontWeight: '800', letterSpacing: 1 }, nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 }, nicknameMark: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center', borderRadius: 8 }, nameCopy: { flex: 1, minWidth: 0 }, name: { fontFamily: 'Delius', fontSize: 24, color: '#493d35', fontWeight: '900' }, speciesName: { color: '#9b8874', fontFamily: 'Delius', fontSize: 8, fontWeight: '800', marginTop: 1 }, nicknameButton: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: '#f4ead8', borderWidth: 1, borderColor: '#ddc9a8' },
   rarity: { flexDirection: 'row', alignSelf: 'flex-start', alignItems: 'center', gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, marginTop: 7 }, dot: { width: 5, height: 5, borderRadius: 3 }, rarityText: { fontSize: 9, fontWeight: '800' },
   ability: { fontFamily: 'Delius', fontSize: 11, color: '#635144', marginTop: 15, fontWeight: '800' }, description: { fontFamily: 'Delius', color: '#8a7564', fontSize: 10, lineHeight: 15, marginTop: 5 },
   stage: { width: '44%', height: 210, alignItems: 'center', justifyContent: 'center' }, stageCompact: { width: '100%', height: 210 },
@@ -96,6 +103,6 @@ const s = StyleSheet.create({
   progressColumn: { width: '23%', maxWidth: 200, alignItems: 'stretch' }, progressColumnCompact: { width: '46%', maxWidth: undefined }, progressCard: { width: '100%', padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,250,239,0.88)' }, rewardsInProgress: { width: '100%', alignItems: 'center' }, levelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }, level: { fontFamily: 'Delius', color: '#493d35', fontSize: 18, fontWeight: '900' }, next: { color: '#ac9982', fontSize: 12 },
   track: { height: 8, backgroundColor: '#e6ddce', borderRadius: 4, overflow: 'hidden', marginTop: 12 }, fill: { height: '100%', borderRadius: 4 }, cards: { color: '#88715d', fontSize: 9, marginTop: 5 },
   upgrade: { marginTop: 12, paddingVertical: 9, paddingHorizontal: 6, borderRadius: 8, alignItems: 'center' }, buttonText: { fontFamily: 'Delius', fontSize: 10, fontWeight: '800', color: '#fffaf1', textAlign: 'center' }, cost: { textAlign: 'center', color: '#a08b75', fontSize: 7, marginTop: 5 }, link: { fontSize: 9, textAlign: 'center', marginTop: 12 }, disabled: { opacity: 0.5 },
-  equipArea: { alignItems: 'center', marginTop: 12 }, equip: { flexDirection: 'row', gap: 8, paddingHorizontal: 23, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }, rewards: { width: '86%', maxWidth: 570, alignSelf: 'center', marginTop: 18 },
+  equipArea: { alignItems: 'center', marginTop: 12 }, equip: { flexDirection: 'row', gap: 8, paddingHorizontal: 23, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }, equipActual: { borderWidth: 1, borderColor: 'rgba(255,244,220,0.45)' }, rewards: { width: '86%', maxWidth: 570, alignSelf: 'center', marginTop: 18 },
   tematicasMini: { marginTop: 2, alignItems: 'center' }, tematicasMiniLista: { flexDirection: 'row', gap: 7 }, tematicaMiniBoton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#fff6df', borderWidth: 1.2 }, tematicaMiniIcono: { fontSize: 17 },
 });

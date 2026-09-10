@@ -28,6 +28,7 @@ import { RachaVisualModal } from '../components/RachaVisual';
 import { useRacha } from '../RachaContext';
 import { cacheDocument, getCachedDocument, getProjectedDocument, isOfflineModeEnabled, subscribeCachedDocument, syncSetDoc, syncUpdateDoc } from '../utils/offlineSync';
 import { ALIMENTOS, calcularSaciedad, estadoSaciedad } from '../data/alimentos';
+import { ANIMALITOS } from '../data/animalitos';
 import * as Haptics from 'expo-haptics';
 
 const OverlayContext = createContext(false);
@@ -57,13 +58,21 @@ const nombreComponente = valor => ({
 }[String(valor || '').toLowerCase()] || 'Amor');
 const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
 const JUGAR_IMAGE = require('../assets/inicio/jugar.webp');
-const selectEstadoInicio = data => ({
-  animalito: data?.animalito || null,
-  halconDesbloqueado: Boolean(data?.halconDesbloqueado),
-  pareja: data?.pareja || null,
-  diamantes: Number(data?.diamantes ?? data?.diamante) || 0,
-});
+const selectEstadoInicio = data => {
+  const animalito = data?.animalito || null;
+  const estadoAnimalito = animalito ? data?.animalitos?.[animalito] || {} : {};
+  return {
+    animalito,
+    apodo: String(estadoAnimalito.apodo || '').trim(),
+    nivelAnimalito: Math.max(1, Number(estadoAnimalito.nivel) || 1),
+    halconDesbloqueado: Boolean(data?.halconDesbloqueado),
+    pareja: data?.pareja || null,
+    diamantes: Number(data?.diamantes ?? data?.diamante) || 0,
+  };
+};
 const equalEstadoInicio = (a, b) => a?.animalito === b?.animalito
+  && a?.apodo === b?.apodo
+  && a?.nivelAnimalito === b?.nivelAnimalito
   && a?.halconDesbloqueado === b?.halconDesbloqueado
   && a?.pareja === b?.pareja
   && a?.diamantes === b?.diamantes;
@@ -614,9 +623,11 @@ const AlimentoArrastrable = memo(({ alimento, cantidad, disabled, onDrop, onDrag
   const posicion = useRef(new Animated.ValueXY()).current;
   const [arrastrando, setArrastrando] = useState(false);
   const [soltando, setSoltando] = useState(false);
+  const [alimentoEnArrastre, setAlimentoEnArrastre] = useState(null);
   const escalaArrastre = useRef(new Animated.Value(1)).current;
   const activo = useRef(!disabled && cantidad > 0);
   const alimentoRef = useRef(alimento);
+  const alimentoEnArrastreRef = useRef(null);
   const cantidadRef = useRef(cantidad);
   const onDropRef = useRef(onDrop);
   activo.current = !disabled && cantidad > 0;
@@ -630,7 +641,10 @@ const AlimentoArrastrable = memo(({ alimento, cantidad, disabled, onDrop, onDrag
     onMoveShouldSetPanResponderCapture: (_, gesture) => activo.current && (Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2),
     onMoveShouldSetPanResponder: (_, gesture) => activo.current && (Math.abs(gesture.dx) > 2 || Math.abs(gesture.dy) > 2),
     onPanResponderGrant: () => {
-      console.log('[Alimentar] drag-start', alimentoRef.current.id, 'cantidad:', cantidadRef.current);
+      const alimentoActual = alimentoRef.current;
+      alimentoEnArrastreRef.current = alimentoActual;
+      setAlimentoEnArrastre(alimentoActual);
+      console.log('[Alimentar] drag-start', alimentoActual.id, 'cantidad:', cantidadRef.current);
       if (draggingRef) draggingRef.current = true;
       onDragState?.(true);
       posicion.stopAnimation();
@@ -649,19 +663,21 @@ const AlimentoArrastrable = memo(({ alimento, cantidad, disabled, onDrop, onDrag
       onDragMove?.(gesture.moveX, gesture.moveY);
     },
     onPanResponderRelease: (_, gesture) => {
-      const alimentoActual = alimentoRef.current;
+      const alimentoActual = alimentoEnArrastreRef.current || alimentoRef.current;
       console.log('[Alimentar] drag-release', alimentoActual.id, { x: gesture.moveX, y: gesture.moveY });
       posicion.flattenOffset();
       onDropRef.current?.(alimentoActual, gesture.moveX, gesture.moveY);
       setArrastrando(false);
       if (draggingRef) draggingRef.current = false;
-      onDragState?.(false);
       setSoltando(true);
       Animated.parallel([
         Animated.timing(posicion, { toValue: { x: 0, y: 0 }, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(escalaArrastre, { toValue: 0.52, duration: 260, easing: Easing.out(Easing.quad), useNativeDriver: false }),
       ]).start(() => {
         setSoltando(false);
+        alimentoEnArrastreRef.current = null;
+        setAlimentoEnArrastre(null);
+        onDragState?.(false);
         // Reiniciar cuando la copia ya no está renderizada evita el destello
         // en el que el alimento vuelve a crecer en una posición desplazada.
         requestAnimationFrame(() => {
@@ -674,13 +690,15 @@ const AlimentoArrastrable = memo(({ alimento, cantidad, disabled, onDrop, onDrag
       posicion.flattenOffset();
       setArrastrando(false);
       if (draggingRef) draggingRef.current = false;
-      onDragState?.(false);
       setSoltando(true);
       Animated.parallel([
         Animated.timing(posicion, { toValue: { x: 0, y: 0 }, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
         Animated.timing(escalaArrastre, { toValue: 0.52, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: false }),
       ]).start(() => {
         setSoltando(false);
+        alimentoEnArrastreRef.current = null;
+        setAlimentoEnArrastre(null);
+        onDragState?.(false);
         requestAnimationFrame(() => {
           posicion.setValue({ x: 0, y: 0 });
           escalaArrastre.setValue(1);
@@ -691,7 +709,7 @@ const AlimentoArrastrable = memo(({ alimento, cantidad, disabled, onDrop, onDrag
 
   return <Animated.View {...panResponder.panHandlers} style={[renderContent ? style : styles.foodItem, !renderContent && cantidad <= 0 && styles.foodItemEmpty, !dragPreview && { transform: posicion.getTranslateTransform() }]}>
     {renderContent ? <TouchableOpacity style={[StyleSheet.absoluteFill, styles.foodSelectTouch]} onPress={onPress} activeOpacity={0.78}>{renderContent({ ocultarIcono: arrastrando || soltando })}</TouchableOpacity> : <><Text style={styles.foodEmoji}>{alimento.emoji}</Text><View style={styles.foodCount}><Text style={styles.foodCountText}>{cantidad}</Text></View></>}
-    {dragPreview && (arrastrando || soltando) && <Animated.View pointerEvents="none" style={[styles.foodDragPreview, { transform: [{ translateX: posicion.x }, { translateY: posicion.y }, { scale: escalaArrastre }] }]}><Text style={styles.foodDragPreviewEmoji}>{alimento.emoji}</Text></Animated.View>}
+    {dragPreview && (arrastrando || soltando) && <Animated.View pointerEvents="none" style={[styles.foodDragPreview, { transform: [{ translateX: posicion.x }, { translateY: posicion.y }, { scale: escalaArrastre }] }]}><Text style={styles.foodDragPreviewEmoji}>{(alimentoEnArrastre || alimento).emoji}</Text></Animated.View>}
   </Animated.View>;
 });
 
@@ -710,7 +728,6 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   const zonaActivaRef = useRef(false);
   const hoverTimerRef = useRef(null);
   const zonaRectRef = useRef(null);
-  const burbuja = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!cuidadoRef) return undefined;
@@ -746,17 +763,6 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
     });
     return () => suscripcion.remove();
   }, []);
-
-  useEffect(() => {
-    if (!ANIMACIONES_AMBIENTALES) return undefined;
-    const animation = Animated.loop(Animated.sequence([
-      Animated.delay(4200),
-      Animated.timing(burbuja, { toValue: 1.07, duration: 280, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.spring(burbuja, { toValue: 1, friction: 5, useNativeDriver: true }),
-    ]));
-    animation.start();
-    return () => animation.stop();
-  }, [burbuja]);
 
   const saciedad = calcularSaciedad(cuidado, ahora);
   const estado = estadoSaciedad(saciedad);
@@ -903,39 +909,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
     </View>
   );
 
-  const petMoodBubbleSvg = (
-    <Svg width="46" height="46" viewBox="0 0 42 42" style={styles.petMoodSvg}>
-      <Path d="M11 5h16c5.5 0 10 4.5 10 10v9c0 5.5-4.5 10-10 10h-7l-8 5 2.1-5H11C5.5 34 1 29.5 1 24v-9C1 9.5 5.5 5 11 5Z" fill="#fff5dd" stroke="#c89552" strokeWidth="1.4" strokeLinejoin="round" />
-      <Path d="M5 14c2-4.5 5.5-6.7 10.2-7" fill="none" stroke="#fff9e7" strokeWidth="1.5" strokeLinecap="round" opacity="0.9" />
-      <Circle cx="19" cy="20" r="10" fill={estado.color} opacity="0.16" />
-      {estado.id === 'feliz' && <>
-        <Path d="M14 19c1.3 1.1 2.7 1.1 4 0M24 19c1.3 1.1 2.7 1.1 4 0M17 25c1.8 1.9 5.2 1.9 7 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
-        <Circle cx="14.5" cy="23" r="1.3" fill="#e89aaa" opacity="0.55" /><Circle cx="27.5" cy="23" r="1.3" fill="#e89aaa" opacity="0.55" />
-      </>}
-      {estado.id === 'bien' && <>
-        <Circle cx="16" cy="19" r="1.3" fill="#79513f" /><Circle cx="26" cy="19" r="1.3" fill="#79513f" />
-        <Path d="M17 25c1.6 1.2 4.4 1.2 6 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
-      </>}
-      {estado.id === 'hambre' && <>
-        <Circle cx="16" cy="19" r="1.3" fill="#79513f" /><Circle cx="26" cy="19" r="1.3" fill="#79513f" />
-        <Path d="M17 26c1.6-1.1 4.4-1.1 6 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
-      </>}
-      {estado.id === 'enojado' && <>
-        <Path d="m13.5 17.5 4 1M28.5 17.5l-4 1" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
-        <Circle cx="16" cy="21" r="1.1" fill="#79513f" /><Circle cx="26" cy="21" r="1.1" fill="#79513f" />
-        <Path d="M17 27c1.6-1.2 4.4-1.2 6 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
-      </>}
-      {estado.id === 'dormido' && <>
-        <Path d="M13 20h5M24 20h5M18 26c1.4.8 3.6.8 5 0" fill="none" stroke="#79513f" strokeWidth="1.7" strokeLinecap="round" />
-        <Path d="M29 11h5l-3 3h3" fill="none" stroke="#887aa4" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-      </>}
-    </Svg>
-  );
-
   return <>
-    <Animated.View style={[styles.petMoodBubble, { transform: [{ scale: burbuja }] }]}>
-      {petMoodBubbleSvg}
-    </Animated.View>
     <View style={styles.satietyPanel}>
       <View style={styles.satietyTrack}>
         <View style={[styles.satietyFill, { height: `${saciedad}%`, backgroundColor: estado.color }]} />
@@ -960,6 +934,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   const petBreathScale = useRef(new Animated.Value(1)).current;
   const petFeedScale = useRef(new Animated.Value(1)).current;
   const petFeedY = useRef(new Animated.Value(0)).current;
+  const petIdentityOpacity = useRef(new Animated.Value(0)).current;
   const foodFeedbackTimer = useRef(null);
   const [foodFeedback, setFoodFeedback] = useState(null);
   const [selectedFoodIndex, setSelectedFoodIndex] = useState(-1);
@@ -1128,16 +1103,69 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
     undefined,
     equalEstadoInicio,
   );
+  const [animalitoDetalle, setAnimalitoDetalle] = useState({ id: null, apodo: '', iconoApodo: null, nivel: 1, listo: false });
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    const animalId = estadoInicio?.animalito;
+    if (!uid || !animalId) {
+      setAnimalitoDetalle({ id: null, apodo: '', iconoApodo: null, nivel: 1, listo: false });
+      return undefined;
+    }
+    const path = ['usuarios', uid, 'animalitos', animalId];
+    let activo = true;
+    let ultimoCache = '';
+    const mostrarRespaldo = setTimeout(() => {
+      if (!activo) return;
+      setAnimalitoDetalle(actual => actual.id === animalId && !actual.listo ? { ...actual, listo: true } : actual);
+    }, 450);
+    const aplicar = async (incoming = {}, guardarCache = false) => {
+      const cached = await getCachedDocument(uid, path).catch(() => null);
+      const base = isOfflineModeEnabled() && cached ? { ...cached, ...incoming } : { ...(cached || {}), ...incoming };
+      const proyectado = await getProjectedDocument(uid, path, base).catch(() => base);
+      if (!activo) return;
+      const siguiente = {
+        id: animalId,
+        apodo: String(proyectado?.apodo || '').trim(),
+        iconoApodo: String(proyectado?.iconoApodo || '').trim() || null,
+        nivel: Math.max(1, Number(proyectado?.nivel) || estadoInicio?.nivelAnimalito || 1),
+        listo: true,
+      };
+      clearTimeout(mostrarRespaldo);
+      setAnimalitoDetalle(actual => actual.id === siguiente.id && actual.apodo === siguiente.apodo && actual.iconoApodo === siguiente.iconoApodo && actual.nivel === siguiente.nivel && actual.listo === siguiente.listo ? actual : siguiente);
+      if (guardarCache) {
+        const firma = JSON.stringify(proyectado || {});
+        if (firma !== ultimoCache) {
+          ultimoCache = firma;
+          cacheDocument(uid, path, proyectado || {}).catch(() => {});
+        }
+      }
+    };
+    setAnimalitoDetalle({ id: animalId, apodo: '', iconoApodo: null, nivel: estadoInicio.nivelAnimalito || 1, listo: false });
+    getCachedDocument(uid, path).then(cached => { if (cached) aplicar(cached, false); }).catch(() => {});
+    const quitarCache = subscribeCachedDocument(uid, path, data => { if (data) aplicar(data, false); });
+    const unsub = onSnapshot(doc(db, ...path), snapshot => aplicar(snapshot.data() || {}, true), () => {});
+    return () => { activo = false; clearTimeout(mostrarRespaldo); unsub(); quitarCache(); };
+  }, [estadoInicio?.animalito]);
+
+  useEffect(() => {
+    petIdentityOpacity.stopAnimation();
+    petIdentityOpacity.setValue(0);
+    if (!animalitoDetalle.listo) return undefined;
+    const animation = Animated.timing(petIdentityOpacity, { toValue: 1, duration: 340, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [animalitoDetalle.apodo, animalitoDetalle.iconoApodo, animalitoDetalle.id, animalitoDetalle.listo, petIdentityOpacity]);
 
   useEffect(() => {
     if (overlayActive || !estadoInicio?.animalito) setSelectedFoodIndex(-1);
   }, [estadoInicio?.animalito, overlayActive]);
 
   useEffect(() => {
-    if (selectedFoodIndex < 0) return undefined;
+    if (selectedFoodIndex < 0 || arrastreActivo) return undefined;
     const timer = setTimeout(() => setSelectedFoodIndex(-1), 6000);
     return () => clearTimeout(timer);
-  }, [selectedFoodIndex]);
+  }, [arrastreActivo, selectedFoodIndex]);
 
   const seleccionarAlimento = useCallback(() => {
     const disponibles = ALIMENTOS.filter(alimento => Number(userAlimentos?.[alimento.id]) > 0);
@@ -1283,6 +1311,9 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
           };
   }, [abrirComerciante, actividadPareja, comercianteNuevo, estadoInicio?.animalito, estadoInicio?.pareja, faltanParaBonus, navigation, nivelJuego, parejaInicio, partidasCompletadas, relojActividad]);
 
+  const animalitoBase = ANIMALITOS.find(animal => animal.id === animalitoDetalle.id);
+  const apodoVisible = animalitoDetalle.apodo || animalitoBase?.nombre || 'Tu compañero';
+
   return (
     <OverlayContext.Provider value={overlayActive}>
       <View style={[styles.container, style]}>
@@ -1318,6 +1349,16 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
             <View ref={petDropZoneRef} collapsable={false} pointerEvents="none" style={[styles.petDropZone, { backgroundColor: zonaAlimentar ? 'rgba(40,190,75,0.42)' : 'rgba(220,45,45,0.34)' }]} />
           </View>
         </Animated.View>
+        {estadoInicio?.animalito && animalitoDetalle.listo && <Animated.View style={[styles.petIdentity, { opacity: petIdentityOpacity, transform: [{ translateY: petIdentityOpacity.interpolate({ inputRange: [0, 1], outputRange: [4, 0] }) }] }]} pointerEvents="none">
+          <View style={styles.petIdentityNameRow}>
+            {animalitoDetalle.iconoApodo && <MaterialIcons name={animalitoDetalle.iconoApodo} size={13} color="#b94f6d" />}
+            <Text style={styles.petIdentityName} numberOfLines={1}>{apodoVisible}</Text>
+          </View>
+          <View style={styles.petIdentityLevel}>
+            <View style={styles.petIdentityLevelDot} />
+            <Text style={styles.petIdentityLevelText}>nivel {animalitoDetalle.nivel}</Text>
+          </View>
+        </Animated.View>}
         {estadoInicio?.animalito && <CuidadoAnimal parejaUid={estadoInicio?.pareja} targetRef={petDropZoneRef} disabled={overlayActive} onFed={reaccionarAlComer} dropRef={feedDropRef} hoverRef={feedHoverRef} onZoneChange={setZonaAlimentar} draggingRef={draggingRef} />}
         {foodFeedback && <Animated.View key={foodFeedback.key} style={styles.foodFeedback}><Text style={styles.foodFeedbackEmoji}>{foodFeedback.emoji}</Text><Text style={styles.foodFeedbackText}>+{foodFeedback.recuperado}</Text></Animated.View>}
         {avisoSeleccion && <View style={[styles.feedNotice, styles.feedNoticeSelection]} pointerEvents="none"><Text style={styles.feedNoticeText}>{avisoSeleccion}</Text></View>}
@@ -1331,7 +1372,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
             <View style={styles.canjearIcon}><MaterialIcons name="pets" size={20} color="#f8edf4" /></View>
           </TouchableOpacity>
         </View>
-        <View style={styles.accesosInicioWrap}>
+        <View style={[styles.accesosInicioWrap, arrastreActivo && styles.accesosInicioWrapDragging]}>
           <TouchableOpacity style={[styles.accesoInicioBtn, styles.accesoInicioFirst]} onPress={() => setInventarioAbierto(true)} activeOpacity={0.75}>
             <MaterialIcons name="inventory-2" size={19} color="#b87945" />
             <Text style={styles.accesoInicioText}>Inventario</Text>
@@ -1452,6 +1493,7 @@ const styles = StyleSheet.create({
   regaloDiarioModalSub: { color: '#9c7644', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '800', letterSpacing: 0.55, marginTop: 1 },
   regaloDiarioModalClose: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: 'rgba(255,249,231,0.72)', borderWidth: 1, borderColor: '#d7b977' },
   accesosInicioWrap: { position: 'absolute', right: 198, bottom: 6, flexDirection: 'row', alignItems: 'center', zIndex: 220, elevation: 12 },
+  accesosInicioWrapDragging: { zIndex: 1100, elevation: 1100 },
   accesoInicioBtn: { width: 50, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: 0, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.28, shadowRadius: 6, elevation: 12 },
   accesoInicioFirst: { borderTopLeftRadius: 8, borderBottomLeftRadius: 8 },
   accesoInicioLast: { borderTopRightRadius: 8, borderBottomRightRadius: 8 },
@@ -1503,10 +1545,14 @@ const styles = StyleSheet.create({
   petTouch: { position: 'absolute', width: 112, height: 112, top: -10, left: -11, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
   playerFill: { ...StyleSheet.absoluteFillObject },
   playerImage: { width: 112, height: 112, top: -10, left: -11 },
+  petIdentity: { position: 'absolute', left: '50%', bottom: 172, width: 150, marginLeft: -78, alignItems: 'center', justifyContent: 'center', zIndex: 425, elevation: 425 },
+  petIdentityNameRow: { maxWidth: 150, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  petIdentityName: { maxWidth: 122, color: '#60373f', fontFamily: 'Delius', fontSize: 12.5, lineHeight: 15, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(255,248,233,0.98)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+  petIdentityLevel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 0 },
+  petIdentityLevelDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#e3b55f', shadowColor: '#fff3ba', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 2, elevation: 1 },
+  petIdentityLevelText: { color: '#9a624c', fontFamily: 'Delius', fontSize: 7.4, lineHeight: 9, fontWeight: '900', letterSpacing: 0.15, textShadowColor: 'rgba(255,248,233,0.94)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   petDropZone: { position: 'absolute', width: 76, height: 80, top: 69, left: 63, borderRadius: 999, opacity: 0, zIndex: 999, elevation: 999 },
   playerShadow: { position: 'absolute', left: '50%', bottom: 70, marginLeft: -54, width: 108, height: 32, zIndex: 0, shadowColor: '#5b3845', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.22, shadowRadius: 9, elevation: 2 },
-  petMoodBubble: { position: 'absolute', left: '50%', bottom: 124, marginLeft: 51, zIndex: 430, width: 46, height: 46, shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.24, shadowRadius: 5, elevation: 8 },
-  petMoodSvg: { position: 'absolute', left: 0, top: 0, right: 0, bottom: 0 },
   satietyPanel: { position: 'absolute', left: '50%', bottom: 79, marginLeft: -69, zIndex: 415, width: 16, height: 70, flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 1 },
   satietyIconWrap: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(112,73,55,0.72)', borderWidth: 1, borderColor: 'rgba(255,224,157,0.7)', borderRadius: 3 },
   satietyTrack: { flex: 1, width: 10, overflow: 'hidden', borderRadius: 3, backgroundColor: 'rgba(86,57,54,0.48)', borderWidth: 1, borderColor: 'rgba(255,241,210,0.82)', justifyContent: 'flex-end', shadowColor: '#6c4935', shadowOffset: { width: 1, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
@@ -1551,7 +1597,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: '50%',
     left: '50%',
-    transform: [{ translateX: -350 }, { translateY: -47 }],
+    transform: [{ translateX: -350 }, { translateY: 4 }],
     zIndex: 200,
     elevation: 200,
   },
@@ -1567,7 +1613,7 @@ const styles = StyleSheet.create({
   canjearInfo: { flex: 1, marginLeft: 6 },
   canjearSubtext: { color: '#704b6b', fontFamily: 'Delius', fontSize: 6, fontWeight: '700', marginTop: 0 },
   temporadasQuickWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: -98 }], zIndex: 200, elevation: 200 },
-  comercianteQuickWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: 4 }], zIndex: 200, elevation: 200 },
+  comercianteQuickWrap: { position: 'absolute', top: '50%', left: '50%', transform: [{ translateX: -350 }, { translateY: -47 }], zIndex: 200, elevation: 200 },
   temporadasQuickBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, borderRadius: 8, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.25, shadowRadius: 5, elevation: 7 },
   temporadasQuickIcon: { width: 25, height: 25, borderRadius: 7, backgroundColor: '#b07a43', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#fff0c5' },
   temporadasQuickTitle: { color: '#65492f', fontFamily: 'Delius', fontSize: 7.5, fontWeight: '900', letterSpacing: 0.15 },
