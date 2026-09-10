@@ -155,6 +155,8 @@ const isNetworkError = error => {
   const code = String(error?.code || '').toLowerCase();
   const message = String(error?.message || '').toLowerCase();
   return !code || code.includes('unavailable') || code.includes('deadline') || code.includes('network')
+    || code.includes('functions/internal') || code.includes('functions/unknown') || code.includes('functions/cancelled')
+    || code === 'internal' || code === 'unknown' || code === 'cancelled'
     || code.includes('failed-precondition') || message.includes('network') || message.includes('offline')
     || message.includes('timeout') || message.includes('client is offline');
 };
@@ -214,7 +216,18 @@ const enqueue = async operation => {
 
 const execute = async operation => {
   if (operation.kind === 'callable') {
-    return httpsCallable(functions, operation.name)(decodeValue(operation.data || {}));
+    const callable = httpsCallable(functions, operation.name);
+    try {
+      // Mantiene el mismo comportamiento que los envíos directos: Firebase
+      // puede necesitar renovar el token antes de aceptar una callable.
+      await auth.currentUser?.getIdToken();
+      return callable(decodeValue(operation.data || {}));
+    } catch (error) {
+      const unauthenticated = error?.code === 'functions/unauthenticated';
+      if (!unauthenticated || !auth.currentUser) throw error;
+      await auth.currentUser.getIdToken(true);
+      return callable(decodeValue(operation.data || {}));
+    }
   }
   const reference = doc(db, ...operation.path);
   if (operation.kind === 'delete') return deleteDoc(reference);

@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { httpsCallable } from 'firebase/functions';
-import { addDoc, collection, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import { auth, db, functions } from '../firebaseConfig';
+import { collection, doc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { auth, db } from '../firebaseConfig';
+import { getCachedDocument, isOfflineModeEnabled, syncAddDoc, syncCallable, syncSetDoc } from './offlineSync';
 
 const BUZON_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 const FCM_TOKEN_STORAGE_KEY = '@amor/fcm-device-token';
@@ -45,23 +45,6 @@ class NotificationSystem {
     this._tokenListener = null;
   }
 
-  async _callFunction(name, payload) {
-    const user = auth.currentUser;
-    if (!user) return { success: false, error: 'auth_not_ready' };
-    const callable = httpsCallable(functions, name);
-    try {
-      await user.getIdToken();
-      const response = await callable(payload);
-      return response?.data ?? response;
-    } catch (error) {
-      const unauthenticated = error?.code === 'functions/unauthenticated';
-      if (!unauthenticated || !auth.currentUser) throw error;
-      await auth.currentUser.getIdToken(true);
-      const response = await callable(payload);
-      return response?.data ?? response;
-    }
-  }
-
   async _persistFcmToken(rawToken) {
     const token = normalizeToken(rawToken);
     if (!token) return null;
@@ -70,10 +53,15 @@ class NotificationSystem {
     await AsyncStorage.setItem(FCM_TOKEN_STORAGE_KEY, token).catch(() => {});
     if (!auth.currentUser) return token;
 
-    const result = await this._callFunction('registerFcmToken', {
+    const response = await syncCallable('registerFcmToken', {
       token,
       platform: Platform.OS,
     });
+    const result = response?.data ?? response;
+    if (response?.pending) {
+      console.log('[FCM] Registro del dispositivo en cola; se completará al volver Internet');
+      return token;
+    }
     if (result?.success === false) throw new Error(result.error || 'fcm_registration_failed');
     console.log('[FCM] Token registrado', {
       uid: auth.currentUser?.uid,
@@ -122,7 +110,7 @@ class NotificationSystem {
       || normalizeToken(await AsyncStorage.getItem(FCM_TOKEN_STORAGE_KEY).catch(() => null));
     try {
       if (uid && token && auth.currentUser?.uid === uid) {
-        await this._callFunction('unregisterFcmToken', { token });
+        await syncCallable('unregisterFcmToken', { token }, { uid });
       }
     } catch (error) {
       console.warn('[FCM] No se pudo desvincular el token remoto', error?.message || error);
@@ -146,10 +134,7 @@ class NotificationSystem {
       const user = auth.currentUser;
       if (!user) return;
       const userDocRef = doc(db, 'usuarios', user.uid);
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        await updateDoc(userDocRef, { isOnline: false, lastSeen: new Date() });
-      }
+      await syncSetDoc(userDocRef, { isOnline: false, lastSeen: new Date() }, { merge: true });
     } catch (error) {
       console.error('Error notificando desconexión:', error);
     }
@@ -157,9 +142,18 @@ class NotificationSystem {
 
   async sendFcmToPartner(title, body, data = {}) {
     try {
-      return await this._callFunction('sendFcmNotification', { title, body, data });
+      const response = await syncCallable('sendFcmNotification', { title, body, data });
+      if (response?.pending) {
+        console.log('[FCM] Notificación remota en cola; se enviará al volver Internet', { type: data?.type });
+        return { success: false, pending: true, error: 'offline_queued' };
+      }
+      return response?.data ?? response;
     } catch (error) {
-      console.error('[FCM] Error enviando la notificación', error?.message || error);
+      if (isOfflineModeEnabled()) {
+        console.log('[FCM] Conexión perdida; la notificación quedó para sincronizarse');
+      } else {
+        console.error('[FCM] Error enviando la notificación', error?.message || error);
+      }
       return { success: false, error: error?.code || error?.message || 'fcm_send_failed' };
     }
   }
@@ -170,8 +164,43 @@ class NotificationSystem {
   }
 
   async notifyPartnerUserEntered(userId, userName) {
+    const texto = `${userName || 'Tu pareja'} acaba de conectarse, que pesad@...`;
+    if (!userId || auth.currentUser?.uid !== userId) return;
+    if (isOfflineModeEnabled()) {
+      let partnerId = null;
+      try {
+        const cachedUser = await getCachedDocument(userId, ['usuarios', userId]);
+        partnerId = cachedUser?.pareja;
+        if (partnerId && partnerId !== userId) {
+          const cachedPartner = await getCachedDocument(userId, ['usuarios', partnerId]);
+          const lastNotif = cachedPartner?.lastEntradaNotif;
+          const lastMs = lastNotif?.toMillis ? lastNotif.toMillis() : Number(lastNotif);
+          if (!lastMs || Date.now() - lastMs >= 2 * 60 * 1000) {
+            // Una fecha local permite aplicar el throttle incluso antes de
+            // que la operación pendiente sea enviada a Firestore.
+            await syncSetDoc(doc(db, 'usuarios', partnerId), { lastEntradaNotif: new Date() }, { merge: true });
+            await syncAddDoc(collection(db, 'buzon'), {
+              para: partnerId,
+              tipo: 'pareja_conectada',
+              creadoEn: new Date(),
+              expiraEn: new Date(Date.now() + BUZON_RETENTION_MS),
+              leido: false,
+              de: userId,
+              texto,
+            });
+          }
+        }
+      } catch (error) {
+        console.log('[FCM] No se pudo guardar localmente el aviso de conexión', error?.message || error);
+      }
+      const pairKey = partnerId ? [String(userId), String(partnerId)].sort().join('_') : null;
+      return this.sendFcmToPartner(
+        '💕 Tu amor está aquí',
+        texto,
+        { type: 'user_pair_entered', userId, partnerId, ...(pairKey ? { collapseKey: `user_pair_entered_${pairKey}` } : {}) },
+      );
+    }
     try {
-      if (!userId || auth.currentUser?.uid !== userId) return;
       const userRef = doc(db, 'usuarios', userId);
       const userSnap = await getDoc(userRef);
       if (!userSnap.exists() || auth.currentUser?.uid !== userId) return;
@@ -190,27 +219,29 @@ class NotificationSystem {
         if (Date.now() - lastMs < throttleMs) return;
       }
 
-      await setDoc(partnerRef, { lastEntradaNotif: serverTimestamp() }, { merge: true });
+      await syncSetDoc(partnerRef, { lastEntradaNotif: serverTimestamp() }, { merge: true });
       if (auth.currentUser?.uid !== userId) return;
 
-      await addDoc(collection(db, 'buzon'), {
+      await syncAddDoc(collection(db, 'buzon'), {
         para: partnerId,
         tipo: 'pareja_conectada',
         creadoEn: serverTimestamp(),
         expiraEn: new Date(Date.now() + BUZON_RETENTION_MS),
         leido: false,
         de: userId,
-        texto: `${userName || 'Tu pareja'} acaba de conectarse, que pesad@...`,
+        texto,
       });
 
       const pairKey = [String(userId), String(partnerId)].sort().join('_');
       await this.sendFcmToPartner(
         '💕 Tu amor está aquí',
-        `${userName || 'Tu pareja'} acaba de conectarse, que pesad@...`,
+        texto,
         { type: 'user_pair_entered', userId, partnerId, collapseKey: `user_pair_entered_${pairKey}` },
       );
     } catch (error) {
-      console.error('Error en notifyPartnerUserEntered:', error);
+      if (isOfflineModeEnabled()) {
+        await this.sendFcmToPartner('💕 Tu amor está aquí', texto, { type: 'user_pair_entered', userId });
+      } else console.error('Error en notifyPartnerUserEntered:', error);
     }
   }
 
@@ -219,15 +250,21 @@ class NotificationSystem {
       const currentUser = auth.currentUser;
       const senderId = fromUserId || currentUser?.uid;
       if (!senderId || currentUser?.uid !== senderId) return null;
+      const baseData = { ...data, fromUserId: senderId };
+      if (isOfflineModeEnabled()) return await this.sendFcmToPartner(title, body, baseData);
       const fromSnap = await getDoc(doc(db, 'usuarios', senderId));
       if (!fromSnap.exists() || !fromSnap.data().pareja) return null;
       const enriched = {
-        ...data,
+        ...baseData,
         fromUserId: senderId,
         fromName: this._getSenderDisplayName(fromSnap.data()),
       };
       return await this.sendFcmToPartner(title, body, enriched);
     } catch (error) {
+      if (isOfflineModeEnabled()) {
+        const senderId = fromUserId || auth.currentUser?.uid;
+        if (senderId) return this.sendFcmToPartner(title, body, { ...data, fromUserId: senderId });
+      }
       console.error('Error enviando notificación a la pareja:', error);
       return null;
     }

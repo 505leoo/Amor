@@ -11,9 +11,9 @@ export const SinAnimal = memo(() => (
   </View>
 ));
 
-const PlayerContent = memo(({ animalito, skin, loading, imageStyle, placeholder, onLoadStart, onLoad, onError }) => {
+const PlayerContent = memo(({ animalito, skin, staticSource, loading, imageStyle, placeholder, onLoadStart, onLoad, onError }) => {
   const skinsDisponibles = IMAGENES_POR_SKIN[animalito] || {};
-  const source = animalito ? (skinsDisponibles[skin || 'default'] ?? skinsDisponibles.default ?? ANIMALITOS_POR_ID[animalito]?.imagen ?? null) : null;
+  const source = staticSource ?? (animalito ? (skinsDisponibles[skin || 'default'] ?? skinsDisponibles.default ?? ANIMALITOS_POR_ID[animalito]?.imagen ?? null) : null);
 
   return (
     <>
@@ -34,7 +34,7 @@ const PlayerContent = memo(({ animalito, skin, loading, imageStyle, placeholder,
   );
 });
 
-const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, disabled, dropZoneRef, dropZoneActive = false }) => {
+const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, disabled, dropZoneRef, dropZoneActive = false, staticSource = null }) => {
   const { data: userData, loaded: userLoaded, uid } = useUserDocument(
     data => ({ animalito: data?.animalito, skin: data?.skin }),
     uidProp,
@@ -44,8 +44,8 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
   const imageLoaded = useRef(false);
   const animalito = userData?.animalito ?? null;
   const skin = userData?.skin ?? 'default';
-  const loading = !disabled && Boolean(uid) && !userLoaded;
-  const sourceReady = Boolean(animalito && (IMAGENES_POR_SKIN[animalito]?.[skin] || IMAGENES_POR_SKIN[animalito]?.default || ANIMALITOS_POR_ID[animalito]?.imagen));
+  const loading = !staticSource && !disabled && Boolean(uid) && !userLoaded;
+  const sourceReady = Boolean(staticSource || (animalito && (IMAGENES_POR_SKIN[animalito]?.[skin] || IMAGENES_POR_SKIN[animalito]?.default || ANIMALITOS_POR_ID[animalito]?.imagen)));
 
   const hidePlayer = useCallback(() => {
     playerReveal.stopAnimation();
@@ -71,19 +71,23 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
       hidePlayer();
       return;
     }
+    if (staticSource) {
+      revealPlayer();
+      return;
+    }
     if (!uid || !userLoaded) hidePlayer();
     else if (!animalito || sourceReady || imageLoaded.current) revealPlayer();
-  }, [animalito, disabled, hidePlayer, revealPlayer, sourceReady, uid, userLoaded]);
+  }, [animalito, disabled, hidePlayer, revealPlayer, sourceReady, staticSource, uid, userLoaded]);
 
   useEffect(() => {
-    if (disabled || !uid || !userLoaded || !sourceReady || imageLoaded.current) return undefined;
+    if (disabled || staticSource || !uid || !userLoaded || !sourceReady || imageLoaded.current) return undefined;
     const fallback = setTimeout(revealPlayer, 260);
     return () => clearTimeout(fallback);
-  }, [disabled, revealPlayer, sourceReady, uid, userLoaded]);
+  }, [disabled, revealPlayer, sourceReady, staticSource, uid, userLoaded]);
 
   useEffect(() => {
-    if (!loading && !animalito) revealPlayer();
-  }, [animalito, loading, revealPlayer]);
+    if (staticSource || (!loading && !animalito)) revealPlayer();
+  }, [animalito, loading, revealPlayer, staticSource]);
 
   return (
     <View style={[styles.container, containerStyle]} pointerEvents="box-none">
@@ -91,6 +95,7 @@ const Player = memo(({ containerStyle, imageStyle, uid: uidProp, placeholder, di
         <PlayerContent
           animalito={animalito}
           skin={skin}
+          staticSource={staticSource}
           loading={loading}
           imageStyle={imageStyle}
           placeholder={placeholder}

@@ -327,7 +327,12 @@ export function RachaProvider({ children }) {
       const localDay = dayStateRef.current;
       const localObjectiveCount = OBJETIVO_IDS.filter(id => localDay?.objetivos?.[id]?.completado).length;
       const snapshotObjectiveCount = OBJETIVO_IDS.filter(id => siguienteDia.objetivos?.[id]?.completado).length;
-      if (isOfflineModeEnabled() && localDay?.fecha === dayKey && (localObjectiveCount > snapshotObjectiveCount || Number(localDay.puntosDia) > puntosDia)) {
+      const progresoLocalMayor = OBJETIVO_IDS.some(id => {
+        const local = localDay?.objetivos?.[id] || {};
+        const remoto = siguienteDia.objetivos?.[id] || {};
+        return (Number(local.cantidad) || (local.completado ? 1 : 0)) > (Number(remoto.cantidad) || (remoto.completado ? 1 : 0));
+      });
+      if (localDay?.fecha === dayKey && (progresoLocalMayor || (isOfflineModeEnabled() && (localObjectiveCount > snapshotObjectiveCount || Number(localDay.puntosDia) > puntosDia)))) {
         setLoading(actual => actual ? false : actual);
         return;
       }

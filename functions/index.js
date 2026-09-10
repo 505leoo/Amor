@@ -40,8 +40,8 @@ const PENALIZACION_DIA_UNICO_OBJETIVO = 3;
 const MAX_CONDUCTA_EVENTOS = 24;
 const BITACORA_INTERVALO_MS = 10 * 60 * 1000;
 // Mantenerlo alineado con data/alimentos.js: la saciedad completa tarda
-// aproximadamente 8 horas en llegar a cero.
-const PERDIDA_SACIEDAD_POR_HORA = 100 / 8;
+// aproximadamente 12 horas en llegar a cero.
+const PERDIDA_SACIEDAD_POR_HORA = 100 / 12;
 const OBJETIVOS_RACHA = {
   inicio: {puntos: 2, meta: 1, hitos: {1: 2}},
   nivel: {puntos: 0, meta: 1, hitos: {1: 3}},

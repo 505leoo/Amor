@@ -18,8 +18,9 @@ export const ALIMENTOS = [
   { id: 'coco', nombre: 'Coco tropical', emoji: '🥥', saciedad: 26, precio: 225, cantidad: 2, descripcion: 'Una sorpresa refrescante. Recupera 26 puntos de saciedad por unidad.' },
 ];
 
-// La saciedad completa tarda aproximadamente 8 horas en llegar a cero.
-export const PERDIDA_SACIEDAD_POR_HORA = 100 / 8;
+// La saciedad completa tarda aproximadamente 12 horas en llegar a cero.
+// Da tiempo para cuidarlo con calma sin dejar de hacer importante alimentarlo.
+export const PERDIDA_SACIEDAD_POR_HORA = 100 / 12;
 
 const convertirFechaAMs = valor => {
   if (!valor) return 0;

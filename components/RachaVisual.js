@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialIcons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
@@ -104,7 +104,7 @@ export const RachaCountdown = ({ compact = false, emphasis = false }) => {
 // La barra muestra las tres zonas de conducta y sus dos límites visuales.
 // El color avanza progresivamente de riesgo a avance y se comparte entre
 // Inicio, Perfil y las vistas de pareja.
-export const RachaSegmentedBar = ({ points = 0, dailyPoints, dailyMaxPoints = PUNTOS_MAX_OBJETIVOS_DIARIOS, compact = false, showLabels = true }) => {
+export const RachaSegmentedBar = ({ points = 0, dailyPoints, dailyMaxPoints = PUNTOS_MAX_OBJETIVOS_DIARIOS, compact = false, showLabels = true, loading = false }) => {
   const safeDailyPoints = puntosConductaSeguro(dailyPoints ?? points);
   const safeDailyMax = Math.max(1, puntosConductaSeguro(dailyMaxPoints) || PUNTOS_MAX_OBJETIVOS_DIARIOS || 1);
   // La barra representa únicamente el avance de los objetivos de hoy. Tiene
@@ -114,19 +114,39 @@ export const RachaSegmentedBar = ({ points = 0, dailyPoints, dailyMaxPoints = PU
   const markerProgress = 0.1 + (dailyProgress * 0.9);
   const markerColor = dailyProgress >= 1 ? '#648b67' : safeDailyPoints < 0 ? '#a6535d' : '#a7655d';
   const markerPosition = useRef(new Animated.Value(markerProgress)).current;
+  const markerOpacity = useRef(new Animated.Value(loading ? 0 : 1)).current;
+  const lastProgressRef = useRef(markerProgress);
+  const hasResolvedRef = useRef(!loading);
 
   useEffect(() => {
+    if (loading) {
+      // Mientras llega Firestore no mandamos la aguja a cero: conserva su
+      // última posición y evita el destello engañoso al abrir el modal.
+      Animated.timing(markerOpacity, { toValue: 0, duration: 120, useNativeDriver: false }).start();
+      return undefined;
+    }
+    if (!hasResolvedRef.current) {
+      hasResolvedRef.current = true;
+      lastProgressRef.current = markerProgress;
+      markerPosition.setValue(markerProgress);
+      Animated.timing(markerOpacity, { toValue: 1, duration: 180, useNativeDriver: false }).start();
+      return undefined;
+    }
+    const baja = markerProgress < lastProgressRef.current;
     const animation = Animated.timing(markerPosition, {
       toValue: markerProgress,
-      duration: 360,
+      duration: baja ? 1250 : 720,
+      easing: baja ? Easing.out(Easing.cubic) : Easing.out(Easing.quad),
       useNativeDriver: false,
     });
+    lastProgressRef.current = markerProgress;
+    Animated.timing(markerOpacity, { toValue: 1, duration: 140, useNativeDriver: false }).start();
     animation.start();
     return () => animation.stop();
-  }, [markerPosition, markerProgress]);
+  }, [loading, markerOpacity, markerPosition, markerProgress]);
 
   return <View style={[segmentedStyles.wrap, compact && segmentedStyles.wrapCompact]}>
-    <Animated.View pointerEvents="none" style={[segmentedStyles.marker, compact && segmentedStyles.markerCompact, { left: markerPosition.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}>
+    <Animated.View pointerEvents="none" style={[segmentedStyles.marker, compact && segmentedStyles.markerCompact, { opacity: markerOpacity, left: markerPosition.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]}>
       <Svg width={12} height={8} viewBox="0 0 12 8">
         <Path d="M0 0H12L6 8Z" fill={markerColor} />
       </Svg>
@@ -307,7 +327,7 @@ export const RachaCompletionRitual = () => {
 };
 
 export const RachaVisualModal = ({ visible, onClose }) => {
-  const { day, streakDays, racha } = useRacha();
+  const { day, streakDays, racha, loading } = useRacha();
   const today = useMemo(() => {
     const date = day?.fecha ? new Date(`${day.fecha}T12:00:00`) : new Date();
     return new Intl.DateTimeFormat('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }).format(date).toUpperCase();
@@ -333,7 +353,7 @@ export const RachaVisualModal = ({ visible, onClose }) => {
         <View style={modalStyles.contentRow}>
           <View style={modalStyles.summaryColumn}>
             <View style={modalStyles.hero}><View style={modalStyles.flame}><Text style={modalStyles.flameText}>🔥</Text></View><View><Text style={modalStyles.heroNumber}>{streakDays} {streakDays === 1 ? 'día' : 'días'}</Text><Text style={modalStyles.heroCaption}>{totalPoints} puntos acumulados</Text></View></View>
-            <View style={modalStyles.progressCard}><View style={modalStyles.progressHeader}><Text style={[modalStyles.progressTitle, completedObjectives >= objetivosDiarios.length && modalStyles.progressTitleExcellent]}>{calificacionDia.toUpperCase()} · {completedObjectives}/{objetivosDiarios.length}</Text><Text style={modalStyles.progressScore}>{dailyPoints}/{dailyMaxPoints} pts</Text></View><RachaSegmentedBar points={totalPoints} dailyPoints={dailyPoints} dailyMaxPoints={dailyMaxPoints} /></View>
+            <View style={modalStyles.progressCard}><View style={modalStyles.progressHeader}><Text style={[modalStyles.progressTitle, completedObjectives >= objetivosDiarios.length && modalStyles.progressTitleExcellent]}>{calificacionDia.toUpperCase()} · {completedObjectives}/{objetivosDiarios.length}</Text><Text style={modalStyles.progressScore}>{dailyPoints}/{dailyMaxPoints} pts</Text></View><RachaSegmentedBar points={totalPoints} dailyPoints={dailyPoints} dailyMaxPoints={dailyMaxPoints} loading={loading} /></View>
           </View>
           <View style={modalStyles.missionsColumn}>
             <Text style={modalStyles.missionsTitle}>OBJETIVOS DIARIOS</Text>

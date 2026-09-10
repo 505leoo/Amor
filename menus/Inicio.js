@@ -58,6 +58,14 @@ const nombreComponente = valor => ({
 }[String(valor || '').toLowerCase()] || 'Amor');
 const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
 const JUGAR_IMAGE = require('../assets/inicio/jugar.webp');
+const BOLSA_DORMIR_IMAGE = require('../assets/Animalitos/bolsa-dormir.webp');
+const DURACION_DORMIR_MS = 8 * 60 * 60 * 1000;
+const formatoDormir = (hasta, ahora = Date.now()) => {
+  // Dejamos fuera el minuto que está transcurriendo: recién dormido se ve
+  // 7h 59m y al cambiar de hora no aparece el poco natural 5h 0m.
+  const minutos = Math.max(0, Math.ceil((Number(hasta) - ahora) / 60000) - 1);
+  return `${Math.floor(minutos / 60)}h ${minutos % 60}m`;
+};
 const selectEstadoInicio = data => {
   const animalito = data?.animalito || null;
   const estadoAnimalito = animalito ? data?.animalitos?.[animalito] || {} : {};
@@ -68,6 +76,7 @@ const selectEstadoInicio = data => {
     halconDesbloqueado: Boolean(data?.halconDesbloqueado),
     pareja: data?.pareja || null,
     diamantes: Number(data?.diamantes ?? data?.diamante) || 0,
+    animalitoDurmiendoHastaMs: Number(data?.animalitoDurmiendoHastaMs) || 0,
   };
 };
 const equalEstadoInicio = (a, b) => a?.animalito === b?.animalito
@@ -75,7 +84,8 @@ const equalEstadoInicio = (a, b) => a?.animalito === b?.animalito
   && a?.nivelAnimalito === b?.nivelAnimalito
   && a?.halconDesbloqueado === b?.halconDesbloqueado
   && a?.pareja === b?.pareja
-  && a?.diamantes === b?.diamantes;
+  && a?.diamantes === b?.diamantes
+  && a?.animalitoDurmiendoHastaMs === b?.animalitoDurmiendoHastaMs;
 
 const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
   const activar = () => {
@@ -713,7 +723,7 @@ const AlimentoArrastrable = memo(({ alimento, cantidad, disabled, onDrop, onDrag
   </Animated.View>;
 });
 
-const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, hoverRef, onZoneChange, draggingRef }) => {
+const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, hoverRef, onZoneChange, draggingRef, durmiendo = false }) => {
   const uid = auth.currentUser?.uid;
   const participantes = useMemo(() => uid ? [uid, parejaUid].filter(Boolean).sort() : [], [parejaUid, uid]);
   const cuidadoId = participantes.join('_');
@@ -728,6 +738,17 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   const zonaActivaRef = useRef(false);
   const hoverTimerRef = useRef(null);
   const zonaRectRef = useRef(null);
+  const satietyAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    satietyAnim.stopAnimation();
+    Animated.timing(satietyAnim, {
+      toValue: durmiendo ? 0 : 1,
+      duration: 520,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [durmiendo, satietyAnim]);
 
   useEffect(() => {
     if (!cuidadoRef) return undefined;
@@ -871,7 +892,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   }, [alimentar, targetRef]);
 
   const comprobarHover = useCallback((pageX, pageY) => {
-    if (!draggingRef?.current) return;
+    if (disabled || !draggingRef?.current) return;
     const evaluar = (x, y, width, height) => {
       // Histeresis mínima: evita que el estado parpadee por redondeos de
       // coordenadas mientras el dedo permanece cerca del borde.
@@ -910,13 +931,13 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   );
 
   return <>
-    <View style={styles.satietyPanel}>
+    <Animated.View style={[styles.satietyPanel, { opacity: satietyAnim, transform: [{ translateX: satietyAnim.interpolate({ inputRange: [0, 1], outputRange: [-3, 0] }) }, { scale: satietyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] }]} pointerEvents={durmiendo ? 'none' : 'auto'}>
       <View style={styles.satietyTrack}>
         <View style={[styles.satietyFill, { height: `${saciedad}%`, backgroundColor: estado.color }]} />
         <Text style={styles.satietyPercentage} pointerEvents="none" numberOfLines={1}>{Math.round(saciedad)}%</Text>
       </View>
       <View style={styles.satietyIconWrap}><IconoHambre /></View>
-    </View>
+    </Animated.View>
     {avisoAlimentacion && <View style={styles.feedNotice} pointerEvents="none"><Text style={styles.feedNoticeText}>{avisoAlimentacion}</Text></View>}
   </>;
 });
@@ -934,6 +955,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   const petBreathScale = useRef(new Animated.Value(1)).current;
   const petFeedScale = useRef(new Animated.Value(1)).current;
   const petFeedY = useRef(new Animated.Value(0)).current;
+  const petSleepTransition = useRef(new Animated.Value(0)).current;
   const petIdentityOpacity = useRef(new Animated.Value(0)).current;
   const foodFeedbackTimer = useRef(null);
   const [foodFeedback, setFoodFeedback] = useState(null);
@@ -946,6 +968,15 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   const [arrastreActivo, setArrastreActivo] = useState(false);
   const [avisoSeleccion, setAvisoSeleccion] = useState(null);
   const [rachaAbierta, setRachaAbierta] = useState(false);
+  const [alimentarVisible, setAlimentarVisible] = useState(false);
+  const alimentarTimerRef = useRef(null);
+  const [durmiendoHasta, setDurmiendoHasta] = useState(0);
+  const [relojDormir, setRelojDormir] = useState(Date.now());
+  const sueñoShortcutAnim = useRef(new Animated.Value(1)).current;
+  const petQuickAccessAnim = useRef(new Animated.Value(0)).current;
+  const sleepCounterAnim = useRef(new Animated.Value(0)).current;
+  const [mostrarContadorSueño, setMostrarContadorSueño] = useState(false);
+  const [contadorSueñoTexto, setContadorSueñoTexto] = useState('');
   const { registrarObjetivo } = useRacha();
   const avisoSeleccionTimer = useRef(null);
   const { data: userAlimentos } = useUserDocument(data => data?.alimentos || {});
@@ -1103,6 +1134,105 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
     undefined,
     equalEstadoInicio,
   );
+  const durmiendoActivo = durmiendoHasta > relojDormir;
+
+  useEffect(() => {
+    sueñoShortcutAnim.stopAnimation();
+    sueñoShortcutAnim.setValue(0.72);
+    Animated.spring(sueñoShortcutAnim, {
+      toValue: 1,
+      tension: 150,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+  }, [durmiendoActivo, sueñoShortcutAnim]);
+
+  useEffect(() => {
+    // Mantiene ambos estados montados y los cruza suavemente. Así, al cargar
+    // una sesión que ya estaba durmiendo no aparece primero el Animalito para
+    // cambiar de golpe a la bolsa.
+    petSleepTransition.stopAnimation();
+    Animated.timing(petSleepTransition, {
+      toValue: durmiendoActivo ? 1 : 0,
+      duration: 680,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+    return () => petSleepTransition.stopAnimation();
+  }, [durmiendoActivo, petSleepTransition]);
+
+  useEffect(() => {
+    petQuickAccessAnim.stopAnimation();
+    if (!alimentarVisible) {
+      petQuickAccessAnim.setValue(0);
+      return undefined;
+    }
+    petQuickAccessAnim.setValue(0.82);
+    const animation = Animated.spring(petQuickAccessAnim, {
+      toValue: 1,
+      tension: 145,
+      friction: 9,
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [alimentarVisible, petQuickAccessAnim]);
+
+  useEffect(() => {
+    sleepCounterAnim.stopAnimation();
+    if (durmiendoActivo) {
+      setMostrarContadorSueño(true);
+      sleepCounterAnim.setValue(0);
+      const animation = Animated.timing(sleepCounterAnim, { toValue: 1, duration: 520, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+      animation.start();
+      return () => animation.stop();
+    }
+    const animation = Animated.timing(sleepCounterAnim, { toValue: 0, duration: 520, easing: Easing.inOut(Easing.cubic), useNativeDriver: true });
+    animation.start(({ finished }) => { if (finished) setMostrarContadorSueño(false); });
+    return () => animation.stop();
+  }, [durmiendoActivo, sleepCounterAnim]);
+
+  useEffect(() => {
+    if (durmiendoActivo) setContadorSueñoTexto(formatoDormir(durmiendoHasta, relojDormir));
+  }, [durmiendoActivo, durmiendoHasta, relojDormir]);
+
+  useEffect(() => {
+    const guardado = Number(estadoInicio?.animalitoDurmiendoHastaMs) || 0;
+    setDurmiendoHasta(guardado > Date.now() ? guardado : 0);
+    setRelojDormir(Date.now());
+  }, [estadoInicio?.animalito, estadoInicio?.animalitoDurmiendoHastaMs]);
+
+  useEffect(() => {
+    if (!durmiendoHasta) return undefined;
+    const timer = setInterval(() => {
+      const ahora = Date.now();
+      setRelojDormir(ahora);
+      if (durmiendoHasta <= ahora) {
+        setDurmiendoHasta(0);
+        const uid = auth.currentUser?.uid;
+        if (uid) syncSetDoc(doc(db, 'usuarios', uid), { animalitoDurmiendoHastaMs: 0 }, { merge: true }).catch(() => {});
+      }
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [durmiendoHasta]);
+
+  const dormirAnimalito = useCallback(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid || durmiendoActivo) return;
+    const hasta = Date.now() + DURACION_DORMIR_MS;
+    setDurmiendoHasta(hasta);
+    setRelojDormir(Date.now());
+    setAlimentarVisible(false);
+    syncSetDoc(doc(db, 'usuarios', uid), { animalitoDurmiendoHastaMs: hasta }, { merge: true }).catch(error => console.warn('[Dormir] No se pudo guardar el descanso', error?.message || error));
+  }, [durmiendoActivo]);
+  const despertarAnimalito = useCallback(() => {
+    const uid = auth.currentUser?.uid;
+    setDurmiendoHasta(0);
+    setRelojDormir(Date.now());
+    setAlimentarVisible(false);
+    if (uid) syncSetDoc(doc(db, 'usuarios', uid), { animalitoDurmiendoHastaMs: 0 }, { merge: true }).catch(error => console.warn('[Dormir] No se pudo guardar el despertar', error?.message || error));
+  }, []);
+  const alternarSueño = durmiendoActivo ? despertarAnimalito : dormirAnimalito;
   const [animalitoDetalle, setAnimalitoDetalle] = useState({ id: null, apodo: '', iconoApodo: null, nivel: 1, listo: false });
 
   useEffect(() => {
@@ -1159,7 +1289,15 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
 
   useEffect(() => {
     if (overlayActive || !estadoInicio?.animalito) setSelectedFoodIndex(-1);
+    if (overlayActive || !estadoInicio?.animalito) setAlimentarVisible(false);
   }, [estadoInicio?.animalito, overlayActive]);
+
+  useEffect(() => {
+    clearTimeout(alimentarTimerRef.current);
+    if (!alimentarVisible) return undefined;
+    alimentarTimerRef.current = setTimeout(() => setAlimentarVisible(false), 7000);
+    return () => clearTimeout(alimentarTimerRef.current);
+  }, [alimentarVisible]);
 
   useEffect(() => {
     if (selectedFoodIndex < 0 || arrastreActivo) return undefined;
@@ -1316,7 +1454,12 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
 
   return (
     <OverlayContext.Provider value={overlayActive}>
-      <View style={[styles.container, style]}>
+      <View
+        style={[styles.container, style]}
+        onTouchEnd={() => {
+          if (alimentarVisible) setAlimentarVisible(false);
+        }}
+      >
         <RoomBackground heartDensity="none" />
         <StatusBar hidden={true} />
         <Text style={styles.pruebaHola}>Hola</Text>
@@ -1345,11 +1488,20 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
         </View>
         <Animated.View ref={petTargetRef} collapsable={false} style={[styles.player, { transform: [{ translateX: petIdleX }, { translateY: petIdleY }, { translateY: petFeedY }, { rotate: petIdleRotate.interpolate({ inputRange: [-1, 1], outputRange: ['-1deg', '1deg'] }) }, { scaleX: petIdleSquash.interpolate({ inputRange: [-1, 0, 1], outputRange: [1.015, 1, 0.985] }) }, { scaleY: petIdleSquash.interpolate({ inputRange: [-1, 0, 1], outputRange: [0.985, 1, 1.015] }) }, { scale: petIdleScale }, { scale: petBreathScale }, { scale: petFeedScale }] }]}>
           <View style={styles.petTouch} pointerEvents="none">
-            <Player containerStyle={styles.playerFill} imageStyle={styles.playerImage} disabled={overlayActive} />
+            <Animated.View style={[styles.playerFill, { opacity: petSleepTransition.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
+              <Player containerStyle={styles.playerFill} imageStyle={styles.playerImage} disabled={overlayActive || durmiendoActivo} />
+            </Animated.View>
+            <Animated.View style={[styles.playerFill, { opacity: petSleepTransition }]} pointerEvents="none">
+              <Player containerStyle={styles.playerFill} imageStyle={[styles.playerImage, styles.sleepingBagImage]} staticSource={BOLSA_DORMIR_IMAGE} />
+            </Animated.View>
             <View ref={petDropZoneRef} collapsable={false} pointerEvents="none" style={[styles.petDropZone, { backgroundColor: zonaAlimentar ? 'rgba(40,190,75,0.42)' : 'rgba(220,45,45,0.34)' }]} />
           </View>
         </Animated.View>
+        {estadoInicio?.animalito && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Abrir acciones del Animalito" activeOpacity={1} onTouchEnd={event => event.stopPropagation()} onPress={() => setAlimentarVisible(actual => !actual)} style={styles.petTouchHitbox} />}
         {estadoInicio?.animalito && animalitoDetalle.listo && <Animated.View style={[styles.petIdentity, { opacity: petIdentityOpacity, transform: [{ translateY: petIdentityOpacity.interpolate({ inputRange: [0, 1], outputRange: [4, 0] }) }] }]} pointerEvents="none">
+          {mostrarContadorSueño && <Animated.View style={[styles.petSleepCountdownWrap, { opacity: sleepCounterAnim, transform: [{ translateY: sleepCounterAnim.interpolate({ inputRange: [0, 1], outputRange: [5, 0] }) }, { scale: sleepCounterAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }] }]}> 
+            <Text style={styles.petSleepCountdown}>{contadorSueñoTexto}</Text>
+          </Animated.View>}
           <View style={styles.petIdentityNameRow}>
             {animalitoDetalle.iconoApodo && <MaterialIcons name={animalitoDetalle.iconoApodo} size={13} color="#b94f6d" />}
             <Text style={styles.petIdentityName} numberOfLines={1}>{apodoVisible}</Text>
@@ -1359,7 +1511,32 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
             <Text style={styles.petIdentityLevelText}>nivel {animalitoDetalle.nivel}</Text>
           </View>
         </Animated.View>}
-        {estadoInicio?.animalito && <CuidadoAnimal parejaUid={estadoInicio?.pareja} targetRef={petDropZoneRef} disabled={overlayActive} onFed={reaccionarAlComer} dropRef={feedDropRef} hoverRef={feedHoverRef} onZoneChange={setZonaAlimentar} draggingRef={draggingRef} />}
+        {estadoInicio?.animalito && <CuidadoAnimal parejaUid={estadoInicio?.pareja} targetRef={petDropZoneRef} disabled={overlayActive || durmiendoActivo} durmiendo={durmiendoActivo} onFed={reaccionarAlComer} dropRef={feedDropRef} hoverRef={feedHoverRef} onZoneChange={setZonaAlimentar} draggingRef={draggingRef} />}
+        {estadoInicio?.animalito && alimentarVisible && <Animated.View onTouchStart={event => event.stopPropagation()} onTouchEnd={event => event.stopPropagation()} style={[styles.petQuickAccess, arrastreActivo && styles.petQuickAccessDragging, { opacity: petQuickAccessAnim, transform: [{ translateY: petQuickAccessAnim.interpolate({ inputRange: [0, 1], outputRange: [7, 0] }) }, { scale: petQuickAccessAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] }]}>
+          <AlimentoArrastrable
+            alimento={selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex] : ALIMENTOS[0]}
+            cantidad={selectedFoodIndex >= 0 ? Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0) : 0}
+            disabled={durmiendoActivo || overlayActive || selectedFoodIndex < 0}
+            onDrop={(alimento, x, y) => feedDropRef.current?.(alimento, x, y)}
+            onDragMove={(x, y) => feedHoverRef.current?.(x, y)}
+            draggingRef={draggingRef}
+            onDragState={setArrastreActivo}
+            renderContent={({ ocultarIcono } = {}) => <>
+              <Text style={[styles.petQuickFoodEmoji, ocultarIcono && styles.foodOriginalIconHidden]}>{selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex]?.emoji : '🍽️'}</Text>
+              <Text style={[styles.petQuickAccessText, ocultarIcono && styles.foodOriginalIconHidden]}>Alimentar</Text>
+              {selectedFoodIndex >= 0 && <Text style={styles.petQuickAccessCount}>{Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0)}</Text>}
+            </>}
+            style={styles.petQuickAccessButton}
+            dragPreview
+            onPress={seleccionarAlimento}
+          />
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel={durmiendoActivo ? 'Despertar Animalito' : 'Dormir Animalito'} style={styles.petQuickSleep} activeOpacity={0.78} onPress={alternarSueño}>
+            <Animated.View style={[styles.petSleepShortcutContent, { opacity: sueñoShortcutAnim, transform: [{ scale: sueñoShortcutAnim }] }]}>
+              <MaterialIcons name={durmiendoActivo ? 'wb-sunny' : 'bedtime'} size={14} color="#ad5b78" />
+              <Text style={styles.petQuickSleepText}>{durmiendoActivo ? 'Despertar' : 'Dormir'}</Text>
+            </Animated.View>
+          </TouchableOpacity>
+        </Animated.View>}
         {foodFeedback && <Animated.View key={foodFeedback.key} style={styles.foodFeedback}><Text style={styles.foodFeedbackEmoji}>{foodFeedback.emoji}</Text><Text style={styles.foodFeedbackText}>+{foodFeedback.recuperado}</Text></Animated.View>}
         {avisoSeleccion && <View style={[styles.feedNotice, styles.feedNoticeSelection]} pointerEvents="none"><Text style={styles.feedNoticeText}>{avisoSeleccion}</Text></View>}
         <Pareja navigation={navigation} isPaused={overlayActive} />
@@ -1381,19 +1558,10 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
             <MaterialIcons name="local-fire-department" size={19} color="#c46d83" />
             <Text style={styles.accesoInicioText}>Racha</Text>
           </TouchableOpacity>
-          <AlimentoArrastrable
-            alimento={selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex] : ALIMENTOS[0]}
-            cantidad={selectedFoodIndex >= 0 ? Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0) : 0}
-            disabled={overlayActive || !estadoInicio?.animalito || selectedFoodIndex < 0}
-            onDrop={(alimento, x, y) => feedDropRef.current?.(alimento, x, y)}
-            onDragMove={(x, y) => feedHoverRef.current?.(x, y)}
-            draggingRef={draggingRef}
-            onDragState={setArrastreActivo}
-            renderContent={({ ocultarIcono } = {}) => <><Text style={[styles.foodSelectEmoji, ocultarIcono && styles.foodOriginalIconHidden]}>{selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex]?.emoji : '🍖'}</Text>{selectedFoodIndex >= 0 && <Text style={styles.foodSelectCount}>{Math.max(0, Number(userAlimentos?.[ALIMENTOS[selectedFoodIndex]?.id]) || 0)}</Text>}</>}
-            style={[styles.accesoInicioBtn, styles.accesoInicioLast, styles.foodAccessButton]}
-            dragPreview
-            onPress={seleccionarAlimento}
-          />
+          <TouchableOpacity style={[styles.accesoInicioBtn, styles.accesoInicioLast, styles.accesoInicioDisabled]} activeOpacity={0.8} onPress={() => global.showToast?.({ type: 'info', text1: 'Próximamente' })}>
+            <MaterialIcons name="hourglass-empty" size={18} color="#999287" />
+            <Text style={[styles.accesoInicioText, styles.accesoInicioTextDisabled]}>Próximamente</Text>
+          </TouchableOpacity>
         </View>
         {inventarioAbierto && <InventarioModal visible onClose={() => setInventarioAbierto(false)} />}
         <Descargas visible={descargasAbierta} onClose={() => { setDescargasAbierta(false); setOverlayActive(false); }} />
@@ -1437,6 +1605,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
             </View>
           </View>
         </TouchableOpacity>
+        {alimentarVisible && <TouchableOpacity style={styles.petQuickDismiss} activeOpacity={1} onPress={() => setAlimentarVisible(false)} />}
       </View>
     </OverlayContext.Provider>
   );
@@ -1543,10 +1712,25 @@ const styles = StyleSheet.create({
     elevation: 420,
   },
   petTouch: { position: 'absolute', width: 112, height: 112, top: -10, left: -11, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
+  petTouchHitbox: { position: 'absolute', left: '50%', bottom: 67, width: 90, height: 90, marginLeft: -48, backgroundColor: 'transparent', borderWidth: 0, borderColor: 'transparent', borderRadius: 45, zIndex: 1250, elevation: 1250 },
+  petQuickDismiss: { ...StyleSheet.absoluteFillObject, zIndex: 1200, elevation: 1200 },
+  petQuickAccess: { position: 'absolute', left: '50%', bottom: 98, marginLeft: 48, alignItems: 'center', paddingHorizontal: 1, paddingVertical: 2, borderRadius: 8, backgroundColor: 'rgba(255,247,225,0.90)', borderWidth: 1, borderColor: 'rgba(208,173,112,0.82)', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.16, shadowRadius: 4, elevation: 1300, zIndex: 1300 },
+  petQuickAccessDragging: { zIndex: 1400, elevation: 1400 },
+  petQuickAccessTitle: { marginBottom: 0, color: '#a87840', fontFamily: 'Delius', fontSize: 4.2, fontWeight: '900', letterSpacing: 0.45 },
+  petQuickAccessButton: { width: 43, height: 26, flexDirection: 'row', gap: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 6, backgroundColor: '#f1e1bd', borderWidth: 1, borderColor: '#d0ad70', shadowColor: '#5f4428', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.18, shadowRadius: 3, elevation: 20 },
+  petQuickAccessText: { marginTop: 0, color: '#76552f', fontFamily: 'Delius', fontSize: 4.6, fontWeight: '900' },
+  petQuickFoodEmoji: { fontSize: 14, lineHeight: 15, textAlign: 'center' },
+  petQuickAccessCount: { position: 'absolute', right: -2, top: -4, minWidth: 10, height: 10, paddingHorizontal: 2, borderRadius: 5, backgroundColor: '#bd6f83', borderWidth: 1, borderColor: '#fff1e2', color: '#fff', fontFamily: 'Delius', fontSize: 4.6, fontWeight: '900', textAlign: 'center' },
+  petQuickSleep: { width: 43, height: 26, alignItems: 'center', justifyContent: 'center', marginTop: 2, borderRadius: 8, backgroundColor: '#f5dce4', borderWidth: 1, borderColor: '#dca8b8', shadowColor: '#b96b84', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.16, shadowRadius: 3, elevation: 4 },
+  petSleepShortcutContent: { flexDirection: 'row', gap: 1, alignItems: 'center', justifyContent: 'center' },
+  petQuickSleepText: { color: '#ad5b78', fontFamily: 'Delius', fontSize: 4.6, fontWeight: '900' },
   playerFill: { ...StyleSheet.absoluteFillObject },
   playerImage: { width: 112, height: 112, top: -10, left: -11 },
+  sleepingBagImage: { top: -12 },
   petIdentity: { position: 'absolute', left: '50%', bottom: 172, width: 150, marginLeft: -78, alignItems: 'center', justifyContent: 'center', zIndex: 425, elevation: 425 },
   petIdentityNameRow: { maxWidth: 150, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 },
+  petSleepCountdownWrap: { alignItems: 'center', justifyContent: 'center' },
+  petSleepCountdown: { marginBottom: 1, color: '#7c6d80', fontFamily: 'Delius', fontSize: 7.2, lineHeight: 9, fontWeight: '900', letterSpacing: 0.25, textShadowColor: 'rgba(255,248,233,0.94)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   petIdentityName: { maxWidth: 122, color: '#60373f', fontFamily: 'Delius', fontSize: 12.5, lineHeight: 15, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(255,248,233,0.98)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
   petIdentityLevel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 0 },
   petIdentityLevelDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#e3b55f', shadowColor: '#fff3ba', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 2, elevation: 1 },
