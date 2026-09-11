@@ -2,7 +2,7 @@
   "expo": {
     "name": "Amor",
     "slug": "Amor",
-    "version": "1.1.62",
+    "version": "1.1.63",
     "orientation": "landscape",
     "icon": "./assets/16.png",
     "userInterfaceStyle": "light",
@@ -56,7 +56,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "versionCode": 10162
+      "versionCode": 10163
     },
     "scheme": "amor",
     "ios": {
@@ -104,8 +104,8 @@
         "projectId": "3e224fbe-d6f2-48c1-8903-61bf13953cf2"
       },
       "expo-navigation-bar": {},
-      "updateVersion": "1.1.62",
-      "updateDescription": "Arreglos de los Animalitos."
+      "updateVersion": "1.1.63",
+      "updateDescription": "Arreglo en la mayoria de Animalitos."
     },
     "owner": "505leoo"
   }

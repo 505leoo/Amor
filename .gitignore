@@ -10,6 +10,7 @@ dist/
 web-build/
 .runtime-version-backup.json
 .eas-build-result.json
+.actualizar-progress.json
 expo-env.d.ts
 
 # Native

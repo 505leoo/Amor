@@ -22,9 +22,19 @@ if "%1"=="" (
   if errorlevel 2 set "MODE=build"
 )
 
-echo Verificando acceso EAS...
-call eas whoami
-if errorlevel 1 goto invalidToken
+set "EAS_CHECK_ATTEMPTS=0"
+:checkEas
+set /a EAS_CHECK_ATTEMPTS+=1
+echo Verificando acceso EAS (intento !EAS_CHECK_ATTEMPTS!/3)...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$p = Start-Process -FilePath 'cmd.exe' -ArgumentList '/d','/s','/c','eas whoami' -NoNewWindow -PassThru; if (-not $p.WaitForExit(90000)) { taskkill /PID $p.Id /T /F; exit 124 }; exit $p.ExitCode"
+if not errorlevel 1 goto easReady
+if !EAS_CHECK_ATTEMPTS! lss 3 (
+  echo EAS no respondio a tiempo. Reintentando la verificacion...
+  goto checkEas
+)
+goto invalidToken
+
+:easReady
 
 if "!MODE!"=="build" goto build
 call npm run actualizar:hotfix %*
@@ -51,8 +61,8 @@ echo Falta el token de la cuenta elegida. Configuralo con setx EAS_TOKEN_AMOR "T
 exit /b 1
 
 :invalidToken
-echo El token de la cuenta elegida es invalido o fue revocado. Genera uno nuevo en Expo y vuelve a guardarlo.
-pause
+echo No se pudo verificar el acceso a EAS tras 3 intentos. Puede ser una red temporal o un token invalido.
+echo Si tenes internet, revisa el token de la cuenta elegida y vuelve a ejecutar el comando.
 exit /b 1
 
 :buildFailed
