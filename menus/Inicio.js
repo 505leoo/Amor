@@ -60,6 +60,32 @@ const REWARD_ANIMATION = require('../assets/Lottie/reward.json');
 const JUGAR_IMAGE = require('../assets/inicio/jugar.webp');
 const BOLSA_DORMIR_IMAGE = require('../assets/Animalitos/bolsa-dormir.webp');
 const DURACION_DORMIR_MS = 8 * 60 * 60 * 1000;
+const DURACION_VIGILIA_MS = 16 * 60 * 60 * 1000;
+const VINCULO_POR_NIVEL = 100;
+const VINCULO_POR_COMIDA = 2;
+const PUNTOS_SUEÑO_MAX = 7;
+const MINUTO_SUEÑO_MS = 60 * 1000;
+const HORA_SUEÑO_MS = 60 * 60 * 1000;
+const vinculoSeguro = valor => {
+  const numero = Number(valor);
+  return Number.isFinite(numero) && numero > 0 ? numero : 0;
+};
+const vinculoDesdeAnimal = (animal = {}, nivelFallback = 1) => {
+  if (animal?.vinculo !== undefined && animal?.vinculo !== null) return vinculoSeguro(animal.vinculo);
+  const nivelLegado = Math.max(1, Number(animal?.nivel) || Number(nivelFallback) || 1);
+  return vinculoSeguro((nivelLegado - 1) * VINCULO_POR_NIVEL);
+};
+const puntosPorSueño = (desde, hasta, ahora = Date.now()) => {
+  const inicio = Number(desde) || 0;
+  const final = Number(hasta) || 0;
+  if (!inicio || !final) return 0;
+  const transcurrido = Math.max(0, Math.min(DURACION_DORMIR_MS, ahora - inicio));
+  if (transcurrido < MINUTO_SUEÑO_MS) return 0;
+  return Math.min(PUNTOS_SUEÑO_MAX, Math.floor(transcurrido / HORA_SUEÑO_MS));
+};
+const descansoSeguro = valor => Math.max(0, Math.min(100, Number(valor) || 0));
+const descansoDuranteVigilia = (base, actualizadoEnMs, ahora = Date.now()) => Math.max(0, descansoSeguro(base) - (Math.max(0, ahora - (Number(actualizadoEnMs) || ahora)) / DURACION_VIGILIA_MS) * 100);
+const descansoDuranteSueño = (base, desde, ahora = Date.now()) => Math.min(100, descansoSeguro(base) + (Math.max(0, ahora - (Number(desde) || ahora)) / DURACION_DORMIR_MS) * 100);
 const formatoDormir = (hasta, ahora = Date.now()) => {
   // Dejamos fuera el minuto que está transcurriendo: recién dormido se ve
   // 7h 59m y al cambiar de hora no aparece el poco natural 5h 0m.
@@ -73,19 +99,27 @@ const selectEstadoInicio = data => {
     animalito,
     apodo: String(estadoAnimalito.apodo || '').trim(),
     nivelAnimalito: Math.max(1, Number(estadoAnimalito.nivel) || 1),
+    vinculoAnimalito: vinculoDesdeAnimal(estadoAnimalito),
     halconDesbloqueado: Boolean(data?.halconDesbloqueado),
     pareja: data?.pareja || null,
     diamantes: Number(data?.diamantes ?? data?.diamante) || 0,
     animalitoDurmiendoHastaMs: Number(data?.animalitoDurmiendoHastaMs) || 0,
+    animalitoDurmiendoDesdeMs: Number(data?.animalitoDurmiendoDesdeMs) || 0,
+    animalitoDescansoPorcentaje: data?.animalitoDescansoPorcentaje == null ? null : descansoSeguro(data.animalitoDescansoPorcentaje),
+    animalitoDescansoActualizadoEnMs: Number(data?.animalitoDescansoActualizadoEnMs) || 0,
   };
 };
 const equalEstadoInicio = (a, b) => a?.animalito === b?.animalito
   && a?.apodo === b?.apodo
   && a?.nivelAnimalito === b?.nivelAnimalito
+  && a?.vinculoAnimalito === b?.vinculoAnimalito
   && a?.halconDesbloqueado === b?.halconDesbloqueado
   && a?.pareja === b?.pareja
   && a?.diamantes === b?.diamantes
-  && a?.animalitoDurmiendoHastaMs === b?.animalitoDurmiendoHastaMs;
+  && a?.animalitoDurmiendoHastaMs === b?.animalitoDurmiendoHastaMs
+  && a?.animalitoDurmiendoDesdeMs === b?.animalitoDurmiendoDesdeMs
+  && a?.animalitoDescansoPorcentaje === b?.animalitoDescansoPorcentaje
+  && a?.animalitoDescansoActualizadoEnMs === b?.animalitoDescansoActualizadoEnMs;
 
 const SiguientePaso = memo(({ icono, titulo, detalle, insignia, onPress }) => {
   const activar = () => {
@@ -723,7 +757,7 @@ const AlimentoArrastrable = memo(({ alimento, cantidad, disabled, onDrop, onDrag
   </Animated.View>;
 });
 
-const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, hoverRef, onZoneChange, draggingRef, durmiendo = false }) => {
+const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, onBond, onDescansoChange, vinculo = 0, descanso = 100, dropRef, hoverRef, onZoneChange, draggingRef, durmiendo = false }) => {
   const uid = auth.currentUser?.uid;
   const participantes = useMemo(() => uid ? [uid, parejaUid].filter(Boolean).sort() : [], [parejaUid, uid]);
   const cuidadoId = participantes.join('_');
@@ -738,18 +772,6 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
   const zonaActivaRef = useRef(false);
   const hoverTimerRef = useRef(null);
   const zonaRectRef = useRef(null);
-  const satietyAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    satietyAnim.stopAnimation();
-    Animated.timing(satietyAnim, {
-      toValue: durmiendo ? 0 : 1,
-      duration: 520,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [durmiendo, satietyAnim]);
-
   useEffect(() => {
     if (!cuidadoRef) return undefined;
     const aplicarCuidado = datos => {
@@ -787,6 +809,10 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
 
   const saciedad = calcularSaciedad(cuidado, ahora);
   const estado = estadoSaciedad(saciedad);
+  const vinculoTotal = vinculoSeguro(vinculo);
+  const nivelVinculo = Math.floor(vinculoTotal / VINCULO_POR_NIVEL) + 1;
+  const porcentajeVinculo = vinculoTotal % VINCULO_POR_NIVEL;
+  const descansoVisible = descansoSeguro(descanso);
   const alimentar = useCallback(async alimento => {
     if (!uid || !cuidadoRef || alimentandoRef.current || disabled) return;
     const alimentoSeguro = ALIMENTOS.find(item => item.id === alimento?.id) || alimento;
@@ -854,6 +880,8 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       onFed?.(alimentoSeguro, resultado);
+      onBond?.(VINCULO_POR_COMIDA);
+      onDescansoChange?.(1);
     } catch (error) {
       if (error.message === 'lleno') {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -872,7 +900,7 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
       alimentandoRef.current = false;
       setAlimentando(false);
     }
-  }, [cuidado, cuidadoRef, disabled, inventario, onFed, participantes, uid]);
+  }, [cuidado, cuidadoRef, disabled, inventario, onBond, onDescansoChange, onFed, participantes, uid]);
 
   const soltar = useCallback((alimento, pageX, pageY) => {
     // El botón representa la acción de alimentar y es el único origen de
@@ -926,18 +954,35 @@ const CuidadoAnimal = memo(({ parejaUid, targetRef, disabled, onFed, dropRef, ho
 
   const IconoHambre = () => (
     <View style={styles.satietyIconWrap}>
-      <MaterialIcons name="restaurant" size={11} color="#fff1c8" />
+      <MaterialIcons name="restaurant" size={12} color="#fff1c8" />
     </View>
   );
 
   return <>
-    <Animated.View style={[styles.satietyPanel, { opacity: satietyAnim, transform: [{ translateX: satietyAnim.interpolate({ inputRange: [0, 1], outputRange: [-3, 0] }) }, { scale: satietyAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] }]} pointerEvents={durmiendo ? 'none' : 'auto'}>
+    <View style={styles.satietyPanel} pointerEvents={durmiendo ? 'none' : 'auto'}>
       <View style={styles.satietyTrack}>
         <View style={[styles.satietyFill, { height: `${saciedad}%`, backgroundColor: estado.color }]} />
         <Text style={styles.satietyPercentage} pointerEvents="none" numberOfLines={1}>{Math.round(saciedad)}%</Text>
       </View>
       <View style={styles.satietyIconWrap}><IconoHambre /></View>
-    </Animated.View>
+    </View>
+    <View style={styles.bondPanel} pointerEvents="none">
+      <View style={styles.bondTrack} accessibilityRole="progressbar" accessibilityLabel="Avance del Vínculo" accessibilityValue={{ min: 0, max: VINCULO_POR_NIVEL, now: Math.round(porcentajeVinculo) }}>
+        <View style={[styles.bondFill, { height: `${porcentajeVinculo}%` }]} />
+        <Text style={styles.bondPercentage} numberOfLines={1}>{Math.round(porcentajeVinculo)}%</Text>
+      </View>
+      <View style={styles.bondIconWrap}>
+        <MaterialIcons name="star" size={14} color="#e2b34d" />
+        <Text style={styles.bondIconNumber}>{nivelVinculo}</Text>
+      </View>
+    </View>
+    <View style={styles.sleepPanel} pointerEvents="none">
+      <View style={styles.sleepTrack} accessibilityRole="progressbar" accessibilityLabel="Descanso del Animalito" accessibilityValue={{ min: 0, max: 100, now: Math.round(descansoVisible) }}>
+        <View style={[styles.sleepFill, { height: `${descansoVisible}%` }]} />
+        <Text style={styles.sleepPercentage} numberOfLines={1}>{Math.round(descansoVisible)}%</Text>
+      </View>
+      <View style={styles.sleepIconWrap}><MaterialIcons name="bedtime" size={12} color="#eff0ff" /></View>
+    </View>
     {avisoAlimentacion && <View style={styles.feedNotice} pointerEvents="none"><Text style={styles.feedNoticeText}>{avisoAlimentacion}</Text></View>}
   </>;
 });
@@ -971,6 +1016,9 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   const [alimentarVisible, setAlimentarVisible] = useState(false);
   const alimentarTimerRef = useRef(null);
   const [durmiendoHasta, setDurmiendoHasta] = useState(0);
+  const [durmiendoDesde, setDurmiendoDesde] = useState(0);
+  const [descansoVisible, setDescansoVisible] = useState(100);
+  const descansoBaseRef = useRef({ valor: 100, actualizadoEnMs: 0 });
   const [relojDormir, setRelojDormir] = useState(Date.now());
   const sueñoShortcutAnim = useRef(new Animated.Value(1)).current;
   const petQuickAccessAnim = useRef(new Animated.Value(0)).current;
@@ -979,6 +1027,8 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   const [contadorSueñoTexto, setContadorSueñoTexto] = useState('');
   const { registrarObjetivo } = useRacha();
   const avisoSeleccionTimer = useRef(null);
+  const vinculoActualizacionRef = useRef(Promise.resolve());
+  const sueñoFinalizandoRef = useRef(false);
   const { data: userAlimentos } = useUserDocument(data => data?.alimentos || {});
 
   useEffect(() => {
@@ -1136,6 +1186,40 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
   );
   const durmiendoActivo = durmiendoHasta > relojDormir;
 
+  // El descanso se guarda como un valor más una fecha de referencia. Así no
+  // dependemos de que la app permanezca abierta para que la barra avance o
+  // baje: al volver a renderizarla calculamos el valor real con Date.now().
+  useEffect(() => {
+    const ahora = Date.now();
+    const valorGuardado = estadoInicio?.animalitoDescansoPorcentaje;
+    const valor = valorGuardado == null ? 100 : descansoSeguro(valorGuardado);
+    const actualizadoEnMs = Number(estadoInicio?.animalitoDescansoActualizadoEnMs) || ahora;
+    descansoBaseRef.current = { valor, actualizadoEnMs };
+    setDescansoVisible(anterior => Math.abs(anterior - valor) < 0.01 ? anterior : valor);
+  }, [estadoInicio?.animalito, estadoInicio?.animalitoDescansoPorcentaje, estadoInicio?.animalitoDescansoActualizadoEnMs]);
+
+  useEffect(() => {
+    if (durmiendoActivo) return undefined;
+    const timer = setInterval(() => setRelojDormir(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, [durmiendoActivo]);
+
+  useEffect(() => {
+    const suscripcion = AppState.addEventListener('change', estadoApp => {
+      if (estadoApp === 'active') setRelojDormir(Date.now());
+    });
+    return () => suscripcion.remove();
+  }, []);
+
+  useEffect(() => {
+    const ahora = relojDormir || Date.now();
+    const base = descansoBaseRef.current;
+    const siguiente = durmiendoActivo
+      ? descansoDuranteSueño(base.valor, durmiendoDesde, ahora)
+      : descansoDuranteVigilia(base.valor, base.actualizadoEnMs, ahora);
+    setDescansoVisible(anterior => Math.abs(anterior - siguiente) < 0.01 ? anterior : siguiente);
+  }, [durmiendoActivo, durmiendoDesde, relojDormir, estadoInicio?.animalitoDescansoPorcentaje, estadoInicio?.animalitoDescansoActualizadoEnMs]);
+
   useEffect(() => {
     sueñoShortcutAnim.stopAnimation();
     sueñoShortcutAnim.setValue(0.72);
@@ -1196,50 +1280,175 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
     if (durmiendoActivo) setContadorSueñoTexto(formatoDormir(durmiendoHasta, relojDormir));
   }, [durmiendoActivo, durmiendoHasta, relojDormir]);
 
+  const [animalitoDetalle, setAnimalitoDetalle] = useState({ id: null, apodo: '', iconoApodo: null, nivel: 1, vinculo: 0, listo: false });
+
+  const actualizarVinculo = useCallback((cantidad, opciones = {}) => {
+    const registrar = async () => {
+      const uid = auth.currentUser?.uid;
+      const animalId = estadoInicio?.animalito;
+      if (!uid || !animalId || !cantidad) return;
+      const idSueño = Number(opciones?.idSueño) || 0;
+      const path = ['usuarios', uid, 'animalitos', animalId];
+      const animalRef = doc(db, ...path);
+      try {
+        let siguienteVinculo = 0;
+        if (isOfflineModeEnabled()) {
+          const cache = await getCachedDocument(uid, path).catch(() => null);
+          const base = cache || {};
+          const proyectado = await getProjectedDocument(uid, path, base).catch(() => base);
+          const vinculoActual = vinculoDesdeAnimal(proyectado, estadoInicio?.nivelAnimalito);
+          const sueñoYaProcesado = idSueño > 0 && Number(proyectado?.ultimoSueñoProcesadoDesdeMs) === idSueño;
+          siguienteVinculo = vinculoActual;
+          if (!sueñoYaProcesado) {
+            siguienteVinculo += Number(cantidad);
+            const update = { vinculo: siguienteVinculo };
+            if (idSueño > 0) update.ultimoSueñoProcesadoDesdeMs = idSueño;
+            await syncSetDoc(animalRef, update, { merge: true });
+          }
+        } else {
+          await runTransaction(db, async transaction => {
+            const snapshot = await transaction.get(animalRef);
+            const datos = snapshot.exists() ? snapshot.data() || {} : {};
+            const vinculoActual = vinculoDesdeAnimal(datos, estadoInicio?.nivelAnimalito);
+            if (idSueño > 0 && Number(datos?.ultimoSueñoProcesadoDesdeMs) === idSueño) {
+              siguienteVinculo = vinculoActual;
+              return;
+            }
+            siguienteVinculo = vinculoActual + Number(cantidad);
+            const update = { vinculo: siguienteVinculo };
+            if (idSueño > 0) update.ultimoSueñoProcesadoDesdeMs = idSueño;
+            transaction.set(animalRef, update, { merge: true });
+          });
+        }
+        setAnimalitoDetalle(actual => actual.id === animalId ? { ...actual, vinculo: siguienteVinculo, listo: true } : actual);
+      } catch (error) {
+        console.warn('[Vinculo] No se pudo registrar el avance', error?.message || error);
+      }
+    };
+    vinculoActualizacionRef.current = vinculoActualizacionRef.current.then(registrar, registrar);
+    return vinculoActualizacionRef.current;
+  }, [estadoInicio?.animalito, estadoInicio?.nivelAnimalito]);
+
+  const finalizarSueño = useCallback(({ desde = 0, hasta = 0, ahora = Date.now() } = {}) => {
+    if (sueñoFinalizandoRef.current) return;
+    const inicioSeguro = Number(desde) || 0;
+    const finalSeguro = Number(hasta) || 0;
+    if (!finalSeguro) return;
+    sueñoFinalizandoRef.current = true;
+    const puntos = puntosPorSueño(inicioSeguro, finalSeguro, ahora);
+    const descansoFinal = inicioSeguro
+      ? descansoDuranteSueño(descansoBaseRef.current.valor, inicioSeguro, ahora)
+      : descansoDuranteVigilia(descansoBaseRef.current.valor, descansoBaseRef.current.actualizadoEnMs, ahora);
+    descansoBaseRef.current = { valor: descansoFinal, actualizadoEnMs: ahora };
+    setDescansoVisible(descansoFinal);
+    setDurmiendoHasta(0);
+    setDurmiendoDesde(0);
+    setRelojDormir(ahora);
+    setAlimentarVisible(false);
+    const uid = auth.currentUser?.uid;
+    const limpiarSueño = () => uid
+      ? syncSetDoc(doc(db, 'usuarios', uid), { animalitoDurmiendoHastaMs: 0, animalitoDurmiendoDesdeMs: 0, animalitoDescansoPorcentaje: descansoFinal, animalitoDescansoActualizadoEnMs: ahora }, { merge: true })
+      : Promise.resolve();
+    const recompensa = puntos > 0 && inicioSeguro
+      ? actualizarVinculo(puntos, { idSueño: inicioSeguro })
+      : Promise.resolve();
+    Promise.resolve(recompensa)
+      .then(limpiarSueño)
+      .catch(error => console.warn('[Dormir] No se pudo cerrar el descanso', error?.message || error))
+      .finally(() => { sueñoFinalizandoRef.current = false; });
+  }, [actualizarVinculo]);
+
+  const actualizarDescansoPorComida = useCallback((cantidad = 1) => {
+    const incremento = Number(cantidad) || 0;
+    if (incremento <= 0) return Promise.resolve();
+    const ahora = Date.now();
+    const base = descansoBaseRef.current;
+    const antesDeComer = descansoDuranteVigilia(base.valor, base.actualizadoEnMs, ahora);
+    const siguiente = descansoSeguro(antesDeComer + incremento);
+    descansoBaseRef.current = { valor: siguiente, actualizadoEnMs: ahora };
+    setDescansoVisible(siguiente);
+    const uid = auth.currentUser?.uid;
+    if (!uid) return Promise.resolve();
+    return syncSetDoc(doc(db, 'usuarios', uid), {
+      animalitoDescansoPorcentaje: siguiente,
+      animalitoDescansoActualizadoEnMs: ahora,
+    }, { merge: true }).catch(error => {
+      console.warn('[Descanso] No se pudo guardar el avance', error?.message || error);
+    });
+  }, []);
+
   useEffect(() => {
-    const guardado = Number(estadoInicio?.animalitoDurmiendoHastaMs) || 0;
-    setDurmiendoHasta(guardado > Date.now() ? guardado : 0);
-    setRelojDormir(Date.now());
-  }, [estadoInicio?.animalito, estadoInicio?.animalitoDurmiendoHastaMs]);
+    const hastaGuardado = Number(estadoInicio?.animalitoDurmiendoHastaMs) || 0;
+    const ahora = Date.now();
+    if (!hastaGuardado) {
+      setDurmiendoHasta(0);
+      setDurmiendoDesde(0);
+      setRelojDormir(ahora);
+      return;
+    }
+    const desdeGuardado = Number(estadoInicio?.animalitoDurmiendoDesdeMs) || 0;
+    const desde = desdeGuardado > 0 && desdeGuardado < hastaGuardado
+      ? desdeGuardado
+      : hastaGuardado - DURACION_DORMIR_MS;
+    if (hastaGuardado > ahora) {
+      setDurmiendoDesde(desde);
+      setDurmiendoHasta(hastaGuardado);
+      setRelojDormir(ahora);
+    } else {
+      finalizarSueño({ desde, hasta: hastaGuardado, ahora });
+    }
+  }, [estadoInicio?.animalito, estadoInicio?.animalitoDurmiendoDesdeMs, estadoInicio?.animalitoDurmiendoHastaMs, finalizarSueño]);
 
   useEffect(() => {
     if (!durmiendoHasta) return undefined;
     const timer = setInterval(() => {
       const ahora = Date.now();
       setRelojDormir(ahora);
-      if (durmiendoHasta <= ahora) {
-        setDurmiendoHasta(0);
-        const uid = auth.currentUser?.uid;
-        if (uid) syncSetDoc(doc(db, 'usuarios', uid), { animalitoDurmiendoHastaMs: 0 }, { merge: true }).catch(() => {});
-      }
+      if (durmiendoHasta <= ahora) finalizarSueño({ desde: durmiendoDesde, hasta: durmiendoHasta, ahora });
     }, 30000);
     return () => clearInterval(timer);
-  }, [durmiendoHasta]);
+  }, [durmiendoDesde, durmiendoHasta, finalizarSueño]);
+
+  useEffect(() => {
+    if (durmiendoHasta && durmiendoHasta <= relojDormir) {
+      finalizarSueño({ desde: durmiendoDesde, hasta: durmiendoHasta, ahora: relojDormir });
+    }
+  }, [durmiendoDesde, durmiendoHasta, finalizarSueño, relojDormir]);
 
   const dormirAnimalito = useCallback(() => {
     const uid = auth.currentUser?.uid;
     if (!uid || durmiendoActivo) return;
-    const hasta = Date.now() + DURACION_DORMIR_MS;
+    const desde = Date.now();
+    const hasta = desde + DURACION_DORMIR_MS;
+    const descansoAlDormir = descansoDuranteVigilia(
+      descansoBaseRef.current.valor,
+      descansoBaseRef.current.actualizadoEnMs,
+      desde,
+    );
+    descansoBaseRef.current = { valor: descansoAlDormir, actualizadoEnMs: desde };
+    setDescansoVisible(descansoAlDormir);
+    setDurmiendoDesde(desde);
     setDurmiendoHasta(hasta);
-    setRelojDormir(Date.now());
+    setRelojDormir(desde);
     setAlimentarVisible(false);
-    syncSetDoc(doc(db, 'usuarios', uid), { animalitoDurmiendoHastaMs: hasta }, { merge: true }).catch(error => console.warn('[Dormir] No se pudo guardar el descanso', error?.message || error));
+    syncSetDoc(doc(db, 'usuarios', uid), {
+      animalitoDurmiendoDesdeMs: desde,
+      animalitoDurmiendoHastaMs: hasta,
+      animalitoDescansoPorcentaje: descansoAlDormir,
+      animalitoDescansoActualizadoEnMs: desde,
+    }, { merge: true }).catch(error => console.warn('[Dormir] No se pudo guardar el descanso', error?.message || error));
   }, [durmiendoActivo]);
   const despertarAnimalito = useCallback(() => {
-    const uid = auth.currentUser?.uid;
-    setDurmiendoHasta(0);
-    setRelojDormir(Date.now());
-    setAlimentarVisible(false);
-    if (uid) syncSetDoc(doc(db, 'usuarios', uid), { animalitoDurmiendoHastaMs: 0 }, { merge: true }).catch(error => console.warn('[Dormir] No se pudo guardar el despertar', error?.message || error));
-  }, []);
+    if (!durmiendoHasta) return;
+    finalizarSueño({ desde: durmiendoDesde, hasta: durmiendoHasta, ahora: Date.now() });
+  }, [durmiendoDesde, durmiendoHasta, finalizarSueño]);
   const alternarSueño = durmiendoActivo ? despertarAnimalito : dormirAnimalito;
-  const [animalitoDetalle, setAnimalitoDetalle] = useState({ id: null, apodo: '', iconoApodo: null, nivel: 1, listo: false });
 
   useEffect(() => {
     const uid = auth.currentUser?.uid;
     const animalId = estadoInicio?.animalito;
     if (!uid || !animalId) {
-      setAnimalitoDetalle({ id: null, apodo: '', iconoApodo: null, nivel: 1, listo: false });
+      setAnimalitoDetalle({ id: null, apodo: '', iconoApodo: null, nivel: 1, vinculo: 0, listo: false });
       return undefined;
     }
     const path = ['usuarios', uid, 'animalitos', animalId];
@@ -1259,10 +1468,11 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
         apodo: String(proyectado?.apodo || '').trim(),
         iconoApodo: String(proyectado?.iconoApodo || '').trim() || null,
         nivel: Math.max(1, Number(proyectado?.nivel) || estadoInicio?.nivelAnimalito || 1),
+        vinculo: vinculoDesdeAnimal(proyectado, estadoInicio?.nivelAnimalito),
         listo: true,
       };
       clearTimeout(mostrarRespaldo);
-      setAnimalitoDetalle(actual => actual.id === siguiente.id && actual.apodo === siguiente.apodo && actual.iconoApodo === siguiente.iconoApodo && actual.nivel === siguiente.nivel && actual.listo === siguiente.listo ? actual : siguiente);
+      setAnimalitoDetalle(actual => actual.id === siguiente.id && actual.apodo === siguiente.apodo && actual.iconoApodo === siguiente.iconoApodo && actual.nivel === siguiente.nivel && actual.vinculo === siguiente.vinculo && actual.listo === siguiente.listo ? actual : siguiente);
       if (guardarCache) {
         const firma = JSON.stringify(proyectado || {});
         if (firma !== ultimoCache) {
@@ -1271,7 +1481,7 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
         }
       }
     };
-    setAnimalitoDetalle({ id: animalId, apodo: '', iconoApodo: null, nivel: estadoInicio.nivelAnimalito || 1, listo: false });
+    setAnimalitoDetalle({ id: animalId, apodo: '', iconoApodo: null, nivel: estadoInicio.nivelAnimalito || 1, vinculo: estadoInicio.vinculoAnimalito || 0, listo: false });
     getCachedDocument(uid, path).then(cached => { if (cached) aplicar(cached, false); }).catch(() => {});
     const quitarCache = subscribeCachedDocument(uid, path, data => { if (data) aplicar(data, false); });
     const unsub = onSnapshot(doc(db, ...path), snapshot => aplicar(snapshot.data() || {}, true), () => {});
@@ -1506,12 +1716,8 @@ const Inicio = memo(({ navigation, onReady, style, openReporteSemanal = false })
             {animalitoDetalle.iconoApodo && <MaterialIcons name={animalitoDetalle.iconoApodo} size={13} color="#b94f6d" />}
             <Text style={styles.petIdentityName} numberOfLines={1}>{apodoVisible}</Text>
           </View>
-          <View style={styles.petIdentityLevel}>
-            <View style={styles.petIdentityLevelDot} />
-            <Text style={styles.petIdentityLevelText}>nivel {animalitoDetalle.nivel}</Text>
-          </View>
         </Animated.View>}
-        {estadoInicio?.animalito && <CuidadoAnimal parejaUid={estadoInicio?.pareja} targetRef={petDropZoneRef} disabled={overlayActive || durmiendoActivo} durmiendo={durmiendoActivo} onFed={reaccionarAlComer} dropRef={feedDropRef} hoverRef={feedHoverRef} onZoneChange={setZonaAlimentar} draggingRef={draggingRef} />}
+        {estadoInicio?.animalito && <CuidadoAnimal parejaUid={estadoInicio?.pareja} targetRef={petDropZoneRef} vinculo={animalitoDetalle.vinculo} descanso={descansoVisible} disabled={overlayActive || durmiendoActivo} durmiendo={durmiendoActivo} onFed={reaccionarAlComer} onBond={actualizarVinculo} onDescansoChange={actualizarDescansoPorComida} dropRef={feedDropRef} hoverRef={feedHoverRef} onZoneChange={setZonaAlimentar} draggingRef={draggingRef} />}
         {estadoInicio?.animalito && alimentarVisible && <Animated.View onTouchStart={event => event.stopPropagation()} onTouchEnd={event => event.stopPropagation()} style={[styles.petQuickAccess, arrastreActivo && styles.petQuickAccessDragging, { opacity: petQuickAccessAnim, transform: [{ translateY: petQuickAccessAnim.interpolate({ inputRange: [0, 1], outputRange: [7, 0] }) }, { scale: petQuickAccessAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] }]}>
           <AlimentoArrastrable
             alimento={selectedFoodIndex >= 0 ? ALIMENTOS[selectedFoodIndex] : ALIMENTOS[0]}
@@ -1732,16 +1938,24 @@ const styles = StyleSheet.create({
   petSleepCountdownWrap: { alignItems: 'center', justifyContent: 'center' },
   petSleepCountdown: { marginBottom: 1, color: '#7c6d80', fontFamily: 'Delius', fontSize: 7.2, lineHeight: 9, fontWeight: '900', letterSpacing: 0.25, textShadowColor: 'rgba(255,248,233,0.94)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   petIdentityName: { maxWidth: 122, color: '#60373f', fontFamily: 'Delius', fontSize: 12.5, lineHeight: 15, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(255,248,233,0.98)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
-  petIdentityLevel: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 0 },
-  petIdentityLevelDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#e3b55f', shadowColor: '#fff3ba', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.9, shadowRadius: 2, elevation: 1 },
-  petIdentityLevelText: { color: '#9a624c', fontFamily: 'Delius', fontSize: 7.4, lineHeight: 9, fontWeight: '900', letterSpacing: 0.15, textShadowColor: 'rgba(255,248,233,0.94)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 2 },
   petDropZone: { position: 'absolute', width: 76, height: 80, top: 69, left: 63, borderRadius: 999, opacity: 0, zIndex: 999, elevation: 999 },
   playerShadow: { position: 'absolute', left: '50%', bottom: 70, marginLeft: -54, width: 108, height: 32, zIndex: 0, shadowColor: '#5b3845', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.22, shadowRadius: 9, elevation: 2 },
   satietyPanel: { position: 'absolute', left: '50%', bottom: 79, marginLeft: -69, zIndex: 415, width: 16, height: 70, flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 1 },
-  satietyIconWrap: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(112,73,55,0.72)', borderWidth: 1, borderColor: 'rgba(255,224,157,0.7)', borderRadius: 3 },
+  satietyIconWrap: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(112,73,55,0.72)', borderWidth: 1, borderColor: 'rgba(255,224,157,0.7)', borderRadius: 3 },
   satietyTrack: { flex: 1, width: 10, overflow: 'hidden', borderRadius: 3, backgroundColor: 'rgba(86,57,54,0.48)', borderWidth: 1, borderColor: 'rgba(255,241,210,0.82)', justifyContent: 'flex-end', shadowColor: '#6c4935', shadowOffset: { width: 1, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
   satietyFill: { width: '100%', borderRadius: 2, borderTopWidth: 1, borderTopColor: 'rgba(255,246,190,0.65)', shadowColor: '#fff2c4', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.55, shadowRadius: 2, elevation: 2 },
   satietyPercentage: { position: 'absolute', top: '50%', left: '50%', zIndex: 2, width: 30, height: 9, marginLeft: -15, marginTop: -4.5, color: 'rgba(255,255,255,0.76)', fontSize: 6.2, lineHeight: 7, fontWeight: '800', letterSpacing: 0.1, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false, textShadowColor: 'rgba(54,35,38,0.65)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1.5, transform: [{ rotate: '-90deg' }] },
+  bondPanel: { position: 'absolute', left: '50%', bottom: 79, marginLeft: -88, zIndex: 414, width: 16, height: 70, flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 1 },
+  bondIconWrap: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' },
+  bondIconNumber: { position: 'absolute', top: 5, left: 0, width: 16, color: '#fff9e8', fontFamily: 'Delius', fontSize: 6.3, lineHeight: 7, fontWeight: '900', textAlign: 'center', textShadowColor: 'rgba(111,75,25,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 },
+  bondTrack: { flex: 1, width: 10, overflow: 'hidden', borderRadius: 3, backgroundColor: 'rgba(88,67,39,0.42)', borderWidth: 1, borderColor: 'rgba(255,241,188,0.88)', justifyContent: 'flex-end', shadowColor: '#9b7128', shadowOffset: { width: 1, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
+  bondFill: { width: '100%', borderRadius: 2, backgroundColor: '#e2b34d', borderTopWidth: 1, borderTopColor: 'rgba(255,249,200,0.88)', shadowColor: '#ffe88d', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.62, shadowRadius: 2, elevation: 2 },
+  bondPercentage: { position: 'absolute', top: '50%', left: '50%', zIndex: 2, width: 30, height: 9, marginLeft: -15, marginTop: -4.5, color: 'rgba(255,255,255,0.78)', fontSize: 6.2, lineHeight: 7, fontWeight: '800', letterSpacing: 0.1, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false, textShadowColor: 'rgba(76,55,26,0.72)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1.5, transform: [{ rotate: '-90deg' }] },
+  sleepPanel: { position: 'absolute', left: '50%', bottom: 79, marginLeft: -45, zIndex: 413, width: 16, height: 70, flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', gap: 1 },
+  sleepIconWrap: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(73,78,126,0.78)', borderWidth: 1, borderColor: 'rgba(226,228,255,0.86)', borderRadius: 4 },
+  sleepTrack: { flex: 1, width: 10, overflow: 'hidden', borderRadius: 3, backgroundColor: 'rgba(53,56,91,0.46)', borderWidth: 1, borderColor: 'rgba(226,228,255,0.84)', justifyContent: 'flex-end', shadowColor: '#545a9a', shadowOffset: { width: 1, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
+  sleepFill: { width: '100%', borderRadius: 2, backgroundColor: '#7883d0', borderTopWidth: 1, borderTopColor: 'rgba(242,244,255,0.86)', shadowColor: '#cfd4ff', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.58, shadowRadius: 2, elevation: 2 },
+  sleepPercentage: { position: 'absolute', top: '50%', left: '50%', zIndex: 2, width: 30, height: 9, marginLeft: -15, marginTop: -4.5, color: 'rgba(255,255,255,0.8)', fontSize: 6.2, lineHeight: 7, fontWeight: '800', letterSpacing: 0.1, textAlign: 'center', textAlignVertical: 'center', includeFontPadding: false, textShadowColor: 'rgba(35,38,73,0.72)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1.5, transform: [{ rotate: '-90deg' }] },
   foodTray: { position: 'absolute', left: '50%', bottom: 96, marginLeft: -120, zIndex: 710, elevation: 710, width: 190, height: 36, paddingHorizontal: 8, borderRadius: 18, flexDirection: 'row', gap: 6, alignItems: 'center', backgroundColor: 'rgba(255,250,240,0.98)', borderWidth: 1, borderColor: '#dfc49a', shadowColor: '#674a35', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 6 },
   foodTrayBadge: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: '#f4e3d1', borderWidth: 1, borderColor: '#e0b97a', marginRight: 4 },
   foodTrayBadgeEmoji: { fontSize: 18 },

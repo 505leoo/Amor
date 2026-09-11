@@ -53,6 +53,42 @@ function bumpVersion(version) {
   return [major, minor, patch].join('.');
 }
 
+function androidVersionCode(version) {
+  const parts = version.split('.').map(Number);
+  if (parts.length !== 3 || parts.some(part => !Number.isInteger(part) || part < 0 || part > 99)) {
+    throw new Error(`No se pudo convertir ${version} a un versionCode Android válido.`);
+  }
+
+  // Mantiene el orden de las versiones semver dentro del límite de Android.
+  const [major, minor, patch] = parts;
+  const code = major * 10000 + minor * 100 + patch;
+  if (!Number.isSafeInteger(code) || code < 1 || code > 2100000000) {
+    throw new Error(`El versionCode calculado para ${version} no es válido: ${code}.`);
+  }
+  return code;
+}
+
+function sincronizarVersionAndroid(version) {
+  const gradlePath = 'android/app/build.gradle';
+  if (!fs.existsSync(gradlePath)) {
+    console.warn('No se encontró android/app/build.gradle; se omite la sincronización nativa.');
+    return;
+  }
+
+  const versionCode = androidVersionCode(version);
+  const original = fs.readFileSync(gradlePath, 'utf8');
+  const actualizado = original
+    .replace(/(\bversionCode\s+)\d+/, `$1${versionCode}`)
+    .replace(/(\bversionName\s+)(["']).*?\2/, `$1"${version}"`);
+
+  if (actualizado === original) {
+    throw new Error('No se encontraron versionCode y versionName en android/app/build.gradle.');
+  }
+
+  fs.writeFileSync(gradlePath, actualizado);
+  console.log(`Android sincronizado: versionName ${version}, versionCode ${versionCode}`);
+}
+
 async function notificarActualizacion(version, resumen) {
   const admin = require('../functions/node_modules/firebase-admin');
   const ref = getAdminFirestore().collection('notificaciones').doc('notificacion_1_actualizacion');
@@ -115,6 +151,8 @@ async function run() {
         // Mantiene alineadas la versión visible del binario y la que mostramos
         // dentro de la app. runtimeVersion continúa siendo independiente.
         app.expo.version = newVersion;
+        app.expo.android = app.expo.android || {};
+        app.expo.android.versionCode = androidVersionCode(newVersion);
         // Este dato viaja dentro del manifiesto OTA y permite que la versión
         // instalada muestre qué versión nueva está disponible antes de bajarla.
         app.expo.extra = app.expo.extra || {};
@@ -142,9 +180,13 @@ async function run() {
       }
     }
 
+    // El APK local de Gradle lee estos valores desde el proyecto nativo,
+    // así que deben acompañar siempre al bump de package.json/app.json.
+    sincronizarVersionAndroid(newVersion);
+
     // El primer git add ocurre antes del cambio de versión; añadimos estos
     // archivos otra vez para que el commit publicado incluya los números nuevos.
-    execSync('git add package.json app.json', { stdio: 'inherit' });
+    execSync('git add package.json app.json android/app/build.gradle', { stdio: 'inherit' });
 
     // commit the version bump (unless --no-commit)
     const noCommit = process.argv.includes('--no-commit');
@@ -234,4 +276,3 @@ async function run() {
 }
 
 run();
-

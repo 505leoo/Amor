@@ -7,7 +7,7 @@ import { auth, db } from './firebaseConfig';
 import RoomBackground from './components/RoomBackground';
 import TabButtons from './components/TabButtons';
 import Loading from './components/Loading';
-import AnimalitoShowcase, { ThemeMark } from './components/AnimalitoShowcase';
+import AnimalitoShowcase, { ThemeMark, VinculoBadge } from './components/AnimalitoShowcase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ANIMALITOS, SKINS, TEMATICAS_SKINS, animalitoEstaDesbloqueado } from './data/animalitos';
 import { obtenerIconoLocal } from './data/iconosLocales';
@@ -24,6 +24,15 @@ const Image = ({ source, style, contentFit = 'contain', cachePolicy: _cachePolic
 const COPIAS_POR_NIVEL = nivel => (2 * nivel) + 1;
 const COSTO_MEJORA = nivel => 120 * nivel;
 const EXP_POR_MEJORA = nivel => 15 + (5 * nivel);
+const VINCULO_POR_NIVEL = 100;
+const vinculoSeguro = valor => {
+  const numero = Number(valor);
+  return Number.isFinite(numero) && numero > 0 ? numero : 0;
+};
+const vinculoDeAnimal = (guardado = {}, nivel = 1) => guardado?.vinculo !== undefined && guardado?.vinculo !== null
+  ? vinculoSeguro(guardado.vinculo)
+  : vinculoSeguro((Math.max(1, Number(nivel) || 1) - 1) * VINCULO_POR_NIVEL);
+const nivelVinculoDeAnimal = (guardado = {}, nivel = 1) => Math.floor(vinculoDeAnimal(guardado, nivel) / VINCULO_POR_NIVEL) + 1;
 const MAX_APODO = 18;
 const normalizarApodo = valor => String(valor || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_APODO);
 const ICONOS_APODO = [
@@ -533,10 +542,14 @@ const Animalitos = ({ navigation, mode }) => {
 
   const estadoAnimal = id => {
     const guardado = animalesEstado?.[id] || {};
+    const nivel = Math.max(1, Number(guardado.nivel) || 1);
+    const vinculo = vinculoDeAnimal(guardado, nivel);
     const cartasPropias = Math.max(0, Number(guardado.cartas ?? guardado.copias ?? 0) || 0);
     const cartasUniversales = Math.max(0, Number(cartasAnimalitos) || 0);
     return {
-      nivel: Math.max(1, Number(guardado.nivel) || 1),
+      nivel,
+      vinculo,
+      nivelVinculo: nivelVinculoDeAnimal(guardado, nivel),
       cartasPropias,
       cartasUniversales,
       totalCartas: cartasPropias + cartasUniversales,
@@ -731,7 +744,7 @@ const Animalitos = ({ navigation, mode }) => {
                 return <TouchableOpacity key={item?.id || `animal-simple-${index}`} disabled={!item || esEjemplo} onPress={() => setSeleccionado(item)} style={[s.animalitoSimpleSquare, { backgroundColor: tema.fondo }, activo && s.animalitoSimpleSquareActive, bloqueado && s.animalitoSimpleSquareLocked, esEjemplo && s.animalitoSimpleSquareExample]} activeOpacity={1}>
                   {item && !bloqueado && !esEjemplo ? <>
                     <LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleCardGlow} pointerEvents="none" />
-                    <View style={s.catalogCardProgress} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: requeridasItem, now: Math.min(estadoItem.totalCartas, requeridasItem) }} accessibilityLabel={`${estadoItem.totalCartas} de ${requeridasItem} cartas para subir de nivel`}>
+                    <View style={s.catalogCardProgress} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: requeridasItem, now: Math.min(estadoItem.totalCartas, requeridasItem) }} accessibilityLabel={`${estadoItem.totalCartas} de ${requeridasItem} cartas de crecimiento`}>
                       <LinearGradient colors={faltantesItem ? [tema.acento, tema.texto] : ['#9dce65', '#589044']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.catalogCardProgressFill, { width: `${Math.min(100, estadoItem.totalCartas / requeridasItem * 100)}%` }]} />
                       <MaterialIcons name="style" size={10} color="#ffe6a1" /><Text style={s.catalogCardProgressText}>{estadoItem.totalCartas}/{requeridasItem}</Text>
                     </View>
@@ -744,7 +757,7 @@ const Animalitos = ({ navigation, mode }) => {
                       <Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text>
                       <Text style={s.catalogCardMissing} numberOfLines={1}>{faltantesItem ? `Faltan ${faltantesItem} cartas` : 'Cartas completas'}</Text>
                     </LinearGradient>
-                    <View style={[s.catalogCardLevel, { backgroundColor: tema.acento, borderColor: tema.brillo }]} accessibilityLabel={`Nivel ${estadoItem.nivel}`}><Text style={s.catalogCardLevelLabel}>NV.</Text><Text style={s.catalogCardLevelNumber}>{estadoItem.nivel}</Text></View>
+                    <View style={s.catalogCardVinculo} accessibilityLabel={`Vínculo nivel ${estadoItem.nivelVinculo}`}><VinculoBadge nivel={estadoItem.nivelVinculo} size={27} /></View>
                   </> : item && bloqueado ? <><LinearGradient colors={['#d9d8d4', '#b9b7b3']} style={s.animalitoSimpleCardGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>BLOQ.</Text></View><Image source={item.imagen} style={s.animalitoSimpleImageLocked} contentFit="contain" cachePolicy="memory" /><View style={s.catalogCardNameRow}><Text style={s.catalogCardName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{(apodoDeAnimal(item.id) || item.nombre).toUpperCase()}</Text></View><LinearGradient colors={['#777773', '#555552']} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>VER DETALLES</Text></LinearGradient><View style={[s.catalogCardLevel, s.catalogCardLevelLocked]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : item?.proximo ? <><LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleExampleGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>PRÓX.</Text></View><View style={[s.animalitoSimpleExampleIcon, { backgroundColor: tema.acento }]}><Text style={s.animalitoSimpleExampleEmoji}>{item.icono}</Text></View><Text style={[s.animalitoSimpleExampleName, { color: tema.texto }]} numberOfLines={1}>{item.nombre.toUpperCase()}</Text><LinearGradient colors={[tema.acento, tema.texto]} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>PRÓXIMAMENTE</Text></LinearGradient><View style={[s.catalogCardLevel, { backgroundColor: tema.acento, borderColor: tema.brillo }]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : <Text style={s.animalitoSimpleLock}>🔒</Text>}
                 </TouchableOpacity>;
               }}
@@ -758,7 +771,7 @@ const Animalitos = ({ navigation, mode }) => {
               animal={fichaAnimalMostrado}
               skins={SKINS.filter(skin => skin.animalId === animalMostrado.id).map(skin => ({ ...skin, bloqueado: !animalDesbloqueado || (skin.storageId !== 'default' && skinsEquipadas?.[skin.animalId] !== skin.storageId && !skinsDesbloqueadas?.[skin.animalId]?.[skin.storageId]) }))}
               tema={PALETA_RAREZA[fichaAnimalMostrado.rareza] || PALETA_RAREZA.Común}
-              estado={estadoMostrado} necesarias={cartasNecesarias} costo={costoMejora}
+              estado={estadoMostrado} vinculo={estadoMostrado.vinculo} necesarias={cartasNecesarias} costo={costoMejora}
               puedeMejorar={puedeMejorar} mejorando={Boolean(mejoraEnCurso)}
               desbloqueado={animalDesbloqueado}
               confirmar={mejoraPendiente === animalMostrado.id}
@@ -829,7 +842,7 @@ const Animalitos = ({ navigation, mode }) => {
                 }
               }}
             >
-              <View style={s.recompensasCompactas}>{recompensasCercanas.map(recompensa => { const disponible = estadoMostrado.nivel >= recompensa.nivel; return <TouchableOpacity key={recompensa.nivel} disabled={!disponible} onPress={() => reclamarRecompensaNivel(recompensa)} style={[s.animalitoSimpleReward, disponible && s.animalitoSimpleRewardReady]} activeOpacity={0.8}><Text style={s.animalitoSimpleRewardLevel}>NV. {recompensa.nivel}</Text><Text style={s.animalitoSimpleRewardIcon}>{recompensa.icono}</Text><Text style={s.animalitoSimpleRewardName} numberOfLines={1}>{recompensa.titulo}</Text></TouchableOpacity>; })}</View>
+              <View style={s.recompensasCompactas}>{recompensasCercanas.map(recompensa => { const disponible = estadoMostrado.nivel >= recompensa.nivel; return <TouchableOpacity key={recompensa.nivel} disabled={!disponible} onPress={() => reclamarRecompensaNivel(recompensa)} style={[s.animalitoSimpleReward, disponible && s.animalitoSimpleRewardReady]} activeOpacity={0.8}><Text style={s.animalitoSimpleRewardIcon}>{recompensa.icono}</Text><Text style={s.animalitoSimpleRewardName} numberOfLines={1}>{recompensa.titulo}</Text></TouchableOpacity>; })}</View>
             </AnimalitoShowcase>}
           </View>
         </View>
@@ -1219,6 +1232,7 @@ const s = StyleSheet.create({
   catalogCardFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '26%', paddingLeft: 32, paddingRight: 3, justifyContent: 'center', borderTopWidth: 1.5, borderTopColor: '#493d49', zIndex: 3 },
   catalogCardRarityText: { color: '#fff9e9', fontSize: 6.2, fontWeight: '900', fontFamily: 'Delius' },
   catalogCardMissing: { color: 'rgba(255,249,233,0.85)', fontSize: 5, marginTop: 1, fontWeight: '700' },
+  catalogCardVinculo: { position: 'absolute', bottom: 1, left: 1, width: 29, height: 29, alignItems: 'center', justifyContent: 'center', zIndex: 5, elevation: 5 },
   catalogCardLevel: { position: 'absolute', bottom: 2, left: 2, width: 27, height: 30, borderRadius: 8, borderWidth: 2, alignItems: 'center', justifyContent: 'center', zIndex: 5 },
   catalogCardLevelLocked: { backgroundColor: '#777773', borderColor: '#b8b6b0' },
   catalogCardLevelLabel: { color: '#fff6dc', fontSize: 4, lineHeight: 5, fontWeight: '900' },

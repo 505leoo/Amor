@@ -49,7 +49,12 @@ const OBJETIVOS_RACHA = {
   comerciante: {puntos: 0, meta: 1, hitos: {1: 2}},
 };
 const OBJETIVO_IDS = Object.keys(OBJETIVOS_RACHA);
-const objetivosDiariosCompletos = (objetivos = {}) => OBJETIVO_IDS.every((id) => Boolean(objetivos && objetivos[id] && objetivos[id].completado));
+const objetivoEstaCompletado = (objectiveId, registro = {}) => {
+  const objetivo = OBJETIVOS_RACHA[objectiveId];
+  const cantidad = Math.max(0, Number(registro && registro.cantidad) || 0);
+  return Boolean(registro && registro.completado) || cantidad >= Number((objetivo && objetivo.meta) || 1);
+};
+const objetivosDiariosCompletos = (objetivos = {}) => OBJETIVO_IDS.every((id) => objetivoEstaCompletado(id, objetivos && objetivos[id]));
 
 const conductaEvent = (id, delta, texto, tipo = delta < 0 ? "negativa" : "positiva") => ({
   id,
@@ -251,7 +256,7 @@ const liquidarRachaPendiente = async (uid, hastaDia = previousRachaDay(dayKeyInR
       const inicioDia = datos.puntosDiaInicio !== undefined ?
         puntosConductaSeguro(datos.puntosDiaInicio) : puntos;
       const tuvoDescuidado = Boolean(datos.penalizacionesHambre && Object.keys(datos.penalizacionesHambre).length);
-      const objetivosCompletados = OBJETIVO_IDS.filter((id) => Boolean(datos.objetivos && datos.objetivos[id] && datos.objetivos[id].completado)).length;
+      const objetivosCompletados = OBJETIVO_IDS.filter((id) => objetivoEstaCompletado(id, datos.objetivos && datos.objetivos[id])).length;
       if (ultimoDiaCerrado === dias[index]) objetivosUltimoDia = objetivosCompletados;
       const penalizacion = tuvoDescuidado ? 0 : objetivosCompletados === 0 ?
         PENALIZACION_DIA_SIN_OBJETIVOS : objetivosCompletados === 1 ? PENALIZACION_DIA_UNICO_OBJETIVO : 0;
@@ -703,21 +708,12 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
     };
     const objetivos = {...(currentDay.objetivos || {})};
     const puntosTotalesAntes = Math.max(0, Number(rachaAnterior.puntosTotales) || Number(currentDay.puntosTotales) || (Math.max(0, Number(rachaAnterior.diasConsecutivos) || 0) * PUNTOS_POR_DIA_RACHA));
-    const objetivoRepetible = objectiveId === "nivel" || objectiveId === "alimentar" || objectiveId === "comerciante";
-    if (!objetivoRepetible && objetivos[objectiveId] && objetivos[objectiveId].completado) {
-      if (puntosDiaAntes !== Number(currentDayRaw.puntosDia !== undefined ? currentDayRaw.puntosDia : currentDayRaw.puntos) || puntosTotalesAntes !== Number(currentDayRaw.puntosTotales) || !currentDayRaw.completado && currentDay.completado) {
-        tx.set(dayRef, {
-          meta: META_RACHA_DIARIA,
-          puntos: puntosDiaAntes,
-          puntosDia: puntosDiaAntes,
-          puntosTotales: puntosTotalesAntes,
-          completado: currentDay.completado,
-          actualizadoEn: admin.firestore.FieldValue.serverTimestamp(),
-        }, {merge: true});
-      }
+    if (objetivoEstaCompletado(objectiveId, objetivos[objectiveId])) {
       return {
         aplicado: false,
         dayKey,
+        objectiveId,
+        yaCompletado: true,
         puntos: puntosDiaAntes,
         puntosDia: puntosDiaAntes,
         puntosTotales: puntosTotalesAntes,
@@ -855,7 +851,7 @@ exports.registrarObjetivoRacha = onCall(async (request) => {
       objetivoCompletado,
       puntosObjetivo: puntosAplicados,
       bitacoraRegistrada: bitacora.registrada,
-      objetivosCompletados: OBJETIVO_IDS.filter((id) => objetivos[id] && objetivos[id].completado).length,
+      objetivosCompletados: OBJETIVO_IDS.filter((id) => objetivoEstaCompletado(id, objetivos[id])).length,
       totalObjetivos: OBJETIVO_IDS.length,
     };
   });

@@ -42,7 +42,12 @@ export const PUNTOS_MAX_OBJETIVOS_DIARIOS = Object.values(OBJETIVOS_RACHA)
     Number(objetivo.puntos) || 0,
     Object.values(objetivo.hitos || {}).reduce((subtotal, puntos) => subtotal + (Number(puntos) || 0), 0),
   ), 0);
-export const objetivosDiariosCompletos = (objetivos = {}) => OBJETIVO_IDS.every(id => Boolean(objetivos?.[id]?.completado));
+export const objetivoEstaCompletado = (objectiveId, registro = {}) => {
+  const objetivo = OBJETIVOS_RACHA[objectiveId];
+  const cantidad = Math.max(0, Number(registro.cantidad) || 0);
+  return Boolean(registro.completado) || cantidad >= Number(objetivo?.meta || 1);
+};
+export const objetivosDiariosCompletos = (objetivos = {}) => OBJETIVO_IDS.every(id => objetivoEstaCompletado(id, objetivos?.[id]));
 
 const RachaContext = createContext(null);
 const RACHA_TIME_ZONE = 'America/Argentina/Buenos_Aires';
@@ -169,7 +174,7 @@ const resolverRachaLocal = async uid => {
       const puntos = tienePuntosGuardados ? puntosConductaSeguro(datos.puntosDia ?? datos.puntos) : puntosConducta;
       const inicioDia = datos.puntosDiaInicio !== undefined ? puntosConductaSeguro(datos.puntosDiaInicio) : puntos;
       const tuvoDescuidado = Boolean(datos.penalizacionesHambre && Object.keys(datos.penalizacionesHambre).length);
-      const objetivosCompletados = OBJETIVO_IDS.filter(id => Boolean(datos.objetivos?.[id]?.completado)).length;
+      const objetivosCompletados = OBJETIVO_IDS.filter(id => objetivoEstaCompletado(id, datos.objetivos?.[id])).length;
       const penalizacion = tuvoDescuidado ? 0 : objetivosCompletados === 0
         ? PENALIZACION_DIA_SIN_OBJETIVOS
         : objetivosCompletados === 1 ? PENALIZACION_DIA_UNICO_OBJETIVO : 0;
@@ -247,6 +252,7 @@ export function RachaProvider({ children }) {
   const ritualRef = useRef(null);
   const ritualSeenRef = useRef(null);
   const ritualPendingRef = useRef(null);
+  const objectiveToastKeysRef = useRef(new Set());
 
   useEffect(() => { dayStateRef.current = day; }, [day]);
   useEffect(() => { rachaStateRef.current = racha; }, [racha]);
@@ -285,6 +291,10 @@ export function RachaProvider({ children }) {
     }, 60000);
     return () => clearInterval(timer);
   }, []);
+  useEffect(() => {
+    objectiveToastKeysRef.current.clear();
+    setToast(null);
+  }, [dayKey, uid]);
 
   useEffect(() => {
     if (!uid) {
@@ -325,8 +335,8 @@ export function RachaProvider({ children }) {
         completado: Boolean(datos.completado || objetivosDiariosCompletos(datos.objetivos)),
       };
       const localDay = dayStateRef.current;
-      const localObjectiveCount = OBJETIVO_IDS.filter(id => localDay?.objetivos?.[id]?.completado).length;
-      const snapshotObjectiveCount = OBJETIVO_IDS.filter(id => siguienteDia.objetivos?.[id]?.completado).length;
+      const localObjectiveCount = OBJETIVO_IDS.filter(id => objetivoEstaCompletado(id, localDay?.objetivos?.[id])).length;
+      const snapshotObjectiveCount = OBJETIVO_IDS.filter(id => objetivoEstaCompletado(id, siguienteDia.objetivos?.[id])).length;
       const progresoLocalMayor = OBJETIVO_IDS.some(id => {
         const local = localDay?.objetivos?.[id] || {};
         const remoto = siguienteDia.objetivos?.[id] || {};
@@ -370,10 +380,6 @@ export function RachaProvider({ children }) {
       if (running || isOfflineModeEnabled()) return;
       running = true;
       resolver({}).then(response => {
-        const ajuste = response?.data?.ajuste;
-        if (ajuste && Number(ajuste.puntosTotalesAntes) > Number(ajuste.puntosTotales)) {
-          setToast({ fromPoints: ajuste.puntosTotalesAntes, toPoints: ajuste.puntosTotales, penalty: true });
-        }
         const cierre = response?.data?.cierre;
         mostrarRitual(cierre);
       }).catch(error => {
@@ -382,9 +388,6 @@ export function RachaProvider({ children }) {
         if (['functions/not-found', 'functions/unimplemented'].includes(error?.code)) {
           resolverRachaLocal(uid).then(cierre => {
             mostrarRitual(cierre);
-            if (cierre && Number(cierre.fromPoints) > Number(cierre.toPoints)) {
-              setToast({ fromPoints: cierre.fromPoints, toPoints: cierre.toPoints, penalty: true });
-            }
           }).catch(localError => console.warn('[Racha] No se pudo resolver el cierre local', localError?.message || localError));
         } else if (!isOfflineModeEnabled()) {
           console.warn('[Racha] No se pudo resolver el día anterior', error?.message || error);
@@ -405,6 +408,14 @@ export function RachaProvider({ children }) {
     const currentDayKey = dayKeyFor();
     const userRef = doc(db, 'usuarios', currentUid);
     const dayRef = doc(db, 'usuarios', currentUid, 'racha_diaria', currentDayKey);
+    const objetivoActual = dayStateRef.current?.fecha === currentDayKey
+      ? dayStateRef.current?.objetivos?.[objectiveId]
+      : null;
+    // No enviamos otra llamada cuando el objetivo ya está cumplido. Esto
+    // evita Toast repetidos incluso antes de que llegue el snapshot remoto.
+    if (objetivoEstaCompletado(objectiveId, objetivoActual)) {
+      return { aplicado: false, objectiveId, yaCompletado: true };
+    }
     // El camino normal usa la callable para que el servidor sea la autoridad.
     // El fallback mantiene la app funcional durante el despliegue inicial de
     // Functions y solo se activa cuando la callable todavía no existe.
@@ -415,7 +426,9 @@ export function RachaProvider({ children }) {
       const previousObjectives = previousDay.objetivos || {};
       const previousObjective = previousObjectives[objectiveId] || {};
       const repeatable = objectiveId === 'nivel' || objectiveId === 'alimentar' || objectiveId === 'comerciante';
-      if (!repeatable && previousObjective.completado) return { aplicado: false, objectiveId };
+      if (objetivoEstaCompletado(objectiveId, previousObjective)) {
+        return { aplicado: false, objectiveId, yaCompletado: true };
+      }
       const previousCount = repeatable
         ? Math.max(0, Number(previousObjective.cantidad) || (previousObjective.completado ? 1 : 0))
         : 0;
@@ -459,7 +472,7 @@ export function RachaProvider({ children }) {
         bonoDiaAplicado: Boolean(previousDay.bonoDiaAplicado || nuevoDiaCompletado),
         actualizadoEn: Date.now(),
       };
-      const siguientesObjetivos = OBJETIVO_IDS.filter(id => objetivos[id]?.completado).length;
+      const siguientesObjetivos = OBJETIVO_IDS.filter(id => objetivoEstaCompletado(id, objetivos[id])).length;
       const siguienteRacha = { ...rachaActual, puntosTotales, puntosConducta: puntosDia, diasConsecutivos };
       dayStateRef.current = siguienteDia;
       rachaStateRef.current = siguienteRacha;
@@ -467,23 +480,22 @@ export function RachaProvider({ children }) {
       setRacha(siguienteRacha);
       setStreakDays(diasConsecutivos);
       cacheDocument(currentUid, dayRef.path, siguienteDia).catch(() => {});
-      // También celebramos el avance parcial: alimentar 1/4 ya es un paso
-      // real, aunque el hito de puntos llegue recién al completar la misión.
-      setToast({
-        kind: 'objective',
-        objectiveId,
-        objectiveTitle: objective.titulo,
-        progress: nextCount,
-        goal: objective.meta || 1,
-        completed: Boolean(objetivos[objectiveId]?.completado),
-        fromPoints: puntosTotalesAntes,
-        toPoints: puntosTotales,
-        pointsEarned: puntosObjetivo,
-        dayBonus: nuevoDiaCompletado ? BONUS_DIA_RACHA : 0,
-        completedObjectives: siguientesObjetivos,
-        totalObjectives: OBJETIVO_IDS.length,
-        dayCompleted: nuevoDiaCompletado,
-      });
+      // También celebramos el avance parcial: 1/4 ya es un paso real.
+      const toastKey = `${currentDayKey}:${objectiveId}:${nextCount}`;
+      if (!objectiveToastKeysRef.current.has(toastKey)) {
+        objectiveToastKeysRef.current.add(toastKey);
+        setToast({
+          kind: 'objective',
+          objectiveId,
+          objectiveTitle: objective.titulo,
+          progress: nextCount,
+          goal: objective.meta || 1,
+          completed: Boolean(objetivos[objectiveId]?.completado),
+          completedObjectives: siguientesObjetivos,
+          totalObjectives: OBJETIVO_IDS.length,
+          dayCompleted: nuevoDiaCompletado,
+        });
+      }
       if (nuevoDiaCompletado) {
         setRitual({
           dayKey: currentDayKey,
@@ -506,6 +518,12 @@ export function RachaProvider({ children }) {
       const response = await syncCallable('registrarObjetivoRacha', { objectiveId });
       if (response?.pending) return aplicarObjetivoOptimista();
       result = response?.data || null;
+      // Si una versión antigua de la callable todavía acepta una acción
+      // posterior a la meta, no mostramos un Toast duplicado. La próxima
+      // versión de la función también bloquea esa escritura en el servidor.
+      if (result?.aplicado && Number(result.cantidadObjetivo) > Number(result.metaObjetivo || objective.meta || 1)) {
+        result = { ...result, aplicado: false, yaCompletado: true };
+      }
     } catch (error) {
       const functionMissing = ['functions/not-found', 'functions/unimplemented'].includes(error?.code);
       if (!functionMissing) throw error;
@@ -536,19 +554,8 @@ export function RachaProvider({ children }) {
         const currentObjectives = { ...(currentDay.objetivos || {}) };
         const puntosDiaAntes = currentDay.puntosDia;
         const puntosTotalesAntes = puntosAcumulados(currentStreak.puntosTotales || currentDay.puntosTotales || ((Number(currentStreak.diasConsecutivos) || 0) * PUNTOS_POR_DIA_RACHA));
-        const objetivoRepetible = objectiveId === 'nivel' || objectiveId === 'alimentar' || objectiveId === 'comerciante';
-        if (!objetivoRepetible && currentObjectives[objectiveId]?.completado) {
-          if (puntosDiaAntes !== Number(currentDayRaw.puntosDia ?? currentDayRaw.puntos) || puntosTotalesAntes !== Number(currentDayRaw.puntosTotales) || (objetivosDiariosCompletos(currentDay.objetivos) && !currentDay.completado)) {
-            transaction.set(dayRef, {
-              meta: META_RACHA_DIARIA,
-              puntos: puntosDiaAntes,
-              puntosDia: puntosDiaAntes,
-              puntosTotales: puntosTotalesAntes,
-              completado: objetivosDiariosCompletos(currentDay.objetivos),
-              actualizadoEn: serverTimestamp(),
-            }, { merge: true });
-          }
-          return { aplicado: false, day: { ...currentDay, puntos: puntosDiaAntes, puntosDia: puntosDiaAntes, puntosTotales: puntosTotalesAntes, completado: Boolean(currentDay.completado || objetivosDiariosCompletos(currentDay.objetivos)) }, streakDays: Number(user.rachaDiaria?.diasConsecutivos) || 0 };
+        if (objetivoEstaCompletado(objectiveId, currentObjectives[objectiveId])) {
+          return { aplicado: false, objectiveId, yaCompletado: true, day: { ...currentDay, puntos: puntosDiaAntes, puntosDia: puntosDiaAntes, puntosTotales: puntosTotalesAntes, completado: Boolean(currentDay.completado || objetivosDiariosCompletos(currentDay.objetivos)) }, streakDays: Number(user.rachaDiaria?.diasConsecutivos) || 0 };
         }
         const registroAnterior = currentObjectives[objectiveId] || {};
         const objetivoCuentaAcciones = objectiveId === 'nivel' || objectiveId === 'alimentar' || objectiveId === 'comerciante';
@@ -648,25 +655,26 @@ export function RachaProvider({ children }) {
           ...(completado && !currentDay.completado ? { completadoEn: serverTimestamp() } : {}),
         }, { merge: true });
         transaction.set(userRef, { rachaDiaria: { ...currentStreak, puntosTotales, puntosConducta: puntosDia, diasConsecutivos, ultimaFechaCompleta, ultimoDia: currentDayKey } }, { merge: true });
-        return { aplicado: true, fromPoints: puntosTotalesAntes, toPoints: puntosTotales, fromDailyPoints: puntosDiaAntes, toDailyPoints: puntosDia, streakDays: diasConsecutivos, nuevoDiaCompletado: completadoAhora, objetivosCompletados: OBJETIVO_IDS.filter(id => currentObjectives[id]?.completado).length, totalObjetivos: OBJETIVO_IDS.length, nuevaRacha: diasConsecutivos > diasAntes, dayKey: currentDayKey, cantidadObjetivo: cantidadNueva, metaObjetivo: objective.meta || 1, objetivoCompletado, puntosObjetivo: puntosAplicados, hitosGanados: hitosGanados.map(([cantidad, puntos]) => ({ cantidad, puntos })), bitacoraRegistrada: bitacora.registrada };
+        return { aplicado: true, fromPoints: puntosTotalesAntes, toPoints: puntosTotales, fromDailyPoints: puntosDiaAntes, toDailyPoints: puntosDia, streakDays: diasConsecutivos, nuevoDiaCompletado: completadoAhora, objetivosCompletados: OBJETIVO_IDS.filter(id => objetivoEstaCompletado(id, currentObjectives[id])).length, totalObjetivos: OBJETIVO_IDS.length, nuevaRacha: diasConsecutivos > diasAntes, dayKey: currentDayKey, cantidadObjetivo: cantidadNueva, metaObjetivo: objective.meta || 1, objetivoCompletado, puntosObjetivo: puntosAplicados, hitosGanados: hitosGanados.map(([cantidad, puntos]) => ({ cantidad, puntos })), bitacoraRegistrada: bitacora.registrada };
       });
     }
     if (result?.aplicado && auth.currentUser?.uid === currentUid) {
-      setToast({
-        kind: 'objective',
-        objectiveId,
-        objectiveTitle: objective.titulo,
-        progress: result.cantidadObjetivo ?? (result.objetivoCompletado ? (result.metaObjetivo || objective.meta || 1) : 1),
-        goal: result.metaObjetivo || objective.meta || 1,
-        completed: Boolean(result.objetivoCompletado),
-        fromPoints: result.fromPoints,
-        toPoints: result.toPoints,
-        pointsEarned: result.puntosObjetivo || 0,
-        dayBonus: result.nuevoDiaCompletado ? BONUS_DIA_RACHA : 0,
-        completedObjectives: result.objetivosCompletados || 0,
-        totalObjectives: result.totalObjetivos || OBJETIVO_IDS.length,
-        dayCompleted: Boolean(result.nuevoDiaCompletado),
-      });
+      const progress = Math.min(Number(result.metaObjetivo || objective.meta || 1), Math.max(1, Number(result.cantidadObjetivo) || 1));
+      const toastKey = `${currentDayKey}:${objectiveId}:${progress}`;
+      if (!objectiveToastKeysRef.current.has(toastKey)) {
+        objectiveToastKeysRef.current.add(toastKey);
+        setToast({
+          kind: 'objective',
+          objectiveId,
+          objectiveTitle: objective.titulo,
+          progress,
+          goal: result.metaObjetivo || objective.meta || 1,
+          completed: Boolean(result.objetivoCompletado),
+          completedObjectives: result.objetivosCompletados || 0,
+          totalObjectives: result.totalObjetivos || OBJETIVO_IDS.length,
+          dayCompleted: Boolean(result.nuevoDiaCompletado),
+        });
+      }
       if (result.nuevoDiaCompletado) mostrarRitual({ ...result, dayCompleted: true, completedObjectives: result.objetivosCompletados || OBJETIVO_IDS.length, totalObjectives: result.totalObjetivos || OBJETIVO_IDS.length, outcome: result.nuevaRacha ? 'subio' : 'igual' });
     }
     return result;

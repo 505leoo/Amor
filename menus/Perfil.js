@@ -16,8 +16,7 @@ import RoomBackground from '../components/RoomBackground';
 import Player, { SinAnimal } from '../Player';
 import { ANIMALITOS, ANIMALITOS_POR_ID, SKINS_POR_ANIMAL, animalitoEstaDesbloqueado } from '../data/animalitos';
 import { resolverAvatarUsuario } from '../data/iconosLocales';
-import { RachaCountdown, RachaSegmentedBar } from '../components/RachaVisual';
-import { PUNTOS_POR_DIA_RACHA, useRacha, dayKeyFor } from '../RachaContext';
+import { useRacha } from '../RachaContext';
 
 const ICONO_DEFAULT = require('../assets/inicio/iconos/icono1.webp');
 
@@ -628,7 +627,6 @@ const Perfil = ({ navigation, route }) => {
   const soloLectura = Boolean(externalUid);
   const rachaActual = useRacha();
   const [userData, setUserData] = useState(null);
-  const [rachaDayData, setRachaDayData] = useState(null);
   const [animalStates, setAnimalStates] = useState({});
   const [badgeRecords, setBadgeRecords] = useState({});
   const [openBadgeId, setOpenBadgeId] = useState(null);
@@ -654,7 +652,6 @@ const Perfil = ({ navigation, route }) => {
     const currentUser = auth.currentUser;
     const targetUid = externalUid ?? currentUser?.uid;
     setUserData(null);
-    setRachaDayData(null);
     setBadgeRecords({});
     setOpenBadgeId(null);
     setChapasExpandidas(false);
@@ -781,10 +778,7 @@ const Perfil = ({ navigation, route }) => {
       snap.docs.forEach(badgeDoc => { next[badgeDoc.id] = { id: badgeDoc.id, ...(badgeDoc.data() || {}) }; });
       setBadgeRecords(next);
     }, () => setBadgeRecords({}));
-    const unsubscribeRachaDay = onSnapshot(doc(db, 'usuarios', targetUid, 'racha_diaria', dayKeyFor()), snap => {
-      setRachaDayData(snap.exists() ? (snap.data() || {}) : null);
-    }, () => setRachaDayData(null));
-    return () => { unsubscribeUser(); unsubscribeGame(); unsubscribeMemoria(); unsubscribeAnimals(); unsubscribeBadges(); unsubscribeRachaDay(); };
+    return () => { unsubscribeUser(); unsubscribeGame(); unsubscribeMemoria(); unsubscribeAnimals(); unsubscribeBadges(); };
   }, [externalUid, soloLectura]);
 
   useEffect(() => {
@@ -996,13 +990,6 @@ const Perfil = ({ navigation, route }) => {
   const d = userData;
   const perfilRacha = d.rachaDiaria || {};
   const streakDays = Math.max(0, Number(soloLectura ? perfilRacha.diasConsecutivos : rachaActual.streakDays) || 0);
-  const streakDayPoints = Number(soloLectura
-    ? (rachaDayData?.puntosDia ?? rachaDayData?.puntos ?? perfilRacha.puntosConducta)
-    : (rachaActual.day?.puntosDia ?? rachaActual.day?.puntos ?? rachaActual.racha?.puntosConducta)) || 0;
-  const streakTotalSource = soloLectura
-    ? (perfilRacha.puntosTotales || rachaDayData?.puntosTotales || ((Number(perfilRacha.diasConsecutivos) || 0) * PUNTOS_POR_DIA_RACHA))
-    : (rachaActual.racha?.puntosTotales || rachaActual.day?.puntosTotales || (rachaActual.streakDays * PUNTOS_POR_DIA_RACHA));
-  const streakTotalPoints = Math.max(0, Number(streakTotalSource) || 0);
   const nivelPerfil = 1 + Math.floor(d.exp / 100);
   const progresoPerfil = d.exp % 100;
   const avatar = resolverAvatarUsuario(d, ICONO_DEFAULT);
@@ -1196,13 +1183,6 @@ const Perfil = ({ navigation, route }) => {
             <View style={styles.streakLottieWrap}>
               <LottieView source={require('../assets/Lottie/Fire.lottie')} autoPlay loop style={styles.streakLottie} />
               <Text style={styles.streakNumber}>{streakDays}</Text>
-            </View>
-            <View style={styles.streakCopy}>
-              <Text style={styles.streakEyebrow}>RACHA ACUMULADA</Text>
-              <Text style={styles.streakTitle}>{streakDays ? `${streakDays} ${streakDays === 1 ? 'día' : 'días'} encendidos` : 'Encendé tu primera llama'}</Text>
-              <Text style={styles.streakPoints}>{streakTotalPoints} pts acumulados · {streakDayPoints} pts de conducta hoy</Text>
-              <RachaSegmentedBar points={streakTotalPoints} dailyPoints={streakDayPoints} compact />
-              {!soloLectura && <RachaCountdown compact />}
             </View>
           </LinearGradient>
 
@@ -1449,14 +1429,10 @@ const styles = StyleSheet.create({
   dataValue: { flex: 1, color: '#3f2b20', fontSize: 7.2, fontWeight: '800' },
   activeChip: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, backgroundColor: '#dce8bc', borderWidth: 0.8, borderColor: '#a5be72' },
   activeChipText: { color: '#648440', fontSize: 6.1, fontWeight: '900', letterSpacing: 0.5 },
-  streakPanel: { height: 82, marginTop: 4, marginLeft: '10%', marginRight: 2, borderRadius: 12, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, borderWidth: 1.5, borderColor: '#754951', shadowColor: '#5b3038', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.34, shadowRadius: 5, elevation: 5 },
-  streakLottieWrap: { width: 48, height: 50, alignItems: 'center', justifyContent: 'center', marginRight: 3 },
-  streakLottie: { position: 'absolute', width: 53, height: 53 },
-  streakNumber: { zIndex: 2, color: '#fff5cf', fontFamily: 'Delius', fontSize: 14, lineHeight: 16, fontWeight: '900', textShadowColor: 'rgba(65,25,22,0.72)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
-  streakCopy: { flex: 1, minWidth: 0 },
-  streakEyebrow: { color: '#f8d7b8', fontFamily: 'Delius', fontSize: 5.5, fontWeight: '900', letterSpacing: 0.75 },
-  streakTitle: { marginTop: 1, color: '#fff6e8', fontFamily: 'Delius', fontSize: 8, lineHeight: 10, fontWeight: '900' },
-  streakPoints: { marginTop: 1, color: 'rgba(255,238,218,0.8)', fontFamily: 'Delius', fontSize: 5.4, lineHeight: 7 },
+  streakPanel: { width: 76, height: 76, alignSelf: 'center', marginTop: 4, borderRadius: 20, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#754951', shadowColor: '#5b3038', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.34, shadowRadius: 5, elevation: 5 },
+  streakLottieWrap: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center' },
+  streakLottie: { position: 'absolute', width: 70, height: 70 },
+  streakNumber: { zIndex: 2, color: '#fff5cf', fontFamily: 'Delius', fontSize: 16, lineHeight: 18, fontWeight: '900', transform: [{ translateY: 15 }], textShadowColor: 'rgba(65,25,22,0.72)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   chapasHeader: { width: '100%', alignSelf: 'stretch', minHeight: 34, marginBottom: 6, paddingHorizontal: 38, borderRadius: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#d7647c', borderWidth: 1, borderColor: '#a9435b', shadowColor: '#8f4353', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 2, elevation: 5, position: 'relative', zIndex: 20 },
   chapasTabChevron: { position: 'absolute', right: 48, top: 3, width: 34, height: 26, borderRadius: 6, alignItems: 'center', justifyContent: 'center', backgroundColor: '#9e3f59', borderLeftWidth: 1, borderLeftColor: 'rgba(255,241,215,0.55)', zIndex: 21, elevation: 6 },
   chapasChevronText: { color: '#fff1d7', fontSize: 13, lineHeight: 16, fontWeight: '900' },
