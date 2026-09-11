@@ -41,8 +41,9 @@ export default function AnimalitoShowcase({ animal, skins, tema, estado, vinculo
   const cambiar = delta => setSkinId(skins[(index + delta + skins.length) % skins.length].storageId);
   const usando = equipado && skin?.storageId === skinEquipada;
   const compacto = width < 520;
-  const progreso = Math.min(100, estado.totalCartas / necesarias * 100);
-  const nivelDeVinculo = nivelVinculo(vinculo ?? estado?.vinculo);
+  const vinculoTotal = vinculoSeguro(vinculo ?? estado?.vinculo);
+  const nivelDeVinculo = nivelVinculo(vinculoTotal);
+  const progresoVinculo = vinculoTotal % VINCULO_POR_NIVEL;
   return <View style={s.root} onLayout={event => setWidth(event.nativeEvent.layout.width)}>
     <View style={s.content}>
     <View style={[s.scene, compacto && s.sceneCompact]}>
@@ -85,8 +86,8 @@ export default function AnimalitoShowcase({ animal, skins, tema, estado, vinculo
         <Text style={s.eyebrow}>VÍNCULO</Text>
         <View style={s.vinculoShowcase}><VinculoBadge nivel={nivelDeVinculo} size={40} /></View>
         <Text style={s.vinculoHint}>Crece con tus cuidados</Text>
-        <View style={s.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: necesarias, now: Math.min(estado.totalCartas, necesarias) }} accessibilityLabel="Progreso de cartas"><LinearGradient colors={[tema.acento, tema.texto]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.fill, { width: `${progreso}%` }]} /></View>
-        <Text style={s.cards}>{estado.totalCartas} / {necesarias} cartas</Text>
+        <View style={s.track} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: VINCULO_POR_NIVEL, now: Math.round(progresoVinculo) }} accessibilityLabel="Progreso de Vínculo"><LinearGradient colors={[tema.acento, tema.texto]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.fill, { width: `${progresoVinculo}%` }]} /></View>
+        <Text style={s.vinculoProgressText}>{Math.round(progresoVinculo)}% de vínculo</Text>
         <TouchableOpacity onPress={onMejorar} disabled={!puedeMejorar || mejorando} style={[s.upgrade, { backgroundColor: tema.acento }, (!puedeMejorar || mejorando) && s.disabled]}><Text style={s.buttonText}>{mejorando ? 'Mejorando…' : confirmar ? `Confirmar · ${costo} monedas` : 'Mejorar compañero'}</Text></TouchableOpacity>
         <Text style={s.cost}>{costo} monedas por mejora</Text>
         <TouchableOpacity onPress={onCartas} hitSlop={5}><Text style={[s.link, { color: tema.texto }]}>Conseguir cartas ↗</Text></TouchableOpacity>
@@ -117,7 +118,7 @@ const s = StyleSheet.create({
   arrow: { position: 'absolute', top: 87, width: 30, height: 34, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,250,239,0.9)', borderRadius: 10, zIndex: 5 }, arrowLeft: { left: -7 }, arrowRight: { right: -7 },
   skinCaption: { position: 'absolute', bottom: 0, alignItems: 'center', zIndex: 4 }, skinName: { fontFamily: 'Delius', color: '#584636', fontSize: 11, fontWeight: '800' }, skinCount: { color: '#8f7863', fontSize: 7, marginTop: 3, letterSpacing: 1 },
   progressColumn: { width: '23%', maxWidth: 200, alignItems: 'stretch' }, progressColumnCompact: { width: '46%', maxWidth: undefined }, progressCard: { width: '100%', padding: 14, borderRadius: 12, backgroundColor: 'rgba(255,250,239,0.88)' }, rewardsInProgress: { width: '100%', alignItems: 'center' }, vinculoShowcase: { alignItems: 'center', justifyContent: 'center', marginTop: 7 }, vinculoHint: { color: '#a18b76', fontFamily: 'Delius', fontSize: 8, fontWeight: '800', textAlign: 'center', marginTop: 3 }, vinculoBadge: { alignItems: 'center', justifyContent: 'center', position: 'relative' }, vinculoBadgeText: { position: 'absolute', top: '35%', left: 0, color: '#fff9e8', fontFamily: 'Delius', fontWeight: '900', lineHeight: 10, textAlign: 'center', textShadowColor: 'rgba(111,75,25,0.75)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 1 }, levelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }, level: { fontFamily: 'Delius', color: '#493d35', fontSize: 18, fontWeight: '900' }, next: { color: '#ac9982', fontSize: 12 },
-  track: { height: 8, backgroundColor: '#e6ddce', borderRadius: 4, overflow: 'hidden', marginTop: 12 }, fill: { height: '100%', borderRadius: 4 }, cards: { color: '#88715d', fontSize: 9, marginTop: 5 },
+  track: { height: 8, backgroundColor: '#e6ddce', borderRadius: 4, overflow: 'hidden', marginTop: 12 }, fill: { height: '100%', borderRadius: 4 }, vinculoProgressText: { color: '#88715d', fontSize: 9, marginTop: 5 },
   upgrade: { marginTop: 12, paddingVertical: 9, paddingHorizontal: 6, borderRadius: 8, alignItems: 'center' }, buttonText: { fontFamily: 'Delius', fontSize: 10, fontWeight: '800', color: '#fffaf1', textAlign: 'center' }, cost: { textAlign: 'center', color: '#a08b75', fontSize: 7, marginTop: 5 }, link: { fontSize: 9, textAlign: 'center', marginTop: 12 }, disabled: { opacity: 0.5 },
   equipArea: { alignItems: 'center', marginTop: 12 }, equip: { flexDirection: 'row', gap: 8, paddingHorizontal: 23, paddingVertical: 10, borderRadius: 10, alignItems: 'center' }, equipActual: { borderWidth: 1, borderColor: 'rgba(255,244,220,0.45)' }, rewards: { width: '86%', maxWidth: 570, alignSelf: 'center', marginTop: 18 },
   tematicasMini: { marginTop: 2, alignItems: 'center' }, tematicasMiniLista: { flexDirection: 'row', gap: 7 }, tematicaMiniBoton: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#fff6df', borderWidth: 1.2 }, tematicaMiniIcono: { fontSize: 17 },

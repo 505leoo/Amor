@@ -2,7 +2,7 @@
   "expo": {
     "name": "Amor",
     "slug": "Amor",
-    "version": "1.1.59",
+    "version": "1.1.60",
     "orientation": "landscape",
     "icon": "./assets/16.png",
     "userInterfaceStyle": "light",
@@ -56,7 +56,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "versionCode": 10159
+      "versionCode": 10160
     },
     "scheme": "amor",
     "ios": {
@@ -104,8 +104,8 @@
         "projectId": "3e224fbe-d6f2-48c1-8903-61bf13953cf2"
       },
       "expo-navigation-bar": {},
-      "updateVersion": "1.1.59",
-      "updateDescription": "Mejoras oportunas al Animalito de la aplicación."
+      "updateVersion": "1.1.60",
+      "updateDescription": "Mejoras leves en la aplicación."
     },
     "owner": "505leoo"
   }

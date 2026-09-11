@@ -33,6 +33,7 @@ const vinculoDeAnimal = (guardado = {}, nivel = 1) => guardado?.vinculo !== unde
   ? vinculoSeguro(guardado.vinculo)
   : vinculoSeguro((Math.max(1, Number(nivel) || 1) - 1) * VINCULO_POR_NIVEL);
 const nivelVinculoDeAnimal = (guardado = {}, nivel = 1) => Math.floor(vinculoDeAnimal(guardado, nivel) / VINCULO_POR_NIVEL) + 1;
+const porcentajeVinculoDeAnimal = (guardado = {}, nivel = 1) => vinculoDeAnimal(guardado, nivel) % VINCULO_POR_NIVEL;
 const MAX_APODO = 18;
 const normalizarApodo = valor => String(valor || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_APODO);
 const ICONOS_APODO = [
@@ -672,7 +673,7 @@ const Animalitos = ({ navigation, mode }) => {
   const costoMejora = COSTO_MEJORA(estadoMostrado.nivel);
   const animalDesbloqueado = desbloqueados.includes(animalMostradoId);
   const puedeMejorar = animalDesbloqueado && estadoMostrado.totalCartas >= cartasNecesarias && dinero >= costoMejora;
-  const progresoCartas = Math.min(100, (estadoMostrado.totalCartas / Math.max(1, cartasNecesarias)) * 100);
+  const progresoVinculo = porcentajeVinculoDeAnimal(animalesEstado?.[animalMostradoId], estadoMostrado.nivel);
   const recompensasMostradas = RECOMPENSAS_NIVEL[animalMostradoId] || [];
   const recompensasCercanas = recompensasMostradas
     .filter(recompensa => !recompensasReclamadas?.[animalMostradoId]?.[recompensa.nivel])
@@ -691,7 +692,7 @@ const Animalitos = ({ navigation, mode }) => {
   const animalitosOrdenados = [...animalitosFiltrados]
     .filter(animal => desbloqueados.includes(animal.id))
     .sort((a, b) => {
-    if (ordenCatalogo === 'nivel') return estadoAnimal(b.id).nivel - estadoAnimal(a.id).nivel;
+    if (ordenCatalogo === 'vinculo') return estadoAnimal(b.id).nivelVinculo - estadoAnimal(a.id).nivelVinculo;
     return ANIMALITOS.findIndex(animal => animal.id === a.id) - ANIMALITOS.findIndex(animal => animal.id === b.id);
   });
   const animalitosCatalogo = ANIMALITOS
@@ -739,14 +740,13 @@ const Animalitos = ({ navigation, mode }) => {
                 const activo = item?.id === seleccionado?.id;
                 const tema = PALETA_RAREZA[item?.rareza] || PALETA_RAREZA.Común;
                 const estadoItem = item && !bloqueado ? estadoAnimal(item.id) : null;
-                const requeridasItem = estadoItem ? COPIAS_POR_NIVEL(estadoItem.nivel) : 0;
-                const faltantesItem = estadoItem ? Math.max(0, requeridasItem - estadoItem.totalCartas) : 0;
+                const progresoVinculoItem = estadoItem ? Math.round(estadoItem.vinculo % VINCULO_POR_NIVEL) : 0;
                 return <TouchableOpacity key={item?.id || `animal-simple-${index}`} disabled={!item || esEjemplo} onPress={() => setSeleccionado(item)} style={[s.animalitoSimpleSquare, { backgroundColor: tema.fondo }, activo && s.animalitoSimpleSquareActive, bloqueado && s.animalitoSimpleSquareLocked, esEjemplo && s.animalitoSimpleSquareExample]} activeOpacity={1}>
                   {item && !bloqueado && !esEjemplo ? <>
                     <LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleCardGlow} pointerEvents="none" />
-                    <View style={s.catalogCardProgress} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: requeridasItem, now: Math.min(estadoItem.totalCartas, requeridasItem) }} accessibilityLabel={`${estadoItem.totalCartas} de ${requeridasItem} cartas de crecimiento`}>
-                      <LinearGradient colors={faltantesItem ? [tema.acento, tema.texto] : ['#9dce65', '#589044']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.catalogCardProgressFill, { width: `${Math.min(100, estadoItem.totalCartas / requeridasItem * 100)}%` }]} />
-                      <MaterialIcons name="style" size={10} color="#ffe6a1" /><Text style={s.catalogCardProgressText}>{estadoItem.totalCartas}/{requeridasItem}</Text>
+                    <View style={s.catalogCardProgress} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: VINCULO_POR_NIVEL, now: progresoVinculoItem }} accessibilityLabel={`Vínculo ${progresoVinculoItem}%`}>
+                      <LinearGradient colors={[tema.acento, tema.texto]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.catalogCardProgressFill, { width: `${progresoVinculoItem}%` }]} />
+                      <MaterialIcons name="star" size={10} color="#ffe6a1" /><Text style={s.catalogCardProgressText}>{progresoVinculoItem}%</Text>
                     </View>
                     <Image source={item.imagen} style={s.animalitoSimpleImage} contentFit="contain" cachePolicy="memory-disk" />
                     <View style={s.catalogCardNameRow}>
@@ -755,7 +755,7 @@ const Animalitos = ({ navigation, mode }) => {
                     </View>
                     <LinearGradient colors={[tema.acento, tema.texto]} style={s.catalogCardFooter}>
                       <Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text>
-                      <Text style={s.catalogCardMissing} numberOfLines={1}>{faltantesItem ? `Faltan ${faltantesItem} cartas` : 'Cartas completas'}</Text>
+                      <Text style={s.catalogCardMissing} numberOfLines={1}>VÍNCULO {progresoVinculoItem}%</Text>
                     </LinearGradient>
                     <View style={s.catalogCardVinculo} accessibilityLabel={`Vínculo nivel ${estadoItem.nivelVinculo}`}><VinculoBadge nivel={estadoItem.nivelVinculo} size={27} /></View>
                   </> : item && bloqueado ? <><LinearGradient colors={['#d9d8d4', '#b9b7b3']} style={s.animalitoSimpleCardGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>BLOQ.</Text></View><Image source={item.imagen} style={s.animalitoSimpleImageLocked} contentFit="contain" cachePolicy="memory" /><View style={s.catalogCardNameRow}><Text style={s.catalogCardName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{(apodoDeAnimal(item.id) || item.nombre).toUpperCase()}</Text></View><LinearGradient colors={['#777773', '#555552']} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>VER DETALLES</Text></LinearGradient><View style={[s.catalogCardLevel, s.catalogCardLevelLocked]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : item?.proximo ? <><LinearGradient colors={[tema.brillo, tema.fondo]} style={s.animalitoSimpleExampleGlow} pointerEvents="none" /><View style={s.catalogCardProgress}><Text style={s.catalogCardProgressText}>PRÓX.</Text></View><View style={[s.animalitoSimpleExampleIcon, { backgroundColor: tema.acento }]}><Text style={s.animalitoSimpleExampleEmoji}>{item.icono}</Text></View><Text style={[s.animalitoSimpleExampleName, { color: tema.texto }]} numberOfLines={1}>{item.nombre.toUpperCase()}</Text><LinearGradient colors={[tema.acento, tema.texto]} style={s.catalogCardFooter}><Text style={s.catalogCardRarityText}>{item.rareza.toUpperCase()}</Text><Text style={s.catalogCardMissing}>PRÓXIMAMENTE</Text></LinearGradient><View style={[s.catalogCardLevel, { backgroundColor: tema.acento, borderColor: tema.brillo }]}><Text style={s.catalogCardLevelNumber}>?</Text></View></> : <Text style={s.animalitoSimpleLock}>🔒</Text>}
@@ -898,31 +898,30 @@ const Animalitos = ({ navigation, mode }) => {
                   const bloqueado = Boolean(item?.bloqueado);
                   const id = item?.id === 'default' ? 'halcon' : item?.id;
                   const estadoItem = item && !bloqueado ? estadoAnimal(id) : null;
-                  const cartasNecesariasItem = estadoItem ? COPIAS_POR_NIVEL(estadoItem.nivel) : 1;
-                  const progresoItem = estadoItem ? Math.min(100, (estadoItem.totalCartas / cartasNecesariasItem) * 100) : 0;
+                  const progresoVinculoItem = estadoItem ? Math.round(estadoItem.vinculo % VINCULO_POR_NIVEL) : 0;
                   const activo = item?.id === animalMostrado.id;
                   return <TouchableOpacity key={item?.id || `animal-integrado-${index}`} disabled={!item} onPress={() => setSeleccionado(item)} style={[s.animalIntegradoItem, activo && s.animalIntegradoItemActivo, bloqueado && s.animalIntegradoItemBloqueado]} activeOpacity={0.82}>
                     {item && !bloqueado ? <>
                       <Image source={item.imagen} style={s.animalIntegradoImagen} contentFit="contain" cachePolicy="memory" />
-                      <View style={s.animalIntegradoCopy}><Text style={s.animalIntegradoName} numberOfLines={1}>{item.nombre}</Text><Text style={s.animalIntegradoMeta}>{item.rareza || 'Común'} · Nivel {estadoItem.nivel}</Text><View style={s.animalIntegradoTrack}><View style={[s.animalIntegradoFill, { width: `${progresoItem}%` }]} /><Text style={s.animalIntegradoTrackText}>{estadoItem.totalCartas}/{cartasNecesariasItem}</Text></View></View>
+                      <View style={s.animalIntegradoCopy}><Text style={s.animalIntegradoName} numberOfLines={1}>{item.nombre}</Text><Text style={s.animalIntegradoMeta}>{item.rareza || 'Común'} · Vínculo {estadoItem.nivelVinculo}</Text><View style={s.animalIntegradoTrack}><View style={[s.animalIntegradoFill, { width: `${progresoVinculoItem}%` }]} /><Text style={s.animalIntegradoTrackText}>{progresoVinculoItem}%</Text></View></View>
                       {activo && <MaterialIcons name="chevron-right" size={18} color="#6f9e55" />}
                     </> : <><Image source={item?.imagen} style={s.animalIntegradoImagenBloqueada} contentFit="contain" cachePolicy="memory" /><View style={s.animalIntegradoCopy}><Text style={s.animalIntegradoName}>{item?.nombre || 'Animal misterioso'}</Text><Text style={s.animalIntegradoMeta}>Bloqueado · Entrá para ver Detalles</Text></View><MaterialIcons name="lock-outline" size={14} color="#8f8b83" /></>}
                   </TouchableOpacity>;
                 })}
               </ScrollView>
-              <View style={s.animalitosIntegradosFilters}><TouchableOpacity style={[s.integratedFilter, soloDesbloqueados && s.integratedFilterActive]} onPress={() => setSoloDesbloqueados(value => !value)} activeOpacity={0.8}><Text style={s.integratedFilterText}>{soloDesbloqueados ? '✓ Desbloqueados' : 'Todos'}</Text></TouchableOpacity><TouchableOpacity style={s.integratedFilter} onPress={() => setOrdenCatalogo(value => value === 'rareza' ? 'nivel' : 'rareza')} activeOpacity={0.8}><Text style={s.integratedFilterText}>Por {ordenCatalogo}</Text></TouchableOpacity></View>
+              <View style={s.animalitosIntegradosFilters}><TouchableOpacity style={[s.integratedFilter, soloDesbloqueados && s.integratedFilterActive]} onPress={() => setSoloDesbloqueados(value => !value)} activeOpacity={0.8}><Text style={s.integratedFilterText}>{soloDesbloqueados ? '✓ Desbloqueados' : 'Todos'}</Text></TouchableOpacity><TouchableOpacity style={s.integratedFilter} onPress={() => setOrdenCatalogo(value => value === 'rareza' ? 'vinculo' : 'rareza')} activeOpacity={0.8}><Text style={s.integratedFilterText}>Por {ordenCatalogo === 'rareza' ? 'rareza' : 'vínculo'}</Text></TouchableOpacity></View>
             </View>
 
             <View style={s.animalitoIntegradoDetail}>
-              <View style={s.animalitoIntegradoDetailHeader}><View><Text style={s.animalitoIntegradoDetailEyebrow}>COMPAÑERO SELECCIONADO</Text><Text style={s.animalitoIntegradoDetailTitle}>{animalMostrado.nombre || 'Animalito'}</Text></View><View style={s.animalitoIntegradoLevel}><Text style={s.animalitoIntegradoLevelLabel}>NIVEL</Text><Text style={s.animalitoIntegradoLevelNumber}>{estadoMostrado.nivel}</Text></View></View>
-              <View style={s.animalitoIntegradoHero}><Image source={animalMostrado.imagen} style={s.animalitoIntegradoImage} contentFit="contain" cachePolicy="memory" /><View style={s.animalitoIntegradoHeroCopy}><View style={s.animalitoIntegradoRarity}><Text style={s.animalitoIntegradoRarityText}>{fichaAnimalMostrado.rareza}</Text></View><Text style={s.animalitoIntegradoDescription}>{fichaAnimalMostrado.habilidadTexto || 'Un compañero especial que crece con tus cuidados.'}</Text><View style={s.animalitoIntegradoProgress}><View style={[s.animalitoIntegradoProgressFill, { width: `${progresoCartas}%` }]} /><Text style={s.animalitoIntegradoProgressText}>{estadoMostrado.totalCartas} / {cartasNecesarias} cartas</Text></View></View></View>
-              <View style={s.animalitoIntegradoInfoRow}><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>HABILIDAD</Text><Text style={s.animalitoIntegradoInfoValue}>{fichaAnimalMostrado.habilidad || 'Compañía'}</Text></View><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>CARTAS PROPIAS</Text><Text style={s.animalitoIntegradoInfoValue}>{estadoMostrado.cartasPropias}</Text></View><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>UNIVERSALES</Text><Text style={s.animalitoIntegradoInfoValue}>{estadoMostrado.cartasUniversales}</Text></View></View>
-              <View style={s.animalitoIntegradoRewards}><Text style={s.animalitoIntegradoSectionTitle}>PRÓXIMAS RECOMPENSAS</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.animalitoIntegradoRewardsContent}>{recompensasMostradas.map(recompensa => { const disponible = estadoMostrado.nivel >= recompensa.nivel; const reclamada = Boolean(recompensasReclamadas?.[animalMostradoId]?.[recompensa.nivel]); return <TouchableOpacity key={recompensa.nivel} style={[s.integratedReward, disponible && s.integratedRewardReady]} onPress={() => disponible && !reclamada ? reclamarRecompensaNivel(recompensa) : setPreviewRecompensa(recompensa)} activeOpacity={0.8}><Text style={s.integratedRewardLevel}>NV. {recompensa.nivel}</Text><Text style={s.integratedRewardIcon}>{recompensa.icono}</Text><Text style={s.integratedRewardName} numberOfLines={2}>{reclamada ? '✓ Reclamado' : recompensa.titulo}</Text></TouchableOpacity>; })}</ScrollView></View>
+              <View style={s.animalitoIntegradoDetailHeader}><View><Text style={s.animalitoIntegradoDetailEyebrow}>COMPAÑERO SELECCIONADO</Text><Text style={s.animalitoIntegradoDetailTitle}>{animalMostrado.nombre || 'Animalito'}</Text></View><View style={s.animalitoIntegradoLevel}><Text style={s.animalitoIntegradoLevelLabel}>VÍNCULO</Text><Text style={s.animalitoIntegradoLevelNumber}>{estadoMostrado.nivelVinculo}</Text></View></View>
+              <View style={s.animalitoIntegradoHero}><Image source={animalMostrado.imagen} style={s.animalitoIntegradoImage} contentFit="contain" cachePolicy="memory" /><View style={s.animalitoIntegradoHeroCopy}><View style={s.animalitoIntegradoRarity}><Text style={s.animalitoIntegradoRarityText}>{fichaAnimalMostrado.rareza}</Text></View><Text style={s.animalitoIntegradoDescription}>{fichaAnimalMostrado.habilidadTexto || 'Un compañero especial que crece con tus cuidados.'}</Text><View style={s.animalitoIntegradoProgress}><View style={[s.animalitoIntegradoProgressFill, { width: `${progresoVinculo}%` }]} /><Text style={s.animalitoIntegradoProgressText}>{Math.round(progresoVinculo)}% de vínculo</Text></View></View></View>
+              <View style={s.animalitoIntegradoInfoRow}><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>HABILIDAD</Text><Text style={s.animalitoIntegradoInfoValue}>{fichaAnimalMostrado.habilidad || 'Compañía'}</Text></View><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>VÍNCULO ACTUAL</Text><Text style={s.animalitoIntegradoInfoValue}>Nivel {estadoMostrado.nivelVinculo}</Text></View><View style={s.animalitoIntegradoInfoCard}><Text style={s.animalitoIntegradoInfoLabel}>AVANCE</Text><Text style={s.animalitoIntegradoInfoValue}>{Math.round(progresoVinculo)}%</Text></View></View>
+              <View style={s.animalitoIntegradoRewards}><Text style={s.animalitoIntegradoSectionTitle}>PRÓXIMAS RECOMPENSAS</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.animalitoIntegradoRewardsContent}>{recompensasMostradas.map(recompensa => { const disponible = estadoMostrado.nivel >= recompensa.nivel; const reclamada = Boolean(recompensasReclamadas?.[animalMostradoId]?.[recompensa.nivel]); return <TouchableOpacity key={recompensa.nivel} style={[s.integratedReward, disponible && s.integratedRewardReady]} onPress={() => disponible && !reclamada ? reclamarRecompensaNivel(recompensa) : setPreviewRecompensa(recompensa)} activeOpacity={0.8}><Text style={s.integratedRewardLevel}>VÍNCULO {recompensa.nivel}</Text><Text style={s.integratedRewardIcon}>{recompensa.icono}</Text><Text style={s.integratedRewardName} numberOfLines={2}>{reclamada ? '✓ Reclamado' : recompensa.titulo}</Text></TouchableOpacity>; })}</ScrollView></View>
               <View style={s.animalitoIntegradoActions}><TouchableOpacity style={[s.integratedCardsButton, !animalDesbloqueado && s.integratedActionDisabled]} onPress={() => navigation?.navigate?.('comerciante')} disabled={!animalDesbloqueado} activeOpacity={0.82}><MaterialIcons name="style" size={13} color="#fff8df" /><Text style={s.integratedActionText}>{animalDesbloqueado ? 'CONSEGUIR CARTAS' : 'BLOQUEADO'}</Text></TouchableOpacity><TouchableOpacity style={[s.integratedUseButton, equipado === animalMostrado.id && s.integratedUseButtonActive, !animalDesbloqueado && s.integratedActionDisabled]} onPress={() => handleEquipar(animalMostrado.id)} disabled={!animalDesbloqueado} activeOpacity={0.82}><MaterialIcons name={equipado === animalMostrado.id ? 'check' : 'pets'} size={13} color="#fff8df" /><Text style={s.integratedActionText}>{equipado === animalMostrado.id ? 'USANDO' : 'USAR'}</Text></TouchableOpacity><TouchableOpacity style={[s.integratedUpgradeButton, !puedeMejorar && s.integratedUpgradeDisabled]} onPress={() => manejarMejora(animalMostrado.id)} disabled={!puedeMejorar || Boolean(mejoraEnCurso)} activeOpacity={puedeMejorar ? 0.82 : 1}><MaterialIcons name="arrow-upward" size={13} color="#fff8df" /><Text style={s.integratedActionText}>{mejoraEnCurso === animalMostrado.id ? 'MEJORANDO…' : 'SUBIR NIVEL'}</Text></TouchableOpacity></View>
             </View>
           </View>
         </View>
-        <Modal visible={Boolean(previewRecompensa)} transparent animationType="fade" onRequestClose={() => setPreviewRecompensa(null)}><View style={s.previewFondo}><TouchableOpacity style={s.previewCerrarFondo} activeOpacity={1} onPress={() => setPreviewRecompensa(null)} /><View style={s.previewTarjeta}><Text style={s.previewIconoTexto}>{previewRecompensa?.icono}</Text><Text style={s.previewTitulo}>{previewRecompensa?.titulo}</Text><Text style={s.previewNivel}>Recompensa de nivel {previewRecompensa?.nivel}</Text><TouchableOpacity style={s.previewBoton} onPress={() => setPreviewRecompensa(null)}><Text style={s.previewBotonTexto}>Entendido</Text></TouchableOpacity></View></View></Modal>
+        <Modal visible={Boolean(previewRecompensa)} transparent animationType="fade" onRequestClose={() => setPreviewRecompensa(null)}><View style={s.previewFondo}><TouchableOpacity style={s.previewCerrarFondo} activeOpacity={1} onPress={() => setPreviewRecompensa(null)} /><View style={s.previewTarjeta}><Text style={s.previewIconoTexto}>{previewRecompensa?.icono}</Text><Text style={s.previewTitulo}>{previewRecompensa?.titulo}</Text><Text style={s.previewNivel}>Recompensa de vínculo {previewRecompensa?.nivel}</Text><TouchableOpacity style={s.previewBoton} onPress={() => setPreviewRecompensa(null)}><Text style={s.previewBotonTexto}>Entendido</Text></TouchableOpacity></View></View></Modal>
         <Loading ref={loadingRef} />
       </View>
     );
@@ -955,8 +954,7 @@ const Animalitos = ({ navigation, mode }) => {
             {catalogoSlots.map((item, index) => {
               const activo = item?.id === animalMostrado.id;
               const estadoItem = item ? estadoAnimal(item.id === 'default' ? 'halcon' : item.id) : null;
-              const cartasItemNecesarias = estadoItem ? COPIAS_POR_NIVEL(estadoItem.nivel) : 1;
-              const progresoItem = estadoItem ? Math.min(100, (estadoItem.totalCartas / cartasItemNecesarias) * 100) : 0;
+              const progresoVinculoItem = estadoItem ? Math.round(estadoItem.vinculo % VINCULO_POR_NIVEL) : 0;
               return (
                 <TouchableOpacity key={item?.id || `slot-${index}`} style={[s.nuevaTarjeta, activo && s.nuevaTarjetaActiva, (!item || item.bloqueado) && s.nuevaTarjetaVacia]} disabled={!item} onPress={() => setSeleccionado(item)} activeOpacity={0.82}>
                   {item && !item.bloqueado ? <>
@@ -965,7 +963,7 @@ const Animalitos = ({ navigation, mode }) => {
                     <Text style={s.temporadaTarjeta}>{item.tipo || 'Tierra'}</Text>
                     <Image source={item.imagen} style={s.tarjetaAnimal} contentFit="contain" cachePolicy="memory" />
                     <View style={s.rarezaPildora}><Text style={s.rarezaTexto}>{item.rareza || 'Común'}</Text></View>
-                    <View style={s.tarjetaProgreso}><View style={[s.tarjetaProgresoFill, { width: `${progresoItem}%` }]} /><Text style={s.tarjetaProgresoTexto}>{estadoItem.totalCartas} / {cartasItemNecesarias}</Text></View>
+                    <View style={s.tarjetaProgreso} accessibilityLabel={`Vínculo ${progresoVinculoItem}%`}><View style={[s.tarjetaProgresoFill, { width: `${progresoVinculoItem}%` }]} /><MaterialIcons name="star" size={9} color="#fff8dc" /><Text style={s.tarjetaProgresoTexto}>{progresoVinculoItem}%</Text></View>
                     <View style={s.nivelEstrella}><Text style={s.nivelEstrellaTexto}>{estadoItem.nivel}</Text></View>
                   </> : item?.bloqueado ? <>
                     <RNImage source={item.imagen} style={s.animalBloqueadoImagenNormal} resizeMode="contain" />
@@ -983,7 +981,7 @@ const Animalitos = ({ navigation, mode }) => {
           </ScrollView>
           <View style={s.filtrosFila}>
             <TouchableOpacity style={[s.filtroBtn, soloDesbloqueados && s.filtroBtnActivo]} onPress={() => setSoloDesbloqueados(valor => !valor)} activeOpacity={0.8}><Text style={s.filtroTexto}>{soloDesbloqueados ? '✓ Desbloqueados' : '▼ Todos'}</Text></TouchableOpacity>
-            <TouchableOpacity style={s.filtroBtn} onPress={() => setOrdenCatalogo(orden => orden === 'rareza' ? 'nivel' : 'rareza')} activeOpacity={0.8}><Text style={s.filtroTexto}>Por {ordenCatalogo === 'rareza' ? 'rareza' : 'nivel'} ↕</Text></TouchableOpacity>
+            <TouchableOpacity style={s.filtroBtn} onPress={() => setOrdenCatalogo(orden => orden === 'rareza' ? 'vinculo' : 'rareza')} activeOpacity={0.8}><Text style={s.filtroTexto}>Por {ordenCatalogo === 'rareza' ? 'rareza' : 'vínculo'} ↕</Text></TouchableOpacity>
           </View>
         </View>
 
@@ -1001,12 +999,12 @@ const Animalitos = ({ navigation, mode }) => {
             <View style={s.habilidadCaja}><Text style={s.cajaMiniTitulo}>HABILIDAD</Text><Text style={s.habilidadNombre}>🍃 {fichaAnimalMostrado.habilidad}</Text><Text style={s.habilidadTexto}>{fichaAnimalMostrado.habilidadTexto}</Text></View>
             <View style={s.estadisticasCaja}>
               <View style={s.progresoResumenFila}><Text style={s.progresoResumenIcono}>{fichaAnimalMostrado.icono}</Text><View><Text style={s.progresoResumenLabel}>Cartas de {fichaAnimalMostrado.nombre}</Text><Text style={s.progresoResumenValor}>{estadoMostrado.cartasPropias}</Text></View></View>
-              <View style={s.progresoResumenFila}><Text style={s.progresoResumenIcono}>▣</Text><View><Text style={s.progresoResumenLabel}>Cartas universales de apoyo</Text><Text style={s.progresoResumenValor}>{estadoMostrado.cartasUniversales} · Total {estadoMostrado.totalCartas}/{cartasNecesarias}</Text></View></View>
+              <View style={s.progresoResumenFila}><Text style={s.progresoResumenIcono}>✦</Text><View><Text style={s.progresoResumenLabel}>Avance de vínculo</Text><Text style={s.progresoResumenValor}>{Math.round(progresoVinculo)}%</Text></View></View>
             </View>
           </View>
 
-          <View style={s.recompensasCaja}>
-            <View style={s.recompensasTitulo}><Text style={s.recompensasTituloTexto}>RECOMPENSAS POR NIVEL</Text></View>
+            <View style={s.recompensasCaja}>
+            <View style={s.recompensasTitulo}><Text style={s.recompensasTituloTexto}>RECOMPENSAS DE VÍNCULO</Text></View>
             <View style={s.recompensasFila}>{recompensasMostradas.map(recompensa => {
               const disponible = estadoMostrado.nivel >= recompensa.nivel;
               const reclamada = Boolean(recompensasReclamadas?.[animalMostradoId]?.[recompensa.nivel]);
@@ -1054,7 +1052,7 @@ const Animalitos = ({ navigation, mode }) => {
         </View>
       </Modal>
 
-      <Modal visible={Boolean(previewRecompensa)} transparent animationType="fade" onRequestClose={() => setPreviewRecompensa(null)}><View style={s.previewFondo}><TouchableOpacity style={s.previewCerrarFondo} activeOpacity={1} onPress={() => setPreviewRecompensa(null)} /><View style={s.previewTarjeta}><Text style={s.previewIconoTexto}>{previewRecompensa?.icono}</Text><Text style={s.previewTitulo}>{previewRecompensa?.titulo}</Text><Text style={s.previewNivel}>Recompensa de nivel {previewRecompensa?.nivel}</Text><TouchableOpacity style={s.previewBoton} onPress={() => setPreviewRecompensa(null)}><Text style={s.previewBotonTexto}>Entendido</Text></TouchableOpacity></View></View></Modal>
+      <Modal visible={Boolean(previewRecompensa)} transparent animationType="fade" onRequestClose={() => setPreviewRecompensa(null)}><View style={s.previewFondo}><TouchableOpacity style={s.previewCerrarFondo} activeOpacity={1} onPress={() => setPreviewRecompensa(null)} /><View style={s.previewTarjeta}><Text style={s.previewIconoTexto}>{previewRecompensa?.icono}</Text><Text style={s.previewTitulo}>{previewRecompensa?.titulo}</Text><Text style={s.previewNivel}>Recompensa de vínculo {previewRecompensa?.nivel}</Text><TouchableOpacity style={s.previewBoton} onPress={() => setPreviewRecompensa(null)}><Text style={s.previewBotonTexto}>Entendido</Text></TouchableOpacity></View></View></Modal>
       <Loading ref={loadingRef} />
     </View>
   );
@@ -1128,10 +1126,10 @@ const Animalitos = ({ navigation, mode }) => {
                   {mode !== 'skins' && <View style={s.levelBadge}><Text style={s.levelBadgeText}>{estadoAnimal(item.id).nivel}</Text></View>}
                   {mode !== 'skins' && (() => {
                     const estado = estadoAnimal(item.id);
-                    const requeridas = COPIAS_POR_NIVEL(estado.nivel);
-                    return <View style={s.cartasProgreso}>
-                      <View style={s.cartaUniversal}><Text style={s.cartaUniversalMarca}>✦</Text></View>
-                      <Text style={s.cartasProgresoTexto}>{estado.totalCartas >= requeridas ? '¡Listo!' : `Faltan ${requeridas - estado.totalCartas}`}</Text>
+                    const progreso = Math.round(estado.vinculo % VINCULO_POR_NIVEL);
+                    return <View style={s.cartasProgreso} accessibilityLabel={`Vínculo ${progreso}%`}>
+                      <MaterialIcons name="star" size={11} color="#b8892e" />
+                      <Text style={s.cartasProgresoTexto}>{progreso}%</Text>
                     </View>;
                   })()}
                   {mode === 'skins'
@@ -1178,7 +1176,7 @@ const Animalitos = ({ navigation, mode }) => {
                 : <Text style={s.previewIconoTexto}>{previewRecompensa.icono}</Text>}
             </View>
             <Text style={s.previewTitulo}>{iconoSinSubir ? 'Icono sin subir' : previewRecompensa.titulo}</Text>
-            <Text style={s.previewNivel}>Recompensa de nivel {previewRecompensa.nivel}</Text>
+            <Text style={s.previewNivel}>Recompensa de vínculo {previewRecompensa.nivel}</Text>
             <Text style={s.previewDescripcion}>{iconoSinSubir ? `Sube un icono de Animalito con el nombre “${previewRecompensa.identificador}”.` : previewRecompensa.tipo === 'skin' ? 'Un traje exclusivo para tu Halcón.' : 'Alcanza el nivel indicado para reclamarlo.'}</Text>
             <TouchableOpacity style={s.previewBoton} onPress={() => setPreviewRecompensa(null)} activeOpacity={0.8}><Text style={s.previewBotonTexto}>Entendido</Text></TouchableOpacity>
           </View>;
