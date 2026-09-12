@@ -21,7 +21,8 @@ export default class AppErrorBoundary extends React.Component {
 
   render() {
     if (this.state.error) {
-      return <View style={styles.root}><GameErrorState title="Esta pantalla tropezó" message="No se perdió tu progreso. Puedes regresar al inicio y continuar jugando." onRetry={this.reset} /></View>;
+      const errorDetail = this.state.error?.message || String(this.state.error);
+      return <View style={styles.root}><GameErrorState title="Esta pantalla tropezó" message="No se perdió tu progreso. Puedes regresar al inicio y continuar jugando." errorDetail={`Error: ${errorDetail}`} onRetry={this.reset} /></View>;
     }
     return <React.Fragment key={this.state.resetKey}>{this.props.children}</React.Fragment>;
   }
